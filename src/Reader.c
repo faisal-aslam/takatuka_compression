@@ -1,3 +1,7 @@
+/**
+* TakaTuka Compression Algorithm © 2024 by Dr. Faisal ASlam is licensed under CC BY-NC-SA 4.0 
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
