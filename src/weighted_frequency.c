@@ -44,17 +44,27 @@ unsigned int fnv1a_hash(uint8_t *sequence, int length) {
 
 // Function to compare two binary sequences
 int compareSequences(uint8_t *seq1, uint8_t *seq2, int length) {
+    if (seq1 == NULL || seq2 == NULL || length <= 0) {
+        fprintf(stderr, "Error: Invalid sequence or length in compareSequences.\n");
+        return -1;  // Indicate an error
+    }
     return memcmp(seq1, seq2, length);
 }
 
+
 // Function to insert or update a sequence in the hash table
 void updateHashTable(uint8_t *sequence, int length) {
+    if (!sequence || length <= 0) {
+        fprintf(stderr, "Error: Invalid sequence or length in updateHashTable.\n");
+        return;
+    }
+
     unsigned int hashValue = fnv1a_hash(sequence, length);
     HashEntry *entry = hashTable[hashValue];
 
     // Traverse the linked list at the hash table index
     while (entry != NULL) {
-        if (compareSequences(entry->seq->sequence, sequence, length) == 0) {
+        if (entry->seq->length == length && compareSequences(entry->seq->sequence, sequence, length) == 0) {
             // Sequence found, update count and frequency
             entry->seq->count++;
             entry->seq->frequency = entry->seq->length * entry->seq->count;
@@ -65,13 +75,32 @@ void updateHashTable(uint8_t *sequence, int length) {
 
     // Sequence not found, create a new entry
     BinarySequence *newSeq = (BinarySequence *)malloc(sizeof(BinarySequence));
-    newSeq->sequence = (uint8_t *)malloc(length);
+    if (!newSeq) {
+        perror("Failed to allocate memory for BinarySequence");
+        return;
+    }
+
+    newSeq->sequence = (uint8_t *)malloc(length * sizeof(uint8_t));
+    if (!newSeq->sequence) {
+        perror("Failed to allocate memory for sequence");
+        free(newSeq);
+        return;
+    }
+
     memcpy(newSeq->sequence, sequence, length);
     newSeq->length = length;
     newSeq->count = 1;
-    newSeq->frequency = length * 1;
+    newSeq->frequency = length;
 
+    // Create new hash table entry
     HashEntry *newEntry = (HashEntry *)malloc(sizeof(HashEntry));
+    if (!newEntry) {
+        perror("Failed to allocate memory for HashEntry");
+        free(newSeq->sequence);
+        free(newSeq);
+        return;
+    }
+
     newEntry->seq = newSeq;
     newEntry->next = hashTable[hashValue];
     hashTable[hashValue] = newEntry;
@@ -115,7 +144,7 @@ void insertIntoMinHeap(BinarySequence *seq, int m) {
             i = (i - 1) / 2;
         }
     } else if (seq->frequency > maxHeap[0]->frequency) {
-        // Replace the root with the new sequence if it has a higher frequency
+        // Replace the root with the new sequence
         maxHeap[0] = seq;
         minHeapify(0);
     }
@@ -135,6 +164,11 @@ void extractTopSequences(int m, BinarySequence **result) {
 void processBlock(uint8_t *block, long blockSize, int k, uint8_t *overlapBuffer, int *overlapSize) {
     // Combine the overlap buffer with the current block
     uint8_t *combinedBuffer = (uint8_t *)malloc(*overlapSize + blockSize);
+    if (combinedBuffer == NULL) {
+        perror("Failed to allocate memory for combinedBuffer");
+        return;
+    }
+
     memcpy(combinedBuffer, overlapBuffer, *overlapSize);
     memcpy(combinedBuffer + *overlapSize, block, blockSize);
     long combinedSize = *overlapSize + blockSize;
@@ -162,6 +196,12 @@ void processFileInBlocks(const char *filename, int k, int m) {
     }
 
     uint8_t *block = (uint8_t *)malloc(BLOCK_SIZE);
+    if (block == NULL) {
+        perror("Failed to allocate memory for block");
+        fclose(file);
+        return;
+    }
+
     uint8_t overlapBuffer[MAX_SEQ_LENGTH];  // Buffer to handle overlapping sequences
     int overlapSize = 0;
 
