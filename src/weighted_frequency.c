@@ -7,6 +7,8 @@
 #define MAX_SEQ_LENGTH 64          // Maximum sequence length in bytes
 #define HASH_TABLE_SIZE 1000003   // Prime number for hash table size
 #define BLOCK_SIZE (1 << 20)      // Block size: 1 MB
+#define SEQ_LENGTH_LIMIT 4  // Maximum sequence length to process (k)
+
 
 // Structure to represent a binary sequence
 typedef struct {
@@ -50,7 +52,6 @@ int compareSequences(uint8_t *seq1, uint8_t *seq2, int length) {
     }
     return memcmp(seq1, seq2, length);
 }
-
 
 // Function to insert or update a sequence in the hash table
 void updateHashTable(uint8_t *sequence, int length) {
@@ -161,7 +162,7 @@ void extractTopSequences(int m, BinarySequence **result) {
 }
 
 // Function to process a block of data
-void processBlock(uint8_t *block, long blockSize, int k, uint8_t *overlapBuffer, int *overlapSize) {
+void processBlock(uint8_t *block, long blockSize, uint8_t *overlapBuffer, int *overlapSize) {
     // Combine the overlap buffer with the current block
     uint8_t *combinedBuffer = (uint8_t *)malloc(*overlapSize + blockSize);
     if (combinedBuffer == NULL) {
@@ -173,22 +174,22 @@ void processBlock(uint8_t *block, long blockSize, int k, uint8_t *overlapBuffer,
     memcpy(combinedBuffer + *overlapSize, block, blockSize);
     long combinedSize = *overlapSize + blockSize;
 
-    // Count sequences in the combined buffer
-    for (int len = 1; len <= k; len++) {
-        for (long i = 0; i <= combinedSize - len; i++) {
-            updateHashTable(combinedBuffer + i, len);
-        }
-    }
-
+    // Count sequences of lengths 1 to 4 in the combined buffer
+    for (int len = 1; len <= SEQ_LENGTH_LIMIT; len++) {
+ 	   for (long i = 0; i <= combinedSize - len; i++) {
+ 	       updateHashTable(combinedBuffer + i, len);
+ 	   }
+	}
+    
     // Update the overlap buffer for the next block
-    *overlapSize = (k - 1 < combinedSize) ? k - 1 : combinedSize;
+    *overlapSize = (SEQ_LENGTH_LIMIT - 1 < combinedSize) ? SEQ_LENGTH_LIMIT - 1 : combinedSize;
     memcpy(overlapBuffer, combinedBuffer + combinedSize - *overlapSize, *overlapSize);
 
     free(combinedBuffer);
 }
 
 // Function to read and process the file in blocks
-void processFileInBlocks(const char *filename, int k, int m) {
+void processFileInBlocks(const char *filename, int m) {
     FILE *file = fopen(filename, "rb");
     if (!file) {
         perror("Failed to open file");
@@ -211,7 +212,7 @@ void processFileInBlocks(const char *filename, int k, int m) {
             break;  // End of file
         }
 
-        processBlock(block, bytesRead, k, overlapBuffer, &overlapSize);
+        processBlock(block, bytesRead, overlapBuffer, &overlapSize);
     }
 
     free(block);
@@ -232,7 +233,7 @@ void buildMinHeap(int m) {
 // Function to print the top m sequences
 void printTopSequences(BinarySequence **topSequences, int m) {
     for (int i = 0; i < m; i++) {
-        printf("Sequence: ");
+        printf("%d: Sequence: ", i);
         for (int j = 0; j < topSequences[i]->length; j++) {
             printf("%02X ", topSequences[i]->sequence[j]);
         }
@@ -255,28 +256,45 @@ void cleanup() {
     }
 }
 
+// Function to calculate m based on file size
+int calculateM(long fileSize) {
+    // Base case: 1 MB file -> m = 500
+    if (fileSize <= (1 << 20)) {
+        return 500;
+    }
+    // Scale m proportionally for larger files
+    return (int)(500 * (fileSize / (double)(1 << 20)));
+}
+
 // Main function
 int main(int argc, char *argv[]) {
-    if (argc != 4) {
-        printf("Usage: %s <binary_file> <k> <m>\n", argv[0]);
+    if (argc != 2) {  // Now only <binary_file> is required
+        printf("Usage: %s <binary_file>\n", argv[0]);
         return 1;
     }
 
     const char *filename = argv[1];
-    int k = atoi(argv[2]);
-    int m = atoi(argv[3]);
 
-    // Check if k is larger than BLOCK_SIZE
-    if (k > BLOCK_SIZE) {
-        fprintf(stderr, "Error: k (%d) is larger than BLOCK_SIZE (%d).\n", k, BLOCK_SIZE);
+    // Open the file to determine its size
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("Failed to open file");
         return 1;
     }
+
+    fseek(file, 0, SEEK_END);
+    long fileSize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    fclose(file);
+
+    // Calculate m based on file size
+    int m = calculateM(fileSize);
 
     // Initialize hash table
     memset(hashTable, 0, sizeof(hashTable));
 
     // Process the file in blocks
-    processFileInBlocks(filename, k, m);
+    processFileInBlocks(filename, m);
 
     // Build the min-heap from the hash table
     buildMinHeap(m);
