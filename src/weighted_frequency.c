@@ -5,17 +5,34 @@
 #include <time.h>
 #include <math.h>
 
-#define SEQ_LENGTH_LIMIT 4  // Maximum sequence length to process (k)
-#define HASH_TABLE_SIZE 1000003   // Prime number for hash table size
-#define BLOCK_SIZE (1 << 20)      // Block size: 1 MB
-#define MAX_NUMBER_OF_SEQUENCES 4368 //Currently maximum number of sequences allows are 2^4+2^8+2^12
+#define SEQ_LENGTH_LIMIT 4
+#define HASH_TABLE_SIZE 1000003
+#define BLOCK_SIZE (1 << 20)
+
+#define CODE_PER_MEGA_BYTE 500
+#define LEAST_REDUCTION 8  // Minimum bits we need to save to consider compression
+
+// Group definitions
+#define GROUP1_THRESHOLD 16    // Top 16 sequences
+#define GROUP2_THRESHOLD 48    // Next 32 sequences (16+32)
+#define GROUP3_THRESHOLD 304   // Next 256 sequences (48+256)
+#define GROUP4_THRESHOLD 4400  // Next 4096 sequences (304+4096)
+#define MAX_NUMBER_OF_SEQUENCES GROUP1_THRESHOLD+GROUP2_THRESHOLD+GROUP3_THRESHOLD+GROUP4_THRESHOLD
+
+// Codeword sizes including overhead (prefix + codeword)
+#define GROUP1_CODE_SIZE 7   // 3 + 4 bits
+#define GROUP2_CODE_SIZE 8   // 3 + 5 bits
+#define GROUP3_CODE_SIZE 11  // 3 + 8 bits
+#define GROUP4_CODE_SIZE 15  // 3 + 12 bits
 
 // Structure to represent a binary sequence
 typedef struct {
-    uint8_t *sequence;  // Pointer to the binary sequence
-    int length;         // Length of the sequence in bytes
+    uint8_t *sequence;
+    int length;         // Length in bytes
     int count;          // Occurrence count
-    int frequency;      // Weighted frequency (length * count)
+    int frequency;      // length * count
+    long potential_savings;  // (original_bits - code_size) * count
+    int group;          // 1-4 based on frequency ranking
 } BinarySequence;
 
 // Hash table entry
@@ -30,6 +47,23 @@ HashEntry *hashTable[HASH_TABLE_SIZE];
 // Priority queue (min-heap) to store the most frequent sequences
 BinarySequence *maxHeap[SEQ_LENGTH_LIMIT * 1000];  // Adjust size as needed
 int heapSize = 0;
+
+// Function declarations
+unsigned int fnv1a_hash(uint8_t *sequence, int length);
+int compareSequences(uint8_t *seq1, uint8_t *seq2, int length);
+void updateHashTable(uint8_t *sequence, int length);
+void swap(int i, int j);
+void minHeapify(int i);
+void insertIntoMinHeap(BinarySequence *seq, int m);
+void extractTopSequences(int m, BinarySequence **result);
+void processBlock(uint8_t *block, long blockSize, uint8_t *overlapBuffer, int *overlapSize);
+void processFileInBlocks(const char *filename, int m);
+void buildMinHeap(int m);
+void printTopSequences(BinarySequence **topSequences, int m);
+void cleanup();
+int calculateM(long fileSize);
+void assignGroupsByFrequency(int m);
+int compareByFrequency(const void *a, const void *b);
 
 // Function to compute a hash value for a binary sequence using FNV-1a
 unsigned int fnv1a_hash(uint8_t *sequence, int length) {
@@ -92,6 +126,8 @@ void updateHashTable(uint8_t *sequence, int length) {
     newSeq->length = length;
     newSeq->count = 1;
     newSeq->frequency = length;
+    newSeq->potential_savings = 0;
+    newSeq->group = 0;
 
     // Create new hash table entry
     HashEntry *newEntry = (HashEntry *)malloc(sizeof(HashEntry));
@@ -132,34 +168,92 @@ void minHeapify(int i) {
     }
 }
 
-// Function to insert a sequence into the min-heap
+/* Inserts a sequence into the min-heap while maintaining heap property
+ * Parameters:
+ *   seq - sequence to consider (does NOT take ownership)
+ *   m - maximum heap size
+ */
 void insertIntoMinHeap(BinarySequence *seq, int m) {
-    if (heapSize < m) {
-        maxHeap[heapSize] = seq;
-        int i = heapSize;
-        heapSize++;
+    BinarySequence *heapSeq = malloc(sizeof(BinarySequence));
+    if (!heapSeq) return;
 
-        // Maintain the min-heap property
-        while (i > 0 && maxHeap[(i - 1) / 2]->frequency > maxHeap[i]->frequency) {
-            swap(i, (i - 1) / 2);
-            i = (i - 1) / 2;
+    heapSeq->sequence = malloc(seq->length);
+    if (!heapSeq->sequence) {
+        free(heapSeq);
+        return;
+    }
+    memcpy(heapSeq->sequence, seq->sequence, seq->length);
+    heapSeq->length = seq->length;
+    heapSeq->count = seq->count;
+    heapSeq->frequency = seq->frequency;
+    heapSeq->potential_savings = seq->potential_savings;
+    heapSeq->group = seq->group;
+
+	if (heapSize < m) {
+		maxHeap[heapSize] = heapSeq;
+		int i = heapSize++;
+		while (i > 0 && maxHeap[(i - 1) / 2]->frequency > maxHeap[i]->frequency) {
+		    swap(i, (i - 1) / 2);
+		    i = (i - 1) / 2;
+		}
+	} else if (heapSeq->frequency > maxHeap[0]->frequency) {
+		// Free old root before replacing
+		free(maxHeap[0]->sequence);
+		free(maxHeap[0]); // Add this line
+
+		maxHeap[0] = heapSeq;
+		minHeapify(0);
+	} else {
+		// Not inserted, so free it
+		free(heapSeq->sequence);
+		free(heapSeq);
+	}
+}
+
+
+
+
+
+/* Compare function for sorting by weighted frequency (descending) */
+int compareByFrequency(const void *a, const void *b) {
+    const BinarySequence *seqA = *(const BinarySequence **)a;
+    const BinarySequence *seqB = *(const BinarySequence **)b;
+    return seqB->frequency - seqA->frequency;  // Descending order
+}
+
+
+/* Assigns groups by sorting only the top m sequences */
+void assignGroupsByFrequency(int m) {
+    // Temporary array for sorting
+    BinarySequence **temp = malloc(heapSize * sizeof(BinarySequence *));
+    memcpy(temp, maxHeap, heapSize * sizeof(BinarySequence *));
+    
+    // Sort just the top sequences
+    qsort(temp, heapSize, sizeof(BinarySequence *), compareByFrequency);
+    
+    // Assign groups based on sorted order
+    for (int i = 0; i < heapSize; i++) {
+        if (i < GROUP1_THRESHOLD) {
+            temp[i]->group = 1;
+            temp[i]->potential_savings = (temp[i]->length * 8 - GROUP1_CODE_SIZE) * temp[i]->count;
         }
-    } else if (seq->frequency > maxHeap[0]->frequency) {
-        // Replace the root with the new sequence
-        maxHeap[0] = seq;
-        minHeapify(0);
+        else if (i < GROUP2_THRESHOLD) {
+            temp[i]->group = 2;
+            temp[i]->potential_savings = (temp[i]->length * 8 - GROUP2_CODE_SIZE) * temp[i]->count;
+        }
+        else if (i < GROUP3_THRESHOLD) {
+            temp[i]->group = 3;
+            temp[i]->potential_savings = (temp[i]->length * 8 - GROUP3_CODE_SIZE) * temp[i]->count;
+        }
+        else {
+            temp[i]->group = 4;
+            temp[i]->potential_savings = (temp[i]->length * 8 - GROUP4_CODE_SIZE) * temp[i]->count;
+        }
     }
+    
+    free(temp);
 }
 
-// Function to extract the top m most frequent sequences
-void extractTopSequences(int m, BinarySequence **result) {
-    for (int i = 0; i < m && heapSize > 0; i++) {
-        result[i] = maxHeap[0];  // Store the root (most frequent sequence)
-        maxHeap[0] = maxHeap[heapSize - 1];  // Replace root with the last element
-        heapSize--;
-        minHeapify(0);  // Restore the min-heap property
-    }
-}
 
 // Function to process a block of data
 void processBlock(uint8_t *block, long blockSize, uint8_t *overlapBuffer, int *overlapSize) {
@@ -176,10 +270,10 @@ void processBlock(uint8_t *block, long blockSize, uint8_t *overlapBuffer, int *o
 
     // Count sequences of lengths 1 to 4 in the combined buffer
     for (int len = 1; len <= SEQ_LENGTH_LIMIT; len++) {
- 	   for (long i = 0; i <= combinedSize - len; i++) {
- 	       updateHashTable(combinedBuffer + i, len);
- 	   }
-	}
+        for (long i = 0; i <= combinedSize - len; i++) {
+            updateHashTable(combinedBuffer + i, len);
+        }
+    }
     
     // Update the overlap buffer for the next block
     *overlapSize = (SEQ_LENGTH_LIMIT - 1 < combinedSize) ? SEQ_LENGTH_LIMIT - 1 : combinedSize;
@@ -219,10 +313,17 @@ void processFileInBlocks(const char *filename, int m) {
     fclose(file);
 }
 
-
-
-// Function to build the min-heap from the hash table
+/* Builds a min-heap of the most frequent sequences from the hash table
+ * Parameters:
+ *   m - maximum number of sequences to keep in the heap
+ */
 void buildMinHeap(int m) {
+    // Free any pre-existing heap memory before rebuilding
+    while (heapSize > 0) {
+        free(maxHeap[--heapSize]->sequence);
+        free(maxHeap[heapSize]);
+    }
+
     for (int i = 0; i < HASH_TABLE_SIZE; i++) {
         HashEntry *entry = hashTable[i];
         while (entry != NULL) {
@@ -230,45 +331,102 @@ void buildMinHeap(int m) {
             entry = entry->next;
         }
     }
+    assignGroupsByFrequency(m);
 }
 
-// Function to print the top m sequences
+
+
+
+/* Extracts the top m sequences that meet the minimum savings requirement
+ * Parameters:
+ *   m - number of sequences to extract
+ *   result - output array for the extracted sequences (caller must free)
+ */
+void extractTopSequences(int m, BinarySequence **result) {
+    int count = 0;
+
+    while (heapSize > 0 && count < m) {
+        BinarySequence *seq = maxHeap[0];
+        maxHeap[0] = maxHeap[--heapSize];
+        minHeapify(0);
+
+        if (seq->potential_savings >= LEAST_REDUCTION) {
+            result[count++] = seq;
+        } else {
+            // Free sequences that don't meet the threshold
+            free(seq->sequence);
+            free(seq);
+        }
+    }
+
+    // Fill remaining slots with NULL
+    while (count < m) {
+        result[count++] = NULL;
+    }
+}
+
+
+// Simplified print function - now just displays all sequences in results
 void printTopSequences(BinarySequence **topSequences, int m) {
     for (int i = 0; i < m; i++) {
+        if (topSequences[i] == NULL) {
+            //printf("%d: [EMPTY SLOT]\n", i);
+            continue;
+        }
+        
         printf("%d: Sequence: ", i);
         for (int j = 0; j < topSequences[i]->length; j++) {
             printf("%02X ", topSequences[i]->sequence[j]);
         }
-        printf("Frequency: %d\n", topSequences[i]->frequency);
+        printf("Count: %d, Freq: %d, Group: %d, Savings: %ld bits\n",
+               topSequences[i]->count,
+               topSequences[i]->frequency,
+               topSequences[i]->group,
+               topSequences[i]->potential_savings);
     }
 }
 
 // Function to clean up allocated memory
 void cleanup() {
+    // Free hash table memory
     for (int i = 0; i < HASH_TABLE_SIZE; i++) {
         HashEntry *entry = hashTable[i];
         while (entry != NULL) {
             HashEntry *next = entry->next;
-            free(entry->seq->sequence);  // Free the sequence
-            free(entry->seq);           // Free the BinarySequence
-            free(entry);                // Free the HashEntry
+            if (entry->seq) {
+                free(entry->seq->sequence);
+                free(entry->seq);
+            }
+            free(entry);
             entry = next;
         }
-        hashTable[i] = NULL;  // Clear the hash table entry
+        hashTable[i] = NULL;
     }
+
+    // Free min-heap sequences
+    for (int i = 0; i < heapSize; i++) {
+        if (maxHeap[i]) {
+            free(maxHeap[i]->sequence);
+            free(maxHeap[i]);
+        }
+    }
+    heapSize = 0;
 }
 
-// Function to calculate m based on file size
+
+
+
+// Function to calculate m (i.e. number of codewords) based on file size
 int calculateM(long fileSize) {
-    // Base case: 1 MB file -> m = 500
+    // Base case: 1 MB file -> m = CODE_PER_MEGA_BYTE
     if (fileSize <= (1 << 20)) {
-        return 500;
+        return CODE_PER_MEGA_BYTE;
     }
     // Scale m proportionally for larger files
     // We do not allow more than MAX_NUMBER_OF_SEQUENCES at the moment.
-    int ret = (int)(500 * (fileSize / (double)(1 << 20)));
+    int ret = (int)(CODE_PER_MEGA_BYTE * (fileSize / (double)(1 << 20)));
     if (ret > MAX_NUMBER_OF_SEQUENCES) {
-    	return MAX_NUMBER_OF_SEQUENCES;
+        return MAX_NUMBER_OF_SEQUENCES;
     }
     return ret;
 }
@@ -308,14 +466,26 @@ int main(int argc, char *argv[]) {
 
     // Extract the top m most frequent sequences
     BinarySequence **topSequences = (BinarySequence **)malloc(m * sizeof(BinarySequence *));
+    if (!topSequences) {
+        perror("Failed to allocate memory for topSequences");
+        cleanup();
+        return 1;
+    }
     extractTopSequences(m, topSequences);
 
     // Print the results
     printTopSequences(topSequences, m);
 
     // Clean up allocated memory
-    cleanup();
+    for (int i = 0; i < m; i++) {
+        if (topSequences[i]) {
+            free(topSequences[i]->sequence);
+            free(topSequences[i]);
+        }
+    }
     free(topSequences);
+    cleanup();
 
     return 0;
 }
+

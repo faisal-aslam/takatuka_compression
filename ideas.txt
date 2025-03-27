@@ -1,7 +1,31 @@
-2+0    (no savings)
-2+4 = 6 16 (saving 18-6=12)
-2+8 = 10 256 (saving 18-10=8)
-2+12 = 14 4096 (saving 18-12=6)
+Each sequence of bits in the compressed binary file begins with either `0` or `1`:  
 
-----------------
-4368 codes per file at the most.
+- **`0` (No Compression):** The next byte is stored as-is from the original file. Every uncompressed byte starts with `0`, followed by the actual byte, adding an overhead of 1 bit per uncompressed byte.  
+- **`1` (Compressed Data):** The following sequence represents a codeword, with an additional 2-bit prefix indicating the codeword length:  
+
+  - **Group 1 (`100`)**: 4-bit codewords for the most weighted frequent sequences (`length × count`). Each entry requires `3 + 4 = 7` bits (3 overhead bits + 4-bit codeword). Supports **16 codewords**.  
+  - **Group 2 (`101`)**: 5-bit codewords for the second most weighted frequent sequences. Each entry requires `3 + 5 = 8` bits. Supports **32 codewords**.  
+  - **Group 3 (`110`)**: 8-bit codewords for less frequent sequences. Each entry requires `3 + 8 = 11` bits. Supports **256 codewords**.  
+  - **Group 4 (`111`)**: 12-bit codewords for the least frequent sequences. Each entry requires `3 + 12 = 15` bits. Supports **4,096 codewords**.  
+
+In total, the algorithm allows **4,400 codewords** per binary file (`16 + 32 + 256 + 4,096 = 4,400`).  
+
+### Potential Savings Calculation  
+To estimate the potential space savings when encoding a binary sequence:  
+
+1. Determine its group based on its **weighted frequency** (`length × count`).  
+2. Calculate the potential savings using the formula:  
+
+   \[
+   (\text{original size in bits} - \text{codeword size}) \times \text{count}
+   \]
+
+For example, if a binary sequence appears **100** times, has a **length of 4 bytes (32 bits)**, and belongs to **Group 3 (8-bit codeword, 11-bit total size)**:  
+
+   \[
+   (32 - 11) \times 100 = 2,100 \text{ bits} = 262.5 \text{ bytes}
+   \]
+
+This represents the storage reduction achieved by encoding this sequence.
+
+In case storage reduction is less than LEAST_REDUCTION define then we do not compress that binary sequence.
