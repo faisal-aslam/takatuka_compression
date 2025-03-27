@@ -1,0 +1,7 @@
+2+0    (no savings)
+2+4 = 6 16 (saving 18-6=12)
+2+8 = 10 256 (saving 18-10=8)
+2+12 = 14 4096 (saving 18-12=6)
+
+----------------
+4368 codes per file at the most.
