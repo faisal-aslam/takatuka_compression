@@ -3,12 +3,12 @@
 #include <string.h>
 #include <stdint.h>
 #include <time.h>
+#include <math.h>
 
-#define MAX_SEQ_LENGTH 64          // Maximum sequence length in bytes
+#define SEQ_LENGTH_LIMIT 4  // Maximum sequence length to process (k)
 #define HASH_TABLE_SIZE 1000003   // Prime number for hash table size
 #define BLOCK_SIZE (1 << 20)      // Block size: 1 MB
-#define SEQ_LENGTH_LIMIT 4  // Maximum sequence length to process (k)
-
+#define MAX_NUMBER_OF_SEQUENCES 4368 //Currently maximum number of sequences allows are 2^4+2^8+2^12
 
 // Structure to represent a binary sequence
 typedef struct {
@@ -28,7 +28,7 @@ typedef struct HashEntry {
 HashEntry *hashTable[HASH_TABLE_SIZE];
 
 // Priority queue (min-heap) to store the most frequent sequences
-BinarySequence *maxHeap[MAX_SEQ_LENGTH * 1000];  // Adjust size as needed
+BinarySequence *maxHeap[SEQ_LENGTH_LIMIT * 1000];  // Adjust size as needed
 int heapSize = 0;
 
 // Function to compute a hash value for a binary sequence using FNV-1a
@@ -197,27 +197,29 @@ void processFileInBlocks(const char *filename, int m) {
     }
 
     uint8_t *block = (uint8_t *)malloc(BLOCK_SIZE);
-    if (block == NULL) {
+    if (!block) {
         perror("Failed to allocate memory for block");
         fclose(file);
         return;
     }
 
-    uint8_t overlapBuffer[MAX_SEQ_LENGTH];  // Buffer to handle overlapping sequences
+    // Local overlap buffer (only needs SEQ_LENGTH_LIMIT-1 bytes)
+    uint8_t overlapBuffer[SEQ_LENGTH_LIMIT - 1] = {0};
     int overlapSize = 0;
 
     while (1) {
         long bytesRead = fread(block, 1, BLOCK_SIZE, file);
-        if (bytesRead == 0) {
-            break;  // End of file
-        }
+        if (bytesRead == 0) break;
 
+        // Process current block with overlap
         processBlock(block, bytesRead, overlapBuffer, &overlapSize);
     }
 
     free(block);
     fclose(file);
 }
+
+
 
 // Function to build the min-heap from the hash table
 void buildMinHeap(int m) {
@@ -263,7 +265,12 @@ int calculateM(long fileSize) {
         return 500;
     }
     // Scale m proportionally for larger files
-    return (int)(500 * (fileSize / (double)(1 << 20)));
+    // We do not allow more than MAX_NUMBER_OF_SEQUENCES at the moment.
+    int ret = (int)(500 * (fileSize / (double)(1 << 20)));
+    if (ret > MAX_NUMBER_OF_SEQUENCES) {
+    	return MAX_NUMBER_OF_SEQUENCES;
+    }
+    return ret;
 }
 
 // Main function
