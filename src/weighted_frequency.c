@@ -45,7 +45,7 @@ typedef struct HashEntry {
 HashEntry *hashTable[HASH_TABLE_SIZE];
 
 // Priority queue (min-heap) to store the most frequent sequences
-BinarySequence *maxHeap[SEQ_LENGTH_LIMIT * 1000];  // Adjust size as needed
+BinarySequence *maxHeap[SEQ_LENGTH_LIMIT * MAX_NUMBER_OF_SEQUENCES];  // Adjust size as needed
 int heapSize = 0;
 
 // Function declarations
@@ -489,7 +489,7 @@ int main(int argc, char *argv[]) {
     fclose(file);
 
     // Calculate m based on file size
-    int m = calculateM(fileSize);
+    int m = MAX_NUMBER_OF_SEQUENCES;//calculateM(fileSize);
 
     // Initialize hash table
     memset(hashTable, 0, sizeof(hashTable));
