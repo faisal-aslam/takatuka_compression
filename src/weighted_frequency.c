@@ -17,7 +17,7 @@
 #define GROUP2_THRESHOLD 48    // Next 32 sequences (16+32)
 #define GROUP3_THRESHOLD 304   // Next 256 sequences (48+256)
 #define GROUP4_THRESHOLD 4400  // Next 4096 sequences (304+4096)
-#define MAX_NUMBER_OF_SEQUENCES GROUP1_THRESHOLD+GROUP2_THRESHOLD+GROUP3_THRESHOLD+GROUP4_THRESHOLD
+#define MAX_NUMBER_OF_SEQUENCES 4400
 
 // Codeword sizes including overhead (prefix + codeword)
 #define GROUP1_CODE_SIZE 7   // 3 + 4 bits
@@ -212,15 +212,12 @@ void insertIntoMinHeap(BinarySequence *seq, int m) {
 
 
 
-
-
 /* Compare function for sorting by weighted frequency (descending) */
 int compareByFrequency(const void *a, const void *b) {
     const BinarySequence *seqA = *(const BinarySequence **)a;
     const BinarySequence *seqB = *(const BinarySequence **)b;
     return seqB->frequency - seqA->frequency;  // Descending order
 }
-
 
 /* Assigns groups by sorting only the top m sequences */
 void assignGroupsByFrequency(int m) {
@@ -231,24 +228,57 @@ void assignGroupsByFrequency(int m) {
     // Sort just the top sequences
     qsort(temp, heapSize, sizeof(BinarySequence *), compareByFrequency);
     
-    // Assign groups based on sorted order
+    int elementsInGroup = 0;
+    
     for (int i = 0; i < heapSize; i++) {
-        if (i < GROUP1_THRESHOLD) {
-            temp[i]->group = 1;
-            temp[i]->potential_savings = (temp[i]->length * 8 - GROUP1_CODE_SIZE) * temp[i]->count;
+        long potential_savings = 0;
+        
+        if (elementsInGroup < GROUP1_THRESHOLD) {
+            potential_savings = (temp[i]->length * 8 - GROUP1_CODE_SIZE) * temp[i]->count;
+            //printf("potential_savings=%ld \n", potential_savings);  
+            if (potential_savings > LEAST_REDUCTION) {  // Only assign if savings is larger than LEAST_REDUCTION.
+                temp[i]->group = 1;
+                temp[i]->potential_savings = potential_savings;
+                elementsInGroup++;
+            } else {
+    	        temp[i]->group = 10;
+                temp[i]->potential_savings = potential_savings;
+			}
         }
-        else if (i < GROUP2_THRESHOLD) {
-            temp[i]->group = 2;
-            temp[i]->potential_savings = (temp[i]->length * 8 - GROUP2_CODE_SIZE) * temp[i]->count;
+        else if (elementsInGroup < GROUP2_THRESHOLD) {
+            potential_savings = (temp[i]->length * 8 - GROUP2_CODE_SIZE) * temp[i]->count;
+            if (potential_savings > LEAST_REDUCTION) { // Only assign if savings is larger than LEAST_REDUCTION.
+                temp[i]->group = 2;
+                temp[i]->potential_savings = potential_savings;
+                elementsInGroup++;
+            } else {
+    	        temp[i]->group = 20;
+                temp[i]->potential_savings = potential_savings;
+			}
         }
-        else if (i < GROUP3_THRESHOLD) {
-            temp[i]->group = 3;
-            temp[i]->potential_savings = (temp[i]->length * 8 - GROUP3_CODE_SIZE) * temp[i]->count;
+        else if (elementsInGroup < GROUP3_THRESHOLD) {
+            potential_savings = (temp[i]->length * 8 - GROUP3_CODE_SIZE) * temp[i]->count;
+            if (potential_savings > LEAST_REDUCTION) { // Only assign if savings is larger than LEAST_REDUCTION.
+                temp[i]->group = 3;
+                temp[i]->potential_savings = potential_savings;
+                elementsInGroup++;
+            } else {
+    	        temp[i]->group = 30;
+                temp[i]->potential_savings = potential_savings;
+			}
+ 
         }
-        else {
-            temp[i]->group = 4;
-            temp[i]->potential_savings = (temp[i]->length * 8 - GROUP4_CODE_SIZE) * temp[i]->count;
-        }
+        else if (elementsInGroup < GROUP4_THRESHOLD) {
+            potential_savings = (temp[i]->length * 8 - GROUP4_CODE_SIZE) * temp[i]->count;
+            if (potential_savings > LEAST_REDUCTION) {
+                temp[i]->group = 4;
+                temp[i]->potential_savings = potential_savings;
+                elementsInGroup++;
+            } else {
+    	        temp[i]->group = 40;
+                temp[i]->potential_savings = potential_savings;
+			}
+       }
     }
     
     free(temp);
@@ -349,16 +379,17 @@ void extractTopSequences(int m, BinarySequence **result) {
         BinarySequence *seq = maxHeap[0];
         maxHeap[0] = maxHeap[--heapSize];
         minHeapify(0);
-
-        if (seq->potential_savings >= LEAST_REDUCTION) {
+        result[count++] = seq;
+    }
+ /*
+ if (seq->potential_savings >= LEAST_REDUCTION) {
             result[count++] = seq;
-        } else {
+     } else {
             // Free sequences that don't meet the threshold
             free(seq->sequence);
             free(seq);
-        }
-    }
-
+}
+ */
     // Fill remaining slots with NULL
     while (count < m) {
         result[count++] = NULL;
@@ -368,6 +399,7 @@ void extractTopSequences(int m, BinarySequence **result) {
 
 // Simplified print function - now just displays all sequences in results
 void printTopSequences(BinarySequence **topSequences, int m) {
+    long total_savings = 0;
     for (int i = 0; i < m; i++) {
         if (topSequences[i] == NULL) {
             //printf("%d: [EMPTY SLOT]\n", i);
@@ -383,7 +415,9 @@ void printTopSequences(BinarySequence **topSequences, int m) {
                topSequences[i]->frequency,
                topSequences[i]->group,
                topSequences[i]->potential_savings);
+       total_savings += topSequences[i]->potential_savings;
     }
+    printf("Total Savings =%ld", total_savings);
 }
 
 // Function to clean up allocated memory
