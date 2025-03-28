@@ -14,15 +14,15 @@
 
 // Group definitions
 #define GROUP1_THRESHOLD 16    // Top 16 sequences
-#define GROUP2_THRESHOLD 48    // Next 32 sequences (16+32)
-#define GROUP3_THRESHOLD 304   // Next 256 sequences (48+256)
-#define GROUP4_THRESHOLD 4400  // Next 4096 sequences (304+4096)
-#define MAX_NUMBER_OF_SEQUENCES 4400
+#define GROUP2_THRESHOLD 32    // Next 32 sequences (16+16)
+#define GROUP3_THRESHOLD 48   // Next 256 sequences (32+16)
+#define GROUP4_THRESHOLD 4144  // Next 4096 sequences (48+2048)
+#define MAX_NUMBER_OF_SEQUENCES 4144
 
 // Codeword sizes including overhead (prefix + codeword)
 #define GROUP1_CODE_SIZE 7   // 3 + 4 bits
-#define GROUP2_CODE_SIZE 8   // 3 + 5 bits
-#define GROUP3_CODE_SIZE 11  // 3 + 8 bits
+#define GROUP2_CODE_SIZE 7   // 3 + 4 bits
+#define GROUP3_CODE_SIZE 7   // 3 + 4 bits
 #define GROUP4_CODE_SIZE 15  // 3 + 12 bits
 
 // Structure to represent a binary sequence
@@ -415,7 +415,9 @@ void printTopSequences(BinarySequence **topSequences, int m) {
                topSequences[i]->frequency,
                topSequences[i]->group,
                topSequences[i]->potential_savings);
-       total_savings += topSequences[i]->potential_savings;
+       if (topSequences[i]->group<=4) {
+	       total_savings += topSequences[i]->potential_savings;
+	   }
     }
     printf("Total Savings =%ld", total_savings);
 }
