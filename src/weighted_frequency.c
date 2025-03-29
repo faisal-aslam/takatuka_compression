@@ -5,11 +5,10 @@
 #include <time.h>
 #include <math.h>
 
+#define SEQ_LENGTH_START 2
 #define SEQ_LENGTH_LIMIT 4
 #define HASH_TABLE_SIZE 1000003
 #define BLOCK_SIZE (1 << 20)
-
-#define CODE_PER_MEGA_BYTE 500
 #define LEAST_REDUCTION 8  // Minimum bits we need to save to consider compression
 
 // Group definitions
@@ -89,8 +88,8 @@ int compareSequences(uint8_t *seq1, uint8_t *seq2, int length) {
 
 // Function to insert or update a sequence in the hash table
 void updateHashTable(uint8_t *sequence, int length) {
-    if (!sequence || length <= 0) {
-        fprintf(stderr, "Error: Invalid sequence or length in updateHashTable.\n");
+    if (!sequence || length <= 0 || length < SEQ_LENGTH_START) {
+        //fprintf(stderr, "Error: Invalid sequence or length in updateHashTable.\n");
         return;
     }
 
@@ -174,6 +173,9 @@ void minHeapify(int i) {
  *   m - maximum heap size
  */
 void insertIntoMinHeap(BinarySequence *seq, int m) {
+    if (seq == NULL || seq->length < SEQ_LENGTH_START) {
+         return;
+    }
     BinarySequence *heapSeq = malloc(sizeof(BinarySequence));
     if (!heapSeq) return;
 
@@ -299,7 +301,7 @@ void processBlock(uint8_t *block, long blockSize, uint8_t *overlapBuffer, int *o
     long combinedSize = *overlapSize + blockSize;
 
     // Count sequences of lengths 1 to 4 in the combined buffer
-    for (int len = 1; len <= SEQ_LENGTH_LIMIT; len++) {
+    for (int len = SEQ_LENGTH_START; len <= SEQ_LENGTH_LIMIT; len++) {
         for (long i = 0; i <= combinedSize - len; i++) {
             updateHashTable(combinedBuffer + i, len);
         }
@@ -450,23 +452,6 @@ void cleanup() {
 }
 
 
-
-
-// Function to calculate m (i.e. number of codewords) based on file size
-int calculateM(long fileSize) {
-    // Base case: 1 MB file -> m = CODE_PER_MEGA_BYTE
-    if (fileSize <= (1 << 20)) {
-        return CODE_PER_MEGA_BYTE;
-    }
-    // Scale m proportionally for larger files
-    // We do not allow more than MAX_NUMBER_OF_SEQUENCES at the moment.
-    int ret = (int)(CODE_PER_MEGA_BYTE * (fileSize / (double)(1 << 20)));
-    if (ret > MAX_NUMBER_OF_SEQUENCES) {
-        return MAX_NUMBER_OF_SEQUENCES;
-    }
-    return ret;
-}
-
 // Main function
 int main(int argc, char *argv[]) {
     if (argc != 2) {  // Now only <binary_file> is required
@@ -488,8 +473,8 @@ int main(int argc, char *argv[]) {
     fseek(file, 0, SEEK_SET);
     fclose(file);
 
-    // Calculate m based on file size
-    int m = MAX_NUMBER_OF_SEQUENCES;//calculateM(fileSize);
+    // Number of codewords 
+    int m = MAX_NUMBER_OF_SEQUENCES;
 
     // Initialize hash table
     memset(hashTable, 0, sizeof(hashTable));
