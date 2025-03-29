@@ -3,6 +3,7 @@
 #define WEIGHTED_FREQ_H
 
 #include "common_types.h"
+#include "sequence_map.h" 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,7 +41,7 @@ BinarySequence* lookupSequence(uint8_t *sequence, int length);
 // From heap.h
 void insertIntoMinHeap(BinarySequence *seq, int m);
 void buildMinHeap(int m);
-void extractTopSequences(int m, BinarySequence **result, SequenceMapEntry **sequenceMap);
+void extractTopSequences(int m, BinarySequence **result);
 void cleanupHeap();
 
 // From file_processor.h

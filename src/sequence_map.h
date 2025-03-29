@@ -3,6 +3,7 @@
 #define SEQUENCE_MAP_H
 
 #include "common_types.h"
+#include "hash_table.h"
 
 struct SequenceMapEntry {
     BinarySequence *sequence;
@@ -10,7 +11,8 @@ struct SequenceMapEntry {
     int key_length;
 };
 
-void initializeSequenceMap();
+extern SequenceMapEntry *sequenceMap[HASH_TABLE_SIZE];
+
 void freeSequenceMap();
 BinarySequence* lookupSequence(uint8_t *sequence, int length);
 

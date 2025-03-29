@@ -29,3 +29,20 @@ For example, if a binary sequence appears **100** times, has a **length of 4 byt
 This represents the storage reduction achieved by encoding this sequence.
 
 In case storage reduction is less than LEAST_REDUCTION define then we do not compress that binary sequence.
+
+
+------------------
+
+Now with your help, we are done with the first pass, where we seleted top frequent sequences and save them in a hashmap to use in the second pass. I think we should place second pass file in a new directory under src. What you think? Please help me writing its code.
+
+In the second pass we again read the file block by block (as before). The only data that go from the firstpass to the second pass is the top sequence hashmap. Rest of the data is cleaned. We go through each byte of binary data and create TreeNode objects corresponding to that byte. 
+Before pruning there could be at most SEQ_LENGTH_LIMIT * (SEQ_LENGTH_LIMIT+1)/2 TreeNode objects. However, by calling function pruneTreeNode we simply delete/prune most of those objects. Then we go to the next byte of binary data, create new TreeNode objects, prune them, and so on.
+
+
+struct TreeNode {
+	uint_8 binary_sequence[SEQ_LENGTH_LIMIT] = {NULL}; //binary sequences at most SEQ_LENGTH_LIMIT
+	long saving_so_far = 0; //compression achieved so far.
+	int incoming_weight = 1; //weight of incoming edge of the tree.
+	int current_level = 0; //current level of the tree.
+};
+TreeNode node[SEQ_LENGTH_LIMIT * (SEQ_LENGTH_LIMIT+1)/2]; //Number of treeNode objects are based on arithmatic series sum formula.

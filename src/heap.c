@@ -4,6 +4,7 @@
 #include "weighted_freq.h"
 #include "hash_table.h" 
 
+
 BinarySequence *maxHeap[SEQ_LENGTH_LIMIT * MAX_NUMBER_OF_SEQUENCES];
 int heapSize = 0;
 
@@ -103,9 +104,8 @@ void buildMinHeap(int m) {
  * Parameters:
  *   m - number of sequences to extract
  *   result - output array for the extracted sequences (caller must free)
- *   sequenceMap - output hashmap for O(1) sequence lookup
  */
-void extractTopSequences(int m, BinarySequence **result, SequenceMapEntry **sequenceMap) {
+void extractTopSequences(int m, BinarySequence **result) {
     int count = 0;
 
     while (heapSize > 0 && count < m) {
@@ -113,88 +113,61 @@ void extractTopSequences(int m, BinarySequence **result, SequenceMapEntry **sequ
         maxHeap[0] = maxHeap[--heapSize];
         minHeapify(0);
         
-        // Only add to results if it meets the savings threshold
         if (seq->potential_savings >= LEAST_REDUCTION && seq->group <= 4) {
             result[count] = seq;
             
-            // Add to sequence map for O(1) lookup
             unsigned int hashValue = fnv1a_hash(seq->sequence, seq->length);
+            int attempts = 0;
             
-            // First try the ideal slot
-            if (sequenceMap[hashValue] == NULL) {
-                // Slot is empty - no collision
-                SequenceMapEntry *entry = malloc(sizeof(SequenceMapEntry));
-                if (!entry) {
-                    perror("Failed to allocate memory for SequenceMapEntry");
-                    continue;
-                }
-                
-                entry->sequence = seq;
-                entry->key = malloc(seq->length);
-                if (!entry->key) {
-                    free(entry);
-                    perror("Failed to allocate memory for sequence key");
-                    continue;
-                }
-                
-                memcpy(entry->key, seq->sequence, seq->length);
-                entry->key_length = seq->length;
-                
-                sequenceMap[hashValue] = entry;
-                count++;
-            } else {
-                // Collision occurred - perform linear probing
-                int attempts = 0;
-                unsigned int probeHash = (hashValue + 1) % HASH_TABLE_SIZE;
-                
-                while (attempts < HASH_TABLE_SIZE) {
-                    if (sequenceMap[probeHash] == NULL) {
-                        // Found empty slot
-                        SequenceMapEntry *entry = malloc(sizeof(SequenceMapEntry));
-                        if (!entry) {
-                            perror("Failed to allocate memory for SequenceMapEntry");
-                            break;
-                        }
-                        
-                        entry->sequence = seq;
-                        entry->key = malloc(seq->length);
-                        if (!entry->key) {
-                            free(entry);
-                            perror("Failed to allocate memory for sequence key");
-                            break;
-                        }
-                        
-                        memcpy(entry->key, seq->sequence, seq->length);
-                        entry->key_length = seq->length;
-                        
-                        sequenceMap[probeHash] = entry;
-                        count++;
+            while (attempts < HASH_TABLE_SIZE) {
+                if (sequenceMap[hashValue] == NULL) {
+                    SequenceMapEntry *entry = malloc(sizeof(SequenceMapEntry));
+                    if (!entry) break;
+                    
+                    entry->key = malloc(seq->length);
+                    if (!entry->key) {
+                        free(entry);
                         break;
                     }
                     
-                    // Move to next slot
-                    probeHash = (probeHash + 1) % HASH_TABLE_SIZE;
-                    attempts++;
+                    memcpy(entry->key, seq->sequence, seq->length);
+                    entry->key_length = seq->length;
+                    entry->sequence = seq;
+                    
+                    sequenceMap[hashValue] = entry;
+                    count++;
+                    break;
                 }
                 
-                if (attempts >= HASH_TABLE_SIZE) {
-                    fprintf(stderr, "Error: Hash table full\n");
-                }
+                hashValue = (hashValue + 1) % HASH_TABLE_SIZE;
+                attempts++;
+            }
+            
+            if (attempts >= HASH_TABLE_SIZE) {
+                fprintf(stderr, "Error: Hash table full, couldn't store sequence\n");
+                free(seq->sequence);
+                free(seq);
             }
         } else {
-            // Free sequences that don't meet the threshold
             free(seq->sequence);
             free(seq);
         }
     }
 
-    // Fill remaining slots with NULL
     while (count < m) {
         result[count++] = NULL;
     }
 }
-
-void cleanupHeap() { /* ... */ }
+void cleanupHeap() {
+    while (heapSize > 0) {
+        heapSize--;
+        if (maxHeap[heapSize]) {
+            free(maxHeap[heapSize]->sequence);
+            free(maxHeap[heapSize]);
+            maxHeap[heapSize] = NULL;
+        }
+    }
+}
 
 /* Assigns groups by sorting only the top m sequences */
 void assignGroupsByFrequency() {

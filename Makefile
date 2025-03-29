@@ -6,12 +6,9 @@ SRC_DIR = src
 BUILD_DIR = build
 
 # List all source files (with path relative to SRC_DIR)
-SRCS = $(wildcard $(SRC_DIR)/*.c)
+SRCS = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/second_pass/*.c)
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 DEPS = $(OBJS:.o=.d)
-
-# Ensure BUILD_DIR exists
-$(shell mkdir -p $(BUILD_DIR))
 
 .PHONY: all clean release debug
 
@@ -27,8 +24,9 @@ debug: $(TARGET)
 $(TARGET): $(OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^
 
-# Compile each .c file to .o in BUILD_DIR
+# Generic rule for all .c files
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:

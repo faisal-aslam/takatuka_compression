@@ -4,7 +4,7 @@
 
 #include "common_types.h"
 
-#define HASH_TABLE_SIZE 1000003  // Add this definition
+#define HASH_TABLE_SIZE 1000003  
 
 struct HashEntry {
     BinarySequence *seq;

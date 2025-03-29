@@ -1,11 +1,8 @@
+// sequence_map.c
 #include "sequence_map.h"
 #include "weighted_freq.h"
 
-SequenceMapEntry *sequenceMap[HASH_TABLE_SIZE];
-
-void initializeSequenceMap() {
-    memset(sequenceMap, 0, sizeof(sequenceMap));
-}
+SequenceMapEntry *sequenceMap[HASH_TABLE_SIZE] = {NULL};
 
 void freeSequenceMap() {
     for (int i = 0; i < HASH_TABLE_SIZE; i++) {
@@ -17,40 +14,29 @@ void freeSequenceMap() {
     }
 }
 
-// Lookup a sequence in the map
 BinarySequence* lookupSequence(uint8_t *sequence, int length) {
+    if (!sequence || length <= 0) return NULL;
+    
     unsigned int hashValue = fnv1a_hash(sequence, length);
-    SequenceMapEntry *entry = sequenceMap[hashValue];
+    int attempts = 0;
     
-    // First check the exact slot
-    if (entry != NULL && entry->key_length == length && 
-        memcmp(entry->key, sequence, length) == 0) {
-        return entry->sequence; // Found on first attempt
-    }
-    
-    // Only do linear probing if there was a collision
-    if (entry != NULL) {  // Collision occurred
-        int attempts = 0;
-        hashValue = (hashValue + 1) % HASH_TABLE_SIZE;
+    while (attempts < HASH_TABLE_SIZE) {
+        SequenceMapEntry *entry = sequenceMap[hashValue];
         
-        while (attempts < HASH_TABLE_SIZE) {
-            entry = sequenceMap[hashValue];
-            
-            if (entry == NULL) {
-                return NULL; // Not found
-            }
-            
-            if (entry->key_length == length && 
-                memcmp(entry->key, sequence, length) == 0) {
-                return entry->sequence; // Found during probing
-            }
-            
-            // Move to next slot
-            hashValue = (hashValue + 1) % HASH_TABLE_SIZE;
-            attempts++;
+        if (entry == NULL) {
+            return NULL;
         }
+        
+        if (entry->key_length == length && 
+            memcmp(entry->key, sequence, length) == 0) {
+            return entry->sequence;
+        }
+        
+        hashValue = (hashValue + 1) % HASH_TABLE_SIZE;
+        attempts++;
     }
     
-    return NULL; // Not found
+    return NULL;
 }
+
 

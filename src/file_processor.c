@@ -30,7 +30,7 @@ void processBlock(uint8_t *block, long blockSize, uint8_t *overlapBuffer, int *o
 }
 
 /* Function to read and process the file in blocks */
-void processFileInBlocks(const char *filename) {  // Removed unused 'm' parameter
+void processFileInBlocks(const char *filename) { 
     FILE *file = fopen(filename, "rb");
     if (!file) {
         perror("Failed to open file");
