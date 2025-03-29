@@ -40,11 +40,20 @@ typedef struct HashEntry {
     struct HashEntry *next;
 } HashEntry;
 
-// Hash table
+// Hash table for sequence counting
 HashEntry *hashTable[HASH_TABLE_SIZE];
 
+// Hash table for fast sequence lookup
+typedef struct {
+    BinarySequence *sequence;
+    uint8_t *key;       // Copy of the sequence data
+    int key_length;     // Length of the sequence in bytes
+} SequenceMapEntry;
+
+SequenceMapEntry *sequenceMap[HASH_TABLE_SIZE];
+
 // Priority queue (min-heap) to store the most frequent sequences
-BinarySequence *maxHeap[SEQ_LENGTH_LIMIT * MAX_NUMBER_OF_SEQUENCES];  // Adjust size as needed
+BinarySequence *maxHeap[SEQ_LENGTH_LIMIT * MAX_NUMBER_OF_SEQUENCES];
 int heapSize = 0;
 
 // Function declarations
@@ -54,7 +63,7 @@ void updateHashTable(uint8_t *sequence, int length);
 void swap(int i, int j);
 void minHeapify(int i);
 void insertIntoMinHeap(BinarySequence *seq, int m);
-void extractTopSequences(int m, BinarySequence **result);
+void extractTopSequences(int m, BinarySequence **result, SequenceMapEntry **sequenceMap);
 void processBlock(uint8_t *block, long blockSize, uint8_t *overlapBuffer, int *overlapSize);
 void processFileInBlocks(const char *filename, int m);
 void buildMinHeap(int m);
@@ -63,6 +72,9 @@ void cleanup();
 int calculateM(long fileSize);
 void assignGroupsByFrequency(int m);
 int compareByFrequency(const void *a, const void *b);
+void initializeSequenceMap();
+void freeSequenceMap();
+BinarySequence* lookupSequence(uint8_t *sequence, int length);
 
 // Function to compute a hash value for a binary sequence using FNV-1a
 unsigned int fnv1a_hash(uint8_t *sequence, int length) {
@@ -191,28 +203,26 @@ void insertIntoMinHeap(BinarySequence *seq, int m) {
     heapSeq->potential_savings = seq->potential_savings;
     heapSeq->group = seq->group;
 
-	if (heapSize < m) {
-		maxHeap[heapSize] = heapSeq;
-		int i = heapSize++;
-		while (i > 0 && maxHeap[(i - 1) / 2]->frequency > maxHeap[i]->frequency) {
-		    swap(i, (i - 1) / 2);
-		    i = (i - 1) / 2;
-		}
-	} else if (heapSeq->frequency > maxHeap[0]->frequency) {
-		// Free old root before replacing
-		free(maxHeap[0]->sequence);
-		free(maxHeap[0]); // Add this line
+    if (heapSize < m) {
+        maxHeap[heapSize] = heapSeq;
+        int i = heapSize++;
+        while (i > 0 && maxHeap[(i - 1) / 2]->frequency > maxHeap[i]->frequency) {
+            swap(i, (i - 1) / 2);
+            i = (i - 1) / 2;
+        }
+    } else if (heapSeq->frequency > maxHeap[0]->frequency) {
+        // Free old root before replacing
+        free(maxHeap[0]->sequence);
+        free(maxHeap[0]); // Add this line
 
-		maxHeap[0] = heapSeq;
-		minHeapify(0);
-	} else {
-		// Not inserted, so free it
-		free(heapSeq->sequence);
-		free(heapSeq);
-	}
+        maxHeap[0] = heapSeq;
+        minHeapify(0);
+    } else {
+        // Not inserted, so free it
+        free(heapSeq->sequence);
+        free(heapSeq);
+    }
 }
-
-
 
 /* Compare function for sorting by weighted frequency (descending) */
 int compareByFrequency(const void *a, const void *b) {
@@ -243,9 +253,9 @@ void assignGroupsByFrequency(int m) {
                 temp[i]->potential_savings = potential_savings;
                 elementsInGroup++;
             } else {
-    	        temp[i]->group = 10;
+                temp[i]->group = 10;
                 temp[i]->potential_savings = potential_savings;
-			}
+            }
         }
         else if (elementsInGroup < GROUP2_THRESHOLD) {
             potential_savings = (temp[i]->length * 8 - GROUP2_CODE_SIZE) * temp[i]->count;
@@ -254,9 +264,9 @@ void assignGroupsByFrequency(int m) {
                 temp[i]->potential_savings = potential_savings;
                 elementsInGroup++;
             } else {
-    	        temp[i]->group = 20;
+                temp[i]->group = 20;
                 temp[i]->potential_savings = potential_savings;
-			}
+            }
         }
         else if (elementsInGroup < GROUP3_THRESHOLD) {
             potential_savings = (temp[i]->length * 8 - GROUP3_CODE_SIZE) * temp[i]->count;
@@ -265,9 +275,9 @@ void assignGroupsByFrequency(int m) {
                 temp[i]->potential_savings = potential_savings;
                 elementsInGroup++;
             } else {
-    	        temp[i]->group = 30;
+                temp[i]->group = 30;
                 temp[i]->potential_savings = potential_savings;
-			}
+            }
  
         }
         else if (elementsInGroup < GROUP4_THRESHOLD) {
@@ -277,15 +287,14 @@ void assignGroupsByFrequency(int m) {
                 temp[i]->potential_savings = potential_savings;
                 elementsInGroup++;
             } else {
-    	        temp[i]->group = 40;
+                temp[i]->group = 40;
                 temp[i]->potential_savings = potential_savings;
-			}
+            }
        }
     }
     
     free(temp);
 }
-
 
 // Function to process a block of data
 void processBlock(uint8_t *block, long blockSize, uint8_t *overlapBuffer, int *overlapSize) {
@@ -366,32 +375,148 @@ void buildMinHeap(int m) {
     assignGroupsByFrequency(m);
 }
 
+// Initialize the sequence map
+void initializeSequenceMap() {
+    memset(sequenceMap, 0, sizeof(sequenceMap));
+}
 
+// Free memory used by the sequence map
+void freeSequenceMap() {
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+        if (sequenceMap[i] != NULL) {
+            free(sequenceMap[i]->key);
+            free(sequenceMap[i]);
+            sequenceMap[i] = NULL;
+        }
+    }
+}
 
+// Lookup a sequence in the map
+BinarySequence* lookupSequence(uint8_t *sequence, int length) {
+    unsigned int hashValue = fnv1a_hash(sequence, length);
+    SequenceMapEntry *entry = sequenceMap[hashValue];
+    
+    // First check the exact slot
+    if (entry != NULL && entry->key_length == length && 
+        memcmp(entry->key, sequence, length) == 0) {
+        return entry->sequence; // Found on first attempt
+    }
+    
+    // Only do linear probing if there was a collision
+    if (entry != NULL) {  // Collision occurred
+        int attempts = 0;
+        hashValue = (hashValue + 1) % HASH_TABLE_SIZE;
+        
+        while (attempts < HASH_TABLE_SIZE) {
+            entry = sequenceMap[hashValue];
+            
+            if (entry == NULL) {
+                return NULL; // Not found
+            }
+            
+            if (entry->key_length == length && 
+                memcmp(entry->key, sequence, length) == 0) {
+                return entry->sequence; // Found during probing
+            }
+            
+            // Move to next slot
+            hashValue = (hashValue + 1) % HASH_TABLE_SIZE;
+            attempts++;
+        }
+    }
+    
+    return NULL; // Not found
+}
 
 /* Extracts the top m sequences that meet the minimum savings requirement
  * Parameters:
  *   m - number of sequences to extract
  *   result - output array for the extracted sequences (caller must free)
+ *   sequenceMap - output hashmap for O(1) sequence lookup
  */
-void extractTopSequences(int m, BinarySequence **result) {
+void extractTopSequences(int m, BinarySequence **result, SequenceMapEntry **sequenceMap) {
     int count = 0;
 
     while (heapSize > 0 && count < m) {
         BinarySequence *seq = maxHeap[0];
         maxHeap[0] = maxHeap[--heapSize];
         minHeapify(0);
-        result[count++] = seq;
-    }
- /*
- if (seq->potential_savings >= LEAST_REDUCTION) {
-            result[count++] = seq;
-     } else {
+        
+        // Only add to results if it meets the savings threshold
+        if (seq->potential_savings >= LEAST_REDUCTION && seq->group <= 4) {
+            result[count] = seq;
+            
+            // Add to sequence map for O(1) lookup
+            unsigned int hashValue = fnv1a_hash(seq->sequence, seq->length);
+            
+            // First try the ideal slot
+            if (sequenceMap[hashValue] == NULL) {
+                // Slot is empty - no collision
+                SequenceMapEntry *entry = malloc(sizeof(SequenceMapEntry));
+                if (!entry) {
+                    perror("Failed to allocate memory for SequenceMapEntry");
+                    continue;
+                }
+                
+                entry->sequence = seq;
+                entry->key = malloc(seq->length);
+                if (!entry->key) {
+                    free(entry);
+                    perror("Failed to allocate memory for sequence key");
+                    continue;
+                }
+                
+                memcpy(entry->key, seq->sequence, seq->length);
+                entry->key_length = seq->length;
+                
+                sequenceMap[hashValue] = entry;
+                count++;
+            } else {
+                // Collision occurred - perform linear probing
+                int attempts = 0;
+                unsigned int probeHash = (hashValue + 1) % HASH_TABLE_SIZE;
+                
+                while (attempts < HASH_TABLE_SIZE) {
+                    if (sequenceMap[probeHash] == NULL) {
+                        // Found empty slot
+                        SequenceMapEntry *entry = malloc(sizeof(SequenceMapEntry));
+                        if (!entry) {
+                            perror("Failed to allocate memory for SequenceMapEntry");
+                            break;
+                        }
+                        
+                        entry->sequence = seq;
+                        entry->key = malloc(seq->length);
+                        if (!entry->key) {
+                            free(entry);
+                            perror("Failed to allocate memory for sequence key");
+                            break;
+                        }
+                        
+                        memcpy(entry->key, seq->sequence, seq->length);
+                        entry->key_length = seq->length;
+                        
+                        sequenceMap[probeHash] = entry;
+                        count++;
+                        break;
+                    }
+                    
+                    // Move to next slot
+                    probeHash = (probeHash + 1) % HASH_TABLE_SIZE;
+                    attempts++;
+                }
+                
+                if (attempts >= HASH_TABLE_SIZE) {
+                    fprintf(stderr, "Error: Hash table full\n");
+                }
+            }
+        } else {
             // Free sequences that don't meet the threshold
             free(seq->sequence);
             free(seq);
-}
- */
+        }
+    }
+
     // Fill remaining slots with NULL
     while (count < m) {
         result[count++] = NULL;
@@ -418,8 +543,8 @@ void printTopSequences(BinarySequence **topSequences, int m) {
                topSequences[i]->group,
                topSequences[i]->potential_savings);
        if (topSequences[i]->group<=4) {
-	       total_savings += topSequences[i]->potential_savings;
-	   }
+           total_savings += topSequences[i]->potential_savings;
+       }
     }
     printf("Total Savings =%ld", total_savings);
 }
@@ -449,8 +574,10 @@ void cleanup() {
         }
     }
     heapSize = 0;
+    
+    // Free sequence map
+    freeSequenceMap();
 }
-
 
 // Main function
 int main(int argc, char *argv[]) {
@@ -478,6 +605,9 @@ int main(int argc, char *argv[]) {
 
     // Initialize hash table
     memset(hashTable, 0, sizeof(hashTable));
+    
+    // Initialize sequence map
+    initializeSequenceMap();
 
     // Process the file in blocks
     processFileInBlocks(filename, m);
@@ -492,10 +622,21 @@ int main(int argc, char *argv[]) {
         cleanup();
         return 1;
     }
-    extractTopSequences(m, topSequences);
+    
+    extractTopSequences(m, topSequences, sequenceMap);
 
     // Print the results
     printTopSequences(topSequences, m);
+
+    // Test the sequence lookup
+    if (m > 0 && topSequences[0] != NULL) {
+        BinarySequence *found = lookupSequence(topSequences[0]->sequence, topSequences[0]->length);
+        if (found) {
+            printf("\n\nLookup test successful for first sequence!\n");
+        } else {
+            printf("\n\nLookup test failed for first sequence!\n");
+        }
+    }
 
     // Clean up allocated memory
     for (int i = 0; i < m; i++) {
@@ -509,4 +650,3 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
-
