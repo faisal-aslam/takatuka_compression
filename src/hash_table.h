@@ -1,12 +1,17 @@
+// hash_table.h
 #ifndef HASH_TABLE_H
 #define HASH_TABLE_H
 
-#include "weighted_freq.h"
+#include "common_types.h"
 
-typedef struct HashEntry {
+#define HASH_TABLE_SIZE 1000003  // Add this definition
+
+struct HashEntry {
     BinarySequence *seq;
     struct HashEntry *next;
-} HashEntry;
+};
+
+extern HashEntry *hashTable[HASH_TABLE_SIZE];
 
 void initializeHashTable();
 void updateHashTable(uint8_t *sequence, int length);

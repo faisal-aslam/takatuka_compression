@@ -1,17 +1,38 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -O2
+CFLAGS = -Wall -Wextra -pedantic -O3 -march=native -flto -funroll-loops -fomit-frame-pointer -MMD -I./src
+LDFLAGS = -flto -O3
 TARGET = weighted_freq
-SRCS = main.c hash_table.c sequence_map.c heap.c file_processor.c
-OBJS = $(SRCS:.c=.o)
-HEADERS = weighted_freq.h hash_table.h sequence_map.h heap.h file_processor.h
+SRC_DIR = src
+BUILD_DIR = build
+
+# List all source files (with path relative to SRC_DIR)
+SRCS = $(wildcard $(SRC_DIR)/*.c)
+OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
+DEPS = $(OBJS:.o=.d)
+
+# Ensure BUILD_DIR exists
+$(shell mkdir -p $(BUILD_DIR))
+
+.PHONY: all clean release debug
 
 all: $(TARGET)
 
-$(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^
+release: CFLAGS += -DNDEBUG
+release: $(TARGET)
 
-%.o: %.c $(HEADERS)
+debug: CFLAGS += -O0 -g -DDEBUG
+debug: LDFLAGS = -g
+debug: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+# Compile each .c file to .o in BUILD_DIR
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(TARGET) $(OBJS)
+	rm -rf $(TARGET) $(BUILD_DIR)
+	rm -f $(SRC_DIR)/combined_code.c
+
+-include $(DEPS)

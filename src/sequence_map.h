@@ -1,13 +1,14 @@
+// sequence_map.h
 #ifndef SEQUENCE_MAP_H
 #define SEQUENCE_MAP_H
 
-#include "weighted_freq.h"
+#include "common_types.h"
 
-typedef struct {
+struct SequenceMapEntry {
     BinarySequence *sequence;
     uint8_t *key;
     int key_length;
-} SequenceMapEntry;
+};
 
 void initializeSequenceMap();
 void freeSequenceMap();

@@ -1,3 +1,4 @@
+#include "common_types.h"
 #include "hash_table.h"
 #include "weighted_freq.h"
 

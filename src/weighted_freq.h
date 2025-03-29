@@ -1,10 +1,11 @@
+// weighted_freq.h
 #ifndef WEIGHTED_FREQ_H
 #define WEIGHTED_FREQ_H
 
+#include "common_types.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
 
 #define SEQ_LENGTH_START 2
 #define SEQ_LENGTH_LIMIT 4
@@ -25,14 +26,6 @@
 #define GROUP3_CODE_SIZE 7
 #define GROUP4_CODE_SIZE 15
 
-typedef struct {
-    uint8_t *sequence;
-    int length;
-    int count;
-    int frequency;
-    long potential_savings;
-    int group;
-} BinarySequence;
 
 // From hash_table.h
 void initializeHashTable();
@@ -47,11 +40,11 @@ BinarySequence* lookupSequence(uint8_t *sequence, int length);
 // From heap.h
 void insertIntoMinHeap(BinarySequence *seq, int m);
 void buildMinHeap(int m);
-void extractTopSequences(int m, BinarySequence **result);
+void extractTopSequences(int m, BinarySequence **result, SequenceMapEntry **sequenceMap);
 void cleanupHeap();
 
 // From file_processor.h
-void processFileInBlocks(const char *filename, int m);
+void processFileInBlocks(const char *filename);
 void processBlock(uint8_t *block, long blockSize, uint8_t *overlapBuffer, int *overlapSize);
 
 // Utility functions
