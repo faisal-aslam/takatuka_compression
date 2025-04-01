@@ -4,19 +4,21 @@
 #include "weighted_freq.h"
 #include "hash_table.h" 
 
+static void assignGroupsByFrequency();
+static int compareByFrequency(const void *a, const void *b);
 
 BinarySequence *maxHeap[SEQ_LENGTH_LIMIT * MAX_NUMBER_OF_SEQUENCES];
 int heapSize = 0;
 
 // Function to swap two elements in the heap
-void swap(int i, int j) {
+static inline void swap(int i, int j) {
     BinarySequence *temp = maxHeap[i];
     maxHeap[i] = maxHeap[j];
     maxHeap[j] = temp;
 }
 
 // Function to maintain the min-heap property
-void minHeapify(int i) {
+static inline void minHeapify(int i) {
     int smallest = i;
     int left = 2 * i + 1;
     int right = 2 * i + 2;
@@ -37,9 +39,8 @@ void minHeapify(int i) {
 /* Inserts a sequence into the min-heap while maintaining heap property
  * Parameters:
  *   seq - sequence to consider (does NOT take ownership)
- *   m - maximum heap size
  */
-void insertIntoMinHeap(BinarySequence *seq, int m) {
+void insertIntoMinHeap(BinarySequence *seq) {
     if (seq == NULL || seq->length < SEQ_LENGTH_START) {
          return;
     }
@@ -58,7 +59,7 @@ void insertIntoMinHeap(BinarySequence *seq, int m) {
     heapSeq->potential_savings = seq->potential_savings;
     heapSeq->group = seq->group;
 
-    if (heapSize < m) {
+    if (heapSize < MAX_NUMBER_OF_SEQUENCES) {
         maxHeap[heapSize] = heapSeq;
         int i = heapSize++;
         while (i > 0 && maxHeap[(i - 1) / 2]->frequency > maxHeap[i]->frequency) {
@@ -80,10 +81,8 @@ void insertIntoMinHeap(BinarySequence *seq, int m) {
 }
 
 /* Builds a min-heap of the most frequent sequences from the hash table
- * Parameters:
- *   m - maximum number of sequences to keep in the heap
  */
-void buildMinHeap(int m) {
+void buildMinHeap() {
     // Free any pre-existing heap memory before rebuilding
     while (heapSize > 0) {
         free(maxHeap[--heapSize]->sequence);
@@ -93,22 +92,21 @@ void buildMinHeap(int m) {
     for (int i = 0; i < HASH_TABLE_SIZE; i++) {
         HashEntry *entry = hashTable[i];
         while (entry != NULL) {
-            insertIntoMinHeap(entry->seq, m);
+            insertIntoMinHeap(entry->seq);
             entry = entry->next;
         }
     }
     assignGroupsByFrequency();
 }
 
-/* Extracts the top m sequences that meet the minimum savings requirement
+/* Extracts the top MAX_NUMBER_OF_SEQUENCES sequences that meet the minimum savings requirement
  * Parameters:
- *   m - number of sequences to extract
  *   result - output array for the extracted sequences (caller must free)
  */
-void extractTopSequences(int m, BinarySequence **result) {
+void extractTopSequences(BinarySequence **result) {
     int count = 0;
 
-    while (heapSize > 0 && count < m) {
+    while (heapSize > 0 && count < MAX_NUMBER_OF_SEQUENCES) {
         BinarySequence *seq = maxHeap[0];
         maxHeap[0] = maxHeap[--heapSize];
         minHeapify(0);
@@ -154,7 +152,7 @@ void extractTopSequences(int m, BinarySequence **result) {
         }
     }
 
-    while (count < m) {
+    while (count < MAX_NUMBER_OF_SEQUENCES) {
         result[count++] = NULL;
     }
 }
@@ -169,8 +167,8 @@ void cleanupHeap() {
     }
 }
 
-/* Assigns groups by sorting only the top m sequences */
-void assignGroupsByFrequency() {
+/* Assigns groups by sorting only the top MAX_NUMBER_OF_SEQUENCES sequences */
+static void assignGroupsByFrequency() {
     // Temporary array for sorting
     BinarySequence **temp = malloc(heapSize * sizeof(BinarySequence *));
     memcpy(temp, maxHeap, heapSize * sizeof(BinarySequence *));
@@ -235,7 +233,7 @@ void assignGroupsByFrequency() {
 }
 
 /* Compare function for sorting by weighted frequency (descending) */
-int compareByFrequency(const void *a, const void *b) {
+static int compareByFrequency(const void *a, const void *b) {
     const BinarySequence *seqA = *(const BinarySequence **)a;
     const BinarySequence *seqB = *(const BinarySequence **)b;
     return seqB->frequency - seqA->frequency;  // Descending order

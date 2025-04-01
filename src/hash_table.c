@@ -2,10 +2,21 @@
 #include "hash_table.h"
 #include "weighted_freq.h"
 
+static inline int compareSequences(uint8_t *seq1, uint8_t *seq2, int length);
+
 HashEntry *hashTable[HASH_TABLE_SIZE];
 
 void initializeHashTable() {
     memset(hashTable, 0, sizeof(hashTable));
+}
+
+// Function to compare two binary sequences
+static inline int compareSequences(uint8_t *seq1, uint8_t *seq2, int length) {
+    if (seq1 == NULL || seq2 == NULL || length <= 0) {
+        fprintf(stderr, "Error: Invalid sequence or length in compareSequences.\n");
+        return -1;  // Indicate an error
+    }
+    return memcmp(seq1, seq2, length);
 }
 
 // Function to insert or update a sequence in the hash table

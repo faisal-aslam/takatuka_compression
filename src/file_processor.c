@@ -3,7 +3,7 @@
 #include "weighted_freq.h"
 
 /* Function to process a block of data */
-void processBlock(uint8_t *block, long blockSize, uint8_t *overlapBuffer, int *overlapSize) {
+static void processBlock(uint8_t *block, long blockSize, uint8_t *overlapBuffer, int *overlapSize) {
     // Combine the overlap buffer with the current block
     uint8_t *combinedBuffer = (uint8_t *)malloc(*overlapSize + blockSize);
     if (combinedBuffer == NULL) {

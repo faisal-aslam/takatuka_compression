@@ -15,19 +15,10 @@ unsigned int fnv1a_hash(uint8_t *sequence, int length) {
     return hash % HASH_TABLE_SIZE;
 }
 
-// Function to compare two binary sequences
-int compareSequences(uint8_t *seq1, uint8_t *seq2, int length) {
-    if (seq1 == NULL || seq2 == NULL || length <= 0) {
-        fprintf(stderr, "Error: Invalid sequence or length in compareSequences.\n");
-        return -1;  // Indicate an error
-    }
-    return memcmp(seq1, seq2, length);
-}
-
 // Function to print the top sequences
-void printTopSequences(BinarySequence **topSequences, int m) {
+void printTopSequences(BinarySequence **topSequences) {
     long total_savings = 0;
-    for (int i = 0; i < m; i++) {
+    for (int i = 0; i < MAX_NUMBER_OF_SEQUENCES; i++) {
         if (topSequences[i] == NULL) {
             //printf("%d: [EMPTY SLOT]\n", i);
             continue;

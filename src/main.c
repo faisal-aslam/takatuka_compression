@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
     // First pass: Frequency analysis and sequence selection
     initializeHashTable();
     processFileInBlocks(filename);
-    buildMinHeap(MAX_NUMBER_OF_SEQUENCES);
+    buildMinHeap();
 
     BinarySequence **topSequences = malloc(MAX_NUMBER_OF_SEQUENCES * sizeof(BinarySequence *));
     if (!topSequences) {
@@ -24,9 +24,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-    extractTopSequences(MAX_NUMBER_OF_SEQUENCES, topSequences);
+    extractTopSequences(topSequences);
     
-    printTopSequences(topSequences, MAX_NUMBER_OF_SEQUENCES);
+    printTopSequences(topSequences);
     
     // Test lookup
     if (MAX_NUMBER_OF_SEQUENCES > 0 && topSequences[0] != NULL) {
