@@ -12,8 +12,10 @@
 
 #define HASH_TABLE_SIZE 1000003
 
-
-
+// Add these declarations
+#ifdef DEBUG
+#include "debug/debug_sequences.h"
+#endif
 
 // From hash_table.h
 void initializeHashTable();

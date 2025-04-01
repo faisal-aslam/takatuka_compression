@@ -1,46 +1,66 @@
+# Compiler and base flags
 CC = gcc
 CFLAGS = -Wall -Wextra -pedantic -O3 -march=native -flto -funroll-loops \
          -fomit-frame-pointer -MMD -I./src \
          -fno-signed-zeros -fno-trapping-math -fassociative-math -fno-math-errno \
-         $(CPUFLAGS)
-CFLAGS += -fstrict-aliasing -ftree-vectorize -fno-stack-protector
+         -fstrict-aliasing -ftree-vectorize -fno-stack-protector
 LDFLAGS = -flto -O3 -fuse-linker-plugin
+
+# Targets
 TARGET = weighted_freq
+DEBUG_TARGET = weighted_freq-debug
+
+# Directory structure
 SRC_DIR = src
 BUILD_DIR = build
+DEBUG_DIR = $(SRC_DIR)/debug
+SECOND_PASS_DIR = $(SRC_DIR)/second_pass
 
-# List all source files
-SRCS = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/second_pass/*.c)
-OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
-DEPS = $(OBJS:.o=.d)
+# Source files
+MAIN_SRCS = $(wildcard $(SRC_DIR)/*.c)
+SECOND_PASS_SRCS = $(wildcard $(SECOND_PASS_DIR)/*.c)
+DEBUG_SRCS = $(wildcard $(DEBUG_DIR)/*.c)
 
-.PHONY: all clean release debug pgo
+# Object files
+MAIN_OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(MAIN_SRCS))
+SECOND_PASS_OBJ = $(patsubst $(SECOND_PASS_DIR)/%.c,$(BUILD_DIR)/second_pass/%.o,$(SECOND_PASS_SRCS))
+DEBUG_OBJS = $(patsubst $(DEBUG_DIR)/%.c,$(BUILD_DIR)/debug/%.o,$(DEBUG_SRCS))
+
+# Dependencies
+DEPS = $(MAIN_OBJS:.o=.d) $(SECOND_PASS_OBJ:.o=.d) $(DEBUG_OBJS:.o=.d)
+
+.PHONY: all clean release debug
 
 all: $(TARGET)
 
 release: CFLAGS += -DNDEBUG
 release: $(TARGET)
 
-debug: CFLAGS += -O0 -g -DDEBUG
-debug: LDFLAGS = -g
-debug: $(TARGET)
+debug: CFLAGS += -DDEBUG -g
+debug: $(DEBUG_TARGET)
 
-pgo:
-	$(MAKE) clean
-	$(MAKE) CFLAGS="$(CFLAGS) -fprofile-generate" LDFLAGS="$(LDFLAGS) -fprofile-generate" $(TARGET)
-	./$(TARGET) your_input_file
-	$(MAKE) clean
-	$(MAKE) CFLAGS="$(CFLAGS) -fprofile-use" LDFLAGS="$(LDFLAGS) -fprofile-use" $(TARGET)
-
-$(TARGET): $(OBJS)
+$(TARGET): $(MAIN_OBJS) $(SECOND_PASS_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^
 
+$(DEBUG_TARGET): $(MAIN_OBJS) $(SECOND_PASS_OBJ) $(DEBUG_OBJS)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+# Main source compilation
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# Second pass compilation
+$(BUILD_DIR)/second_pass/%.o: $(SECOND_PASS_DIR)/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Debug source compilation
+$(BUILD_DIR)/debug/%.o: $(DEBUG_DIR)/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) -DDEBUG -g -c $< -o $@
+
 clean:
-	rm -rf $(TARGET) $(BUILD_DIR)
-	rm -f $(SRC_DIR)/combined_code.c
+	rm -rf $(TARGET) $(DEBUG_TARGET) $(BUILD_DIR)
 
 -include $(DEPS)

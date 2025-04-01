@@ -1,8 +1,20 @@
 #include "debug_sequences.h"
+#include "../constants.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../constants.h"
+
+void free_debug_sequences(BinarySequence** sequences, int count) {
+    if (!sequences) return;
+    
+    for (int i = 0; i < count; i++) {
+        if (sequences[i]) {
+            free(sequences[i]->sequence);
+            free(sequences[i]);
+        }
+    }
+    free(sequences);
+}
 
 BinarySequence** load_debug_sequences(const char* filename, int* count) {
     FILE* file = fopen(filename, "r");
@@ -16,41 +28,44 @@ BinarySequence** load_debug_sequences(const char* filename, int* count) {
     char line[256];
     
     while (fgets(line, sizeof(line), file) && *count < MAX_NUMBER_OF_SEQUENCES) {
-        uint8_t bytes[SEQ_LENGTH_LIMIT];
-        int byteCount = 0;
-        char* token = strtok(line, ",");
+        int length, cnt, group;
+        long savings;
+        unsigned int bytes[SEQ_LENGTH_LIMIT];
+        int matched;
         
-        while (token && byteCount < SEQ_LENGTH_LIMIT) {
-            unsigned int byte;
-            if (sscanf(token, "0x%02x", &byte) == 1) {
-                bytes[byteCount++] = (uint8_t)byte;
-            }
-            token = strtok(NULL, ",");
-        }
-
-        if (byteCount >= SEQ_LENGTH_START) {
+        // Try matching different sequence lengths
+        matched = sscanf(line, "length=%d, 0x%02x, 0x%02x, count=%d, potential_savings=%ld, group=%d",
+                       &length, &bytes[0], &bytes[1], &cnt, &savings, &group);
+        
+        if (matched == 6 && length == 2) {
             sequences[*count] = malloc(sizeof(BinarySequence));
-            sequences[*count]->sequence = malloc(byteCount);
-            memcpy(sequences[*count]->sequence, bytes, byteCount);
-            sequences[*count]->length = byteCount;
-            sequences[*count]->count = 1;
-            sequences[*count]->frequency = byteCount;
-            sequences[*count]->group = 1;
-            sequences[*count]->potential_savings = (byteCount * 8 - GROUP1_CODE_SIZE) * 1;
+            sequences[*count]->sequence = malloc(length);
+            for (int i = 0; i < length; i++) {
+                sequences[*count]->sequence[i] = (uint8_t)bytes[i];
+            }
+            sequences[*count]->length = length;
+            sequences[*count]->count = cnt;
+            sequences[*count]->frequency = length * cnt;
+            sequences[*count]->potential_savings = savings;
+            sequences[*count]->group = group;
+            (*count)++;
+        }
+        else if ((matched = sscanf(line, "length=%d, 0x%02x, 0x%02x, 0x%02x, count=%d, potential_savings=%ld, group=%d",
+                                 &length, &bytes[0], &bytes[1], &bytes[2], &cnt, &savings, &group)) == 7 && length == 3) {
+            sequences[*count] = malloc(sizeof(BinarySequence));
+            sequences[*count]->sequence = malloc(length);
+            for (int i = 0; i < length; i++) {
+                sequences[*count]->sequence[i] = (uint8_t)bytes[i];
+            }
+            sequences[*count]->length = length;
+            sequences[*count]->count = cnt;
+            sequences[*count]->frequency = length * cnt;
+            sequences[*count]->potential_savings = savings;
+            sequences[*count]->group = group;
             (*count)++;
         }
     }
 
     fclose(file);
     return sequences;
-}
-
-void free_debug_sequences(BinarySequence** sequences, int count) {
-    for (int i = 0; i < count; i++) {
-        if (sequences[i]) {
-            free(sequences[i]->sequence);
-            free(sequences[i]);
-        }
-    }
-    free(sequences);
 }

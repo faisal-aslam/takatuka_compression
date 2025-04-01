@@ -1,7 +1,11 @@
-// main.c
 #include "common_types.h"
 #include "weighted_freq.h"
 #include "second_pass/second_pass.h"
+
+#ifdef DEBUG
+#include "debug/debug_sequences.h"
+#define DEBUG_SEQUENCE_FILE "src/debug/debug_sequences.txt"
+#endif
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -9,53 +13,63 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    const char *filename = argv[1];
-    
-    // First pass: Frequency analysis and sequence selection
+    BinarySequence **topSequences;
+    int sequenceCount = 0;
+
+#ifdef DEBUG
+    // Debug mode - load from file
+    topSequences = load_debug_sequences(DEBUG_SEQUENCE_FILE, &sequenceCount);
+    if (!topSequences) {
+        fprintf(stderr, "Debug load failed, falling back to normal processing\n");
+        // Fall through to normal processing
+    } else {
+        // Initialize sequence map with debug sequences
+        initializeSequenceMap();
+        for (int i = 0; i < sequenceCount; i++) {
+            if (topSequences[i]) {
+                unsigned int hashValue = fnv1a_hash(topSequences[i]->sequence, 
+                                                  topSequences[i]->length);
+                SequenceMapEntry *entry = malloc(sizeof(SequenceMapEntry));
+                entry->key = malloc(topSequences[i]->length);
+                memcpy(entry->key, topSequences[i]->sequence, topSequences[i]->length);
+                entry->key_length = topSequences[i]->length;
+                entry->sequence = topSequences[i];
+                sequenceMap[hashValue] = entry;
+            }
+        }
+        goto print_results;  // Skip normal processing
+    }
+#endif
+
+    // Normal processing path
     initializeHashTable();
-    processFileInBlocks(filename);
+    processFileInBlocks(argv[1]);
     buildMinHeap();
 
-    BinarySequence **topSequences = malloc(MAX_NUMBER_OF_SEQUENCES * sizeof(BinarySequence *));
-    if (!topSequences) {
-        perror("Failed to allocate topSequences");
-        cleanupHashTable();
-        cleanupHeap();
-        return 1;
-    }
-    
+    topSequences = malloc(MAX_NUMBER_OF_SEQUENCES * sizeof(BinarySequence *));
     extractTopSequences(topSequences);
-    
-    printTopSequences(topSequences);
-    
-    // Test lookup
-    if (MAX_NUMBER_OF_SEQUENCES > 0 && topSequences[0] != NULL) {
-        BinarySequence *found = lookupSequence(topSequences[0]->sequence, topSequences[0]->length);
-        if (found) {
-            printf("\nLookup test successful for first sequence!\n");
-        } else {
-            printf("\nLookup test failed for first sequence!\n");
-        }
-    }
+    sequenceCount = MAX_NUMBER_OF_SEQUENCES;
 
-    // Cleanup first pass data structures
-    for (int i = 0; i < MAX_NUMBER_OF_SEQUENCES; i++) {
+#ifdef DEBUG
+print_results:
+#endif
+    printTopSequences(topSequences);
+
+    processSecondPass(argv[1]);
+
+    // Cleanup
+#ifdef DEBUG
+    free_debug_sequences(topSequences, sequenceCount);
+#else
+    for (int i = 0; i < sequenceCount; i++) {
         if (topSequences[i]) {
             free(topSequences[i]->sequence);
             free(topSequences[i]);
         }
     }
     free(topSequences);
+#endif
     
-    cleanupHashTable();  // Clean hash table (no longer needed)
-    cleanupHeap();       // Clean heap (no longer needed)
-    
-    // Second pass: Actual compression using the selected sequences
-    // Note: sequenceMap is preserved and still contains our selected sequences
-    processSecondPass(filename);
-    
-    // Final cleanup - sequence map is only needed during second pass
     freeSequenceMap();
-    
     return 0;
 }

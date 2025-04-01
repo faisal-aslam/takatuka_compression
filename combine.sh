@@ -5,7 +5,6 @@ output_file="combined_code.c"
 
 echo "// Combined C and H Files" > "$output_file"
 
-# Function to process files with full path comments
 process_files() {
     local dir=$1
     for file in "$dir"/*; do
@@ -27,12 +26,12 @@ process_files() {
 # Process main src files
 process_files "."
 
-# Process second_pass files if directory exists
+# Process second_pass files
 if [[ -d "second_pass" ]]; then
     process_files "second_pass"
 fi
 
-# Process debug files if directory exists
+# Process debug files
 if [[ -d "debug" ]]; then
     process_files "debug"
 fi

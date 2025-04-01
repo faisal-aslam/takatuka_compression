@@ -21,7 +21,9 @@ void pruneTreeNode(TreeNode* nodes, int* node_count) {
 }
 
 void processBlockSecondPass(uint8_t* block, long blockSize) {
+	if (1) return;
     for (long i = 0; i < blockSize; i++) {
+    	printf("\n\n processing file byte number=%ld\n", i);
         current_node_count = 0;
         
         // Create initial node for current byte

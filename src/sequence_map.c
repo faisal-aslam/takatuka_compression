@@ -4,6 +4,12 @@
 
 SequenceMapEntry *sequenceMap[HASH_TABLE_SIZE] = {NULL};
 
+void initializeSequenceMap() {
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+        sequenceMap[i] = NULL;
+    }
+}
+
 void freeSequenceMap() {
     for (int i = 0; i < HASH_TABLE_SIZE; i++) {
         if (sequenceMap[i] != NULL) {
