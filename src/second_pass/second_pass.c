@@ -23,29 +23,45 @@ static inline void pruneTreeNodes(TreeNode* nodes, int* node_count) {
     *node_count = kept;
 */
 }
-static inline void printNode(TreeNode node) {
-	printf("\n Node :");
-	printf("compress_sequence=%d, saving_so_far=%ld, incoming_weight=%d, isPruned=%d, sequence=0x%x", 
-			node.compress_sequence, node.saving_so_far, node.incoming_weight, node.isPruned, node.sequence);
+static inline void initNode(TreeNode *node) {
+	memset(node->compress_sequence, 0, sizeof(node->compress_sequence));
+    node->compress_sequence_count = 0;
+    node->saving_so_far = 0;
+    node->incoming_weight = 1;
+    node->isPruned = 0;
 }
+
+static inline void printNode(TreeNode *node) {
+	printf("\n Node :");
+	printf("saving_so_far=%ld, incoming_weight=%d, isPruned=%d", node->saving_so_far, node->incoming_weight, node->isPruned);
+}
+
+static inline void copyNodeCompressSeq(TreeNode *NodeA, TreeNode *NodeB, uint8_t bytes_to_copy) {
+	// Copy all valid data from NodeA to NodeB
+	memcpy(NodeB->compress_sequence, NodeA->compress_sequence, bytes_to_copy);
+
+	// Update NodeB's count to match NodeA's
+	NodeB->compress_sequence_count = bytes_to_copy;
+}
+
 static inline int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_count, uint8_t sequence) {
 	int node_count = 0;
 	for (int j=0; j < old_node_count; j++) { //loop through old nodes created previously.
 		//for each old node.
 		TreeNode oldNode = old_pool[j];
-		//can create a total of oldNode.incoming_weight+1 new nodes.
+		//should create a total of oldNode.incoming_weight+1 new nodes.
 		new_pool[node_count].incoming_weight = (oldNode.incoming_weight+1 < SEQ_LENGTH_LIMIT)? oldNode.incoming_weight+1 : SEQ_LENGTH_LIMIT-1;
-		new_pool[node_count].compress_sequence = 0;
+		copyNodeCompressSeq(&oldNode, &new_pool[node_count], new_pool[node_count].compress_sequence_count);
+		new_pool[node_count].compress_sequence[new_pool[node_count].compress_sequence_count++] = 1;
 	    new_pool[node_count].saving_so_far = oldNode.saving_so_far;
-	    new_pool[node_count].sequence = sequence;
-	    printNode(new_pool[node_count]);
+	    printNode(&new_pool[node_count]);
 		node_count++;
 		for (int k=0; k < oldNode.incoming_weight; k++) { //rest of the oldNode.incoming_weight new nodes.
 			new_pool[node_count].incoming_weight = 0;
-			new_pool[node_count].compress_sequence = oldNode.incoming_weight-k;
-			new_pool[node_count].saving_so_far = oldNode.saving_so_far + new_pool[node_count].compress_sequence;
-		    new_pool[node_count].sequence = sequence;
-			printNode(new_pool[node_count]);
+			copyNodeCompressSeq(&oldNode, &new_pool[node_count], new_pool[node_count].compress_sequence_count-oldNode.incoming_weight-k);
+			new_pool[node_count].compress_sequence[new_pool[node_count].compress_sequence_count++] = oldNode.incoming_weight-k;
+			new_pool[node_count].saving_so_far = oldNode.saving_so_far + oldNode.incoming_weight-k;
+			printNode(&new_pool[node_count]);
 			node_count++;
 		}	    
 	}
@@ -54,15 +70,16 @@ static inline int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_no
 
 void processBlockSecondPass(uint8_t* block, long blockSize) {
 	uint8_t isEven = 0;
-	if (SEQ_LENGTH_LIMIT <= 1 || SEQ_LENGTH_LIMIT <= SEQ_LENGTH_START) {
+	if (SEQ_LENGTH_LIMIT <= 1 || SEQ_LENGTH_LIMIT <= SEQ_LENGTH_START 
+	|| blockSize <= 0 || block == NULL) { //some checks.
 		return;
 	}
 	//create root
-    node_pool_even[0].compress_sequence = 0;
+    node_pool_even[0].compress_sequence[0] = block[0];
+    node_pool_even[0].compress_sequence_count = 1;
     node_pool_even[0].saving_so_far = 0;
     node_pool_even[0].incoming_weight = 1;
-    node_pool_even[0].sequence = block[0];
-    printNode(node_pool_even[0]);
+    printNode(&node_pool_even[0]);
     even_pool_count = 1; // there is one even pool node.
 	
     for (long i = 1; i < blockSize; i++) {
