@@ -3,12 +3,15 @@
 #include <string.h>
 #include <stdlib.h>
 
-TreeNode node_pool[MAX_TREE_NODES];
-int current_node_count = 0;
+TreeNode node_pool_even[MAX_TREE_NODES];
+int even_pool_count = 0;
+TreeNode node_pool_odd[MAX_TREE_NODES];
+int odd_pool_count = 0;
 
-void pruneTreeNode(TreeNode* nodes, int* node_count) {
+
+static inline void pruneTreeNodes(TreeNode* nodes, int* node_count) {
     // Basic pruning - keep only nodes with positive savings
-    int kept = 0;
+/*    int kept = 0;
     for (int i = 0; i < *node_count; i++) {
         if (nodes[i].saving_so_far > 0) {
             if (kept != i) {
@@ -18,14 +21,64 @@ void pruneTreeNode(TreeNode* nodes, int* node_count) {
         }
     }
     *node_count = kept;
+*/
+}
+static inline void printNode(TreeNode node) {
+	printf("\n Node :");
+	printf("compress_sequence=%d, saving_so_far=%ld, incoming_weight=%d, isPruned=%d, sequence=0x%x", 
+			node.compress_sequence, node.saving_so_far, node.incoming_weight, node.isPruned, node.sequence);
+}
+static inline int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_count, uint8_t sequence) {
+	int node_count = 0;
+	for (int j=0; j < old_node_count; j++) { //loop through old nodes created previously.
+		//for each old node.
+		TreeNode oldNode = old_pool[j];
+		//can create a total of oldNode.incoming_weight+1 new nodes.
+		new_pool[node_count].incoming_weight = (oldNode.incoming_weight+1 < SEQ_LENGTH_LIMIT)? oldNode.incoming_weight+1 : SEQ_LENGTH_LIMIT-1;
+		new_pool[node_count].compress_sequence = 0;
+	    new_pool[node_count].saving_so_far = oldNode.saving_so_far;
+	    new_pool[node_count].sequence = sequence;
+	    printNode(new_pool[node_count]);
+		node_count++;
+		for (int k=0; k < oldNode.incoming_weight; k++) { //rest of the oldNode.incoming_weight new nodes.
+			new_pool[node_count].incoming_weight = 0;
+			new_pool[node_count].compress_sequence = oldNode.incoming_weight-k;
+			new_pool[node_count].saving_so_far = oldNode.saving_so_far + new_pool[node_count].compress_sequence;
+		    new_pool[node_count].sequence = sequence;
+			printNode(new_pool[node_count]);
+			node_count++;
+		}	    
+	}
+	return node_count;
 }
 
 void processBlockSecondPass(uint8_t* block, long blockSize) {
-	if (1) return;
-    for (long i = 0; i < blockSize; i++) {
+	uint8_t isEven = 0;
+	if (SEQ_LENGTH_LIMIT <= 1 || SEQ_LENGTH_LIMIT <= SEQ_LENGTH_START) {
+		return;
+	}
+	//create root
+    node_pool_even[0].compress_sequence = 0;
+    node_pool_even[0].saving_so_far = 0;
+    node_pool_even[0].incoming_weight = 1;
+    node_pool_even[0].sequence = block[0];
+    printNode(node_pool_even[0]);
+    even_pool_count = 1; // there is one even pool node.
+	
+    for (long i = 1; i < blockSize; i++) {
     	printf("\n\n processing file byte number=%ld\n", i);
-        current_node_count = 0;
-        
+
+		if (isEven) {
+			isEven = 0; //next time process oddnodes.
+			printf("\n even 0x%x", block[i]);
+			even_pool_count = createNodes(node_pool_odd, node_pool_even, odd_pool_count, block[i]);
+		} else {
+			isEven = 1;
+			printf("\n odd 0x%x", block[i]);
+			odd_pool_count = createNodes(node_pool_even, node_pool_odd, even_pool_count, block[i]);
+		}
+		
+		/*        
         // Create initial node for current byte
         if (current_node_count < MAX_TREE_NODES) {
             node_pool[current_node_count].binary_sequence[0] = block[i];
@@ -80,7 +133,9 @@ void processBlockSecondPass(uint8_t* block, long blockSize) {
 
         // TODO: Here you would track the best compression path
         // and eventually output the compressed data
+        */
     }
+    
 }
 
 void processSecondPass(const char* filename) {
