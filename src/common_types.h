@@ -9,8 +9,7 @@ typedef struct {
     int length;
     int count;
     int frequency;
-    long potential_savings;
-    int group;
+    uint8_t group;
 } BinarySequence;
 
 // Forward declarations only

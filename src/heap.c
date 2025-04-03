@@ -56,7 +56,6 @@ void insertIntoMinHeap(BinarySequence *seq) {
     heapSeq->length = seq->length;
     heapSeq->count = seq->count;
     heapSeq->frequency = seq->frequency;
-    heapSeq->potential_savings = seq->potential_savings;
     heapSeq->group = seq->group;
 
     if (heapSize < MAX_NUMBER_OF_SEQUENCES) {
@@ -110,8 +109,9 @@ void extractTopSequences(BinarySequence **result) {
         BinarySequence *seq = maxHeap[0];
         maxHeap[0] = maxHeap[--heapSize];
         minHeapify(0);
-        
-        if (seq->potential_savings >= LEAST_REDUCTION && seq->group <= 4) {
+        long potential_savings = (seq->length * 8 - groupCodeSize(seq->group)) * seq->count;
+        //printf(" \n\n potential_savings=%ld, seq->group (%d) <= TOTAL_GROUPS (%d)", potential_savings, seq->group, TOTAL_GROUPS);
+        if (potential_savings >= LEAST_REDUCTION && seq->group <= TOTAL_GROUPS) {
             result[count] = seq;
             
             unsigned int hashValue = fnv1a_hash(seq->sequence, seq->length);
@@ -151,7 +151,7 @@ void extractTopSequences(BinarySequence **result) {
             free(seq);
         }
     }
-
+	printf("\n Sequences found = %d", count);
     while (count < MAX_NUMBER_OF_SEQUENCES) {
         result[count++] = NULL;
     }
@@ -180,53 +180,49 @@ static void assignGroupsByFrequency() {
     
     for (int i = 0; i < heapSize; i++) {
         long potential_savings = 0;
+        int code_size = 0;  // Will store the actual code size used
         
         if (elementsInGroup < GROUP1_THRESHOLD) {
-            potential_savings = (temp[i]->length * 8 - GROUP1_CODE_SIZE) * temp[i]->count;
-            //printf("potential_savings=%ld \n", potential_savings);  
-            if (potential_savings > LEAST_REDUCTION) {  // Only assign if savings is larger than LEAST_REDUCTION.
+            code_size = GROUP1_CODE_SIZE;
+            potential_savings = (temp[i]->length * 8 - code_size) * temp[i]->count;
+            
+            if (potential_savings > LEAST_REDUCTION) {
                 temp[i]->group = 1;
-                temp[i]->potential_savings = potential_savings;
                 elementsInGroup++;
-            } else {
-                temp[i]->group = 10;
-                temp[i]->potential_savings = potential_savings;
             }
         }
         else if (elementsInGroup < GROUP2_THRESHOLD) {
-            potential_savings = (temp[i]->length * 8 - GROUP2_CODE_SIZE) * temp[i]->count;
-            if (potential_savings > LEAST_REDUCTION) { // Only assign if savings is larger than LEAST_REDUCTION.
+            code_size = GROUP2_CODE_SIZE;
+            potential_savings = (temp[i]->length * 8 - code_size) * temp[i]->count;
+            
+            if (potential_savings > LEAST_REDUCTION) {
                 temp[i]->group = 2;
-                temp[i]->potential_savings = potential_savings;
                 elementsInGroup++;
-            } else {
-                temp[i]->group = 20;
-                temp[i]->potential_savings = potential_savings;
             }
         }
         else if (elementsInGroup < GROUP3_THRESHOLD) {
-            potential_savings = (temp[i]->length * 8 - GROUP3_CODE_SIZE) * temp[i]->count;
-            if (potential_savings > LEAST_REDUCTION) { // Only assign if savings is larger than LEAST_REDUCTION.
+            code_size = GROUP3_CODE_SIZE;
+            potential_savings = (temp[i]->length * 8 - code_size) * temp[i]->count;
+            
+            if (potential_savings > LEAST_REDUCTION) {
                 temp[i]->group = 3;
-                temp[i]->potential_savings = potential_savings;
                 elementsInGroup++;
-            } else {
-                temp[i]->group = 30;
-                temp[i]->potential_savings = potential_savings;
             }
- 
         }
         else if (elementsInGroup < GROUP4_THRESHOLD) {
-            potential_savings = (temp[i]->length * 8 - GROUP4_CODE_SIZE) * temp[i]->count;
+            code_size = GROUP4_CODE_SIZE;
+            potential_savings = (temp[i]->length * 8 - code_size) * temp[i]->count;
+            
             if (potential_savings > LEAST_REDUCTION) {
                 temp[i]->group = 4;
-                temp[i]->potential_savings = potential_savings;
                 elementsInGroup++;
-            } else {
-                temp[i]->group = 40;
-                temp[i]->potential_savings = potential_savings;
             }
-       }
+        }
+        
+        // Debug output to verify calculations
+        printf("Sequence %d: len=%d, cnt=%d, group=%d, code_size=%d\n",
+               i, temp[i]->length, temp[i]->count, temp[i]->group, 
+               code_size);
     }
     
     free(temp);

@@ -58,7 +58,6 @@ void updateHashTable(uint8_t *sequence, int length) {
     newSeq->length = length;
     newSeq->count = 1;
     newSeq->frequency = length;
-    newSeq->potential_savings = 0;
     newSeq->group = 0;
 
     // Create new hash table entry

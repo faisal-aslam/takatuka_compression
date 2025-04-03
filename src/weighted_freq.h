@@ -40,4 +40,6 @@ void processFileInBlocks(const char *filename);
 unsigned int fnv1a_hash(uint8_t *sequence, int length);
 void printTopSequences(BinarySequence **topSequences);
 
+int groupCodeSize(int group); 
+
 #endif
