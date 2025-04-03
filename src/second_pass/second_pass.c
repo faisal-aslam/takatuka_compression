@@ -38,7 +38,6 @@ static inline void pruneTreeNodes(TreeNode* nodes, int node_count) {
     }
 }
 
-
 static inline void initNode(TreeNode *node) {
 	memset(node->compress_sequence, 0, sizeof(node->compress_sequence));
     node->compress_sequence_count = 0;
@@ -49,7 +48,7 @@ static inline void initNode(TreeNode *node) {
 
 static void printNode(TreeNode *node, uint8_t* block) {
 	printf("\n Node :");
-	printf("saving_so_far=%ld, incoming_weight=%d, isPruned=%d, compress_seq_count=%d", node->saving_so_far, node->incoming_weight, node->isPruned, node->compress_sequence_count);
+	printf("saving_so_far=%u, incoming_weight=%d, isPruned=%d, compress_seq_count=%d", node->saving_so_far, node->incoming_weight, node->isPruned, node->compress_sequence_count);
 	int block_index = 0;
 	for (int i=0; i < node->compress_sequence_count; i++) {
 		printf("\n\tNode compressed = %d", node->compress_sequence[i]);
@@ -75,11 +74,11 @@ static inline void copyNodeCompressSeq(TreeNode *NodeA, TreeNode *NodeB, uint8_t
 /**
 * A binary sequence is valid if it is in our sequenceMap. 
 */
-static inline int isValidSequence(int sequence_length, uint8_t* block, int currentLength) {
+static inline int isValidSequence(uint16_t sequence_length, uint8_t* block, uint32_t currentLength) {
     if (currentLength < sequence_length) {
-        fprintf(stderr, "Error: current length (%d) should be >= than sequence length (%d)\n", 
+        fprintf(stderr, "\n\n\n *************** Error: current length (%u) should be > than sequence length (%u)\n", 
                 currentLength, sequence_length);
-        return 0;
+        return 1; //make it valid
     }
 
     uint8_t lastSequence[sequence_length];
@@ -95,7 +94,7 @@ static inline int isValidSequence(int sequence_length, uint8_t* block, int curre
 * This function creates new nodes while ensuring that nodes with lower savings are pruned immediately.
 * If a newly created node has better savings, it replaces the existing node in O(1) time.
 */
-static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_count, uint8_t* block, int currentLength) {
+static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_count, uint8_t* block, uint32_t currentLength) {
     int new_nodes_count = 0;
     
     // Track the best savings per incoming weight and their corresponding index in new_pool
@@ -119,8 +118,8 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
         printf("\n******************************************************");
 #endif
         // Generate the first type of new node (no new compression)
-        int weight = (oldNode.incoming_weight + 1 < SEQ_LENGTH_LIMIT) ? oldNode.incoming_weight + 1 : SEQ_LENGTH_LIMIT - 1;
-        long new_saving = oldNode.saving_so_far;
+        uint8_t weight = (oldNode.incoming_weight + 1 < SEQ_LENGTH_LIMIT) ? oldNode.incoming_weight + 1 : SEQ_LENGTH_LIMIT - 1;
+        uint32_t new_saving = oldNode.saving_so_far;
 
         if (new_saving > best_saving[weight]) {
             // Prune the previous best if it exists
@@ -145,7 +144,7 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
 
         // Generate compressed nodes
         for (int k = 0; k < oldNode.incoming_weight; k++) {
-            int compress_sequence_length = oldNode.incoming_weight + 1 - k;
+            uint16_t compress_sequence_length = oldNode.incoming_weight + 1 - k;
 
             if (!isValidSequence(compress_sequence_length, block, currentLength)) continue; //skip invalid nodes.
 
@@ -177,44 +176,67 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
     return new_nodes_count;
 }
 
-void processBlockSecondPass(uint8_t* block, long blockSize) {
-	uint8_t isEven = 0;
-	if (SEQ_LENGTH_LIMIT <= 1 || SEQ_LENGTH_LIMIT <= SEQ_LENGTH_START 
-	|| blockSize <= 0 || block == NULL) { //some checks.
-		return;
-	}
+static inline void createRoot(uint8_t* block, int savings) {
+    // Initialize
+    memset(node_pool_even, 0, sizeof(node_pool_even));
+    memset(node_pool_odd, 0, sizeof(node_pool_odd));
+    odd_pool_count=0;
 	//create root
     node_pool_even[0].compress_sequence[0] = block[0];
     node_pool_even[0].compress_sequence_count = 1;
-    node_pool_even[0].saving_so_far = 0;
+    node_pool_even[0].saving_so_far = savings;
     node_pool_even[0].incoming_weight = 1;
-#ifdef DEBUG_PRINT
-    printNode(&node_pool_even[0], block);
-#endif
+    even_pool_count = 1; // start from even pool 	
+}
 
-    even_pool_count = 1; // there is one even pool node.
-	
-    for (long i = 1; i < blockSize; i++) {
-#ifdef DEBUG_PRINT
-    	printf("\n\n processing file byte number=%ld\n", i);
-#endif
-		//if (i >= 4) break;
-		if (isEven) {
-			isEven = 0; //next time process oddnodes.
-#ifdef DEBUG_PRINT			
-			printf("\n\n --------------------------------- even 0x%x", block[i]);
-#endif
-			even_pool_count = createNodes(node_pool_odd, node_pool_even, odd_pool_count, block, i+1);
-		} else {
-			isEven = 1;
-#ifdef DEBUG_PRINT			
-			printf("\n\n---------------------------------- odd 0x%x", block[i]);
-#endif
-			odd_pool_count = createNodes(node_pool_even, node_pool_odd, even_pool_count, block, i+1);
-		}
-		
-    }
+static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint8_t* block) {
+    // Find node with maximum savings
+    uint32_t max_saving = 0;
+    //int best_index = 0;
     
+    for (int i = 0; i < source_count; i++) {
+        if (source_pool[i].saving_so_far > max_saving) {
+            max_saving = source_pool[i].saving_so_far;
+            //best_index = i;
+        }
+    }
+	//todo add here code to write compressed data in file.	
+	createRoot(block, max_saving);  
+}
+
+void processBlockSecondPass(uint8_t* block, long blockSize) {
+    if (SEQ_LENGTH_LIMIT <= 1 || blockSize <= 0 || block == NULL) {
+        return;
+    }
+    uint8_t isEven = 0;  // Initialize
+    
+    createRoot(block, 0);  // Start with fresh root
+    
+    for (uint32_t blockIndex = 1; blockIndex < blockSize; blockIndex++) {
+        // Check if we need to prune
+        if (blockIndex% COMPRESS_SEQUENCE_LENGTH == 0) {
+        	if (isEven) { //valid data is in odd pool as even pool to be process next.
+                resetToBestNode(node_pool_odd, odd_pool_count, block);
+            } else { //valid data is in even pool
+                resetToBestNode(node_pool_even, even_pool_count, block);
+            }
+            isEven = 0; //root is always at even so switch to odd pool next.  
+        }
+
+#ifdef DEBUG_PRINT
+        printf("\n------------------------------------------------>Processing byte %u (pool %s)", blockIndex, isEven ? "even" : "odd");
+#endif
+		//printf("\t %u", i);
+        // Create new nodes in the appropriate pool
+        if (isEven) {
+            even_pool_count = createNodes(node_pool_odd, node_pool_even, 
+                                        odd_pool_count, block, blockIndex+1);
+        } else {
+            odd_pool_count = createNodes(node_pool_even, node_pool_odd,
+                                       even_pool_count, block, blockIndex+1);
+        }
+        isEven = !isEven;  // Alternate pools
+    }
 }
 
 void processSecondPass(const char* filename) {

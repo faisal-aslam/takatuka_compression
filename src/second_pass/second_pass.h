@@ -1,18 +1,19 @@
 // src/second_pass/second_pass.h
 #ifndef SECOND_PASS_H
 #define SECOND_PASS_H
-#define DEBUG_PRINT 1
+//#define DEBUG_PRINT 1
 
+#include <limits.h>
 #include "../weighted_freq.h"
 
-#define MAX_TREE_NODES 6000000//(SEQ_LENGTH_LIMIT * (SEQ_LENGTH_LIMIT + 1) / 2) //todo
-#define COMPRESS_SEQUENCE_LENGTH SEQ_LENGTH_LIMIT*(SEQ_LENGTH_LIMIT+1) //todo
+#define COMPRESS_SEQUENCE_LENGTH 100 //We have to prune tree whenever we reach this length. 
+#define MAX_TREE_NODES COMPRESS_SEQUENCE_LENGTH
 
 typedef struct TreeNode {
     uint8_t compress_sequence[COMPRESS_SEQUENCE_LENGTH];
-    uint8_t compress_sequence_count;
-    long saving_so_far;
-    int incoming_weight;
+    uint16_t compress_sequence_count;
+    uint32_t saving_so_far;
+    uint8_t incoming_weight;
     uint8_t isPruned;
 } TreeNode;
 
