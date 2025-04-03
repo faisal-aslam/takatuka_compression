@@ -104,17 +104,20 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
 
     memset(best_saving, 0x80, sizeof(best_saving));  // Initialize to LONG_MIN
     memset(best_index, -1, sizeof(best_index));      // Initialize indices to -1
-
-    printf("\nold_node_count= %d", old_node_count);
     
+#ifdef DEBUG_PRINT
+    printf("\nold_node_count= %d", old_node_count);
+#endif
+
     for (int j = 0; j < old_node_count; j++) {  // Loop through old nodes
         TreeNode oldNode = old_pool[j];
         if (oldNode.isPruned) continue;  // Skip pruned nodes
         
+#ifdef DEBUG_PRINT        
         printf("\n******************** Processing OLD node ************");
         printNode(&oldNode, block);
         printf("\n******************************************************");
-
+#endif
         // Generate the first type of new node (no new compression)
         int weight = (oldNode.incoming_weight + 1 < SEQ_LENGTH_LIMIT) ? oldNode.incoming_weight + 1 : SEQ_LENGTH_LIMIT - 1;
         long new_saving = oldNode.saving_so_far;
@@ -134,8 +137,9 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
             new_pool[new_nodes_count].compress_sequence[new_pool[new_nodes_count].compress_sequence_count++] = 1;
             new_pool[new_nodes_count].saving_so_far = new_saving;
             new_pool[new_nodes_count].isPruned = 0;
-
+#ifdef DEBUG_PRINT
             printNode(&new_pool[new_nodes_count], block);
+#endif
             new_nodes_count++;
         }
 
@@ -162,9 +166,10 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
             new_pool[new_nodes_count].compress_sequence[new_pool[new_nodes_count].compress_sequence_count++] = compress_sequence_length;
             new_pool[new_nodes_count].saving_so_far = new_saving;
             new_pool[new_nodes_count].isPruned = 0;
-
+#ifdef DEBUG_PRINT
             printNode(&new_pool[new_nodes_count], block);
             printf("to copy = %d-%d+%d=%d", oldNode.compress_sequence_count, oldNode.incoming_weight, k, to_copy);
+#endif
             new_nodes_count++;
         }
     }
@@ -183,19 +188,28 @@ void processBlockSecondPass(uint8_t* block, long blockSize) {
     node_pool_even[0].compress_sequence_count = 1;
     node_pool_even[0].saving_so_far = 0;
     node_pool_even[0].incoming_weight = 1;
+#ifdef DEBUG_PRINT
     printNode(&node_pool_even[0], block);
+#endif
+
     even_pool_count = 1; // there is one even pool node.
 	
     for (long i = 1; i < blockSize; i++) {
+#ifdef DEBUG_PRINT
     	printf("\n\n processing file byte number=%ld\n", i);
+#endif
 		//if (i >= 4) break;
 		if (isEven) {
 			isEven = 0; //next time process oddnodes.
+#ifdef DEBUG_PRINT			
 			printf("\n\n --------------------------------- even 0x%x", block[i]);
+#endif
 			even_pool_count = createNodes(node_pool_odd, node_pool_even, odd_pool_count, block, i+1);
 		} else {
 			isEven = 1;
+#ifdef DEBUG_PRINT			
 			printf("\n\n---------------------------------- odd 0x%x", block[i]);
+#endif
 			odd_pool_count = createNodes(node_pool_even, node_pool_odd, even_pool_count, block, i+1);
 		}
 		

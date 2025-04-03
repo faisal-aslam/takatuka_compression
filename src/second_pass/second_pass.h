@@ -1,6 +1,7 @@
 // src/second_pass/second_pass.h
 #ifndef SECOND_PASS_H
 #define SECOND_PASS_H
+#define DEBUG_PRINT 1
 
 #include "../weighted_freq.h"
 
