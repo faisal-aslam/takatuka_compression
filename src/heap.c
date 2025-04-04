@@ -44,7 +44,7 @@ void insertIntoMinHeap(BinarySequence *seq) {
     if (seq == NULL || seq->length < SEQ_LENGTH_START) {
          return;
     }
-    BinarySequence *heapSeq = malloc(sizeof(BinarySequence));
+    BinarySequence *heapSeq = calloc(1, sizeof(BinarySequence));
     if (!heapSeq) return;
 
     heapSeq->sequence = malloc(seq->length);

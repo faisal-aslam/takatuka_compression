@@ -6,7 +6,7 @@
 #include <limits.h>
 #include "../weighted_freq.h"
 
-#define COMPRESS_SEQUENCE_LENGTH 2 //We have to prune tree whenever we reach this length. 
+#define COMPRESS_SEQUENCE_LENGTH 200 //We have to prune tree whenever we reach this length. 
 #define MAX_TREE_NODES COMPRESS_SEQUENCE_LENGTH
 #define SAVING_GAP SEQ_LENGTH_LIMIT*10
 

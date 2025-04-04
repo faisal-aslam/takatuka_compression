@@ -25,7 +25,7 @@ BinarySequence** load_debug_sequences(const char* filename, int* count) {
     }
 
     /* Allocate memory for the sequence pointers array */
-    BinarySequence** sequences = malloc(MAX_NUMBER_OF_SEQUENCES * sizeof(BinarySequence*));
+    BinarySequence** sequences = calloc(MAX_NUMBER_OF_SEQUENCES, sizeof(BinarySequence*));
     if (!sequences) {
         perror("Memory allocation failed for sequences array");
         fclose(file);
@@ -36,7 +36,8 @@ BinarySequence** load_debug_sequences(const char* filename, int* count) {
     char line[256];
     
     /* Read the file line by line until we reach MAX_NUMBER_OF_SEQUENCES */
-    while (fgets(line, sizeof(line), file) && *count < MAX_NUMBER_OF_SEQUENCES) {
+	while (*count < MAX_NUMBER_OF_SEQUENCES && fgets(line, sizeof(line), file)) {
+
         int length, cnt, group;
         unsigned int bytes[SEQ_LENGTH_LIMIT];
         int matched;
@@ -54,7 +55,7 @@ BinarySequence** load_debug_sequences(const char* filename, int* count) {
             }
 
             /* Allocate memory for the new sequence */
-            sequences[*count] = malloc(sizeof(BinarySequence));
+            sequences[*count] = calloc(1, sizeof(BinarySequence));
             if (!sequences[*count]) {
                 perror("Failed to allocate BinarySequence");
                 break;
@@ -63,7 +64,6 @@ BinarySequence** load_debug_sequences(const char* filename, int* count) {
             /* Store the sequence bytes */
             sequences[*count]->sequence = malloc(length);
             if (!sequences[*count]->sequence) {
-                perror("Failed to allocate sequence data");
                 free(sequences[*count]);
                 break;
             }
@@ -88,7 +88,7 @@ BinarySequence** load_debug_sequences(const char* filename, int* count) {
             }
 
             /* Allocate memory for the new sequence */
-            sequences[*count] = malloc(sizeof(BinarySequence));
+            sequences[*count] = calloc(1, sizeof(BinarySequence));
             if (!sequences[*count]) {
                 perror("Failed to allocate BinarySequence");
                 break;
@@ -97,7 +97,6 @@ BinarySequence** load_debug_sequences(const char* filename, int* count) {
             /* Store the sequence bytes */
             sequences[*count]->sequence = malloc(length);
             if (!sequences[*count]->sequence) {
-                perror("Failed to allocate sequence data");
                 free(sequences[*count]);
                 break;
             }

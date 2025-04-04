@@ -61,6 +61,6 @@ $(BUILD_DIR)/debug/%.o: $(DEBUG_DIR)/%.c
 	$(CC) $(CFLAGS) -DDEBUG -g -c $< -o $@
 
 clean:
-	rm -rf $(TARGET) $(DEBUG_TARGET) $(BUILD_DIR)
+	rm -rf $(TARGET) $(DEBUG_TARGET) $(BUILD_DIR) src/combined_*.c ./a.out
 
 -include $(DEPS)

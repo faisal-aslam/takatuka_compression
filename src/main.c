@@ -17,11 +17,16 @@ int main(int argc, char *argv[]) {
     int sequenceCount = 0;
 
 #ifdef DEBUG
-    // Debug mode - load from file
     topSequences = load_debug_sequences(DEBUG_SEQUENCE_FILE, &sequenceCount);
     if (!topSequences) {
         fprintf(stderr, "Debug load failed, falling back to normal processing\n");
-        // Fall through to normal processing
+        // Continue with normal processing
+        initializeHashTable();
+        processFileInBlocks(argv[1]);
+        buildMinHeap();
+        topSequences = malloc(MAX_NUMBER_OF_SEQUENCES * sizeof(BinarySequence *));
+        extractTopSequences(topSequences);
+        sequenceCount = MAX_NUMBER_OF_SEQUENCES;
     } else {
         // Initialize sequence map with debug sequences
         initializeSequenceMap();
@@ -29,26 +34,29 @@ int main(int argc, char *argv[]) {
             if (topSequences[i]) {
                 unsigned int hashValue = fnv1a_hash(topSequences[i]->sequence, 
                                                   topSequences[i]->length);
-                SequenceMapEntry *entry = malloc(sizeof(SequenceMapEntry));
+                SequenceMapEntry *entry = calloc(1, sizeof(SequenceMapEntry));
                 entry->key = malloc(topSequences[i]->length);
+                if (!entry->key) {
+                    free(entry);
+                    continue;
+                }
                 memcpy(entry->key, topSequences[i]->sequence, topSequences[i]->length);
                 entry->key_length = topSequences[i]->length;
                 entry->sequence = topSequences[i];
                 sequenceMap[hashValue] = entry;
             }
         }
-        goto print_results;  // Skip normal processing
     }
-#endif
-
+#else
     // Normal processing path
     initializeHashTable();
     processFileInBlocks(argv[1]);
     buildMinHeap();
-
     topSequences = malloc(MAX_NUMBER_OF_SEQUENCES * sizeof(BinarySequence *));
     extractTopSequences(topSequences);
     sequenceCount = MAX_NUMBER_OF_SEQUENCES;
+#endif
+
 
 #ifdef DEBUG
 print_results:
