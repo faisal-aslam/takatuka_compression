@@ -292,7 +292,6 @@ void processBlockSecondPass(uint8_t* block, long blockSize) {
                 resetToBestNode(node_pool_even, even_pool_count, block, blockIndex);
             }
             isEven = 0; //root is always at even so switch to odd pool next.  
-            //todo
             break;
         }
 
