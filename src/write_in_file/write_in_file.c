@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h> 
 #include "../weighted_freq.h"
 #include "../second_pass/second_pass.h"
 
@@ -66,10 +67,7 @@ static inline void write_bit(uint8_t bit, uint8_t* buffer, uint8_t* bit_pos,
  * 2. For compressed sequences:
  *    - Sequence starts with '1' flag (1 bit)
  *    - Followed by 2-bit group ID (values 1-4)
- *    - Then the actual codeword (groupCodeSize(group) - 3 bits)
- *    - Note: groupCodeSize() includes 3 overhead bits (flag+group)
- *    - Example: Group 1 (7 bits total: 1 flag + 2 group + 4 codeword)
- * 
+ *    - Then the actual codeword (groupCodeSize(group))
  * @param node The TreeNode containing compression metadata with:
  *             - compress_sequence: Array of sequence lengths
  *             - compress_sequence_count: Valid entries in compress_sequence
@@ -133,22 +131,27 @@ static void writeCompressedDataInFile(TreeNode *node, uint8_t* block, FILE *file
                 write_bit((byte >> 1) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
                 write_bit(byte & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
             }
-        } else {
-            // Process compressed sequence
-            write_bit(1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
-            
-            // Write group bits
-            uint8_t group = bin_seq->group;
-            write_bit((group >> 1) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
-            write_bit(group & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
-            
-            // Write codeword bits
-            uint8_t code_size = groupCodeSize(group) - 3;
-            uint16_t codeword = bin_seq->codeword;
-            for (int k = code_size - 1; k >= 0; k--) {
-                write_bit((codeword >> k) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
-            }
-        }
+         
+        
+		} else {
+			// Process compressed sequence
+			write_bit(1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos); // Flag
+
+			// Get group and codeword from the binary sequence
+			uint8_t group = bin_seq->group;
+			uint16_t codeword = bin_seq->codeword;
+			uint8_t code_size = groupCodeSize(group);
+
+			// Write group bits (2 bits)
+			write_bit((group >> 1) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
+			write_bit(group & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
+
+			// Write codeword bits
+			for (int k = code_size - 1; k >= 0; k--) {
+				write_bit((codeword >> k) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
+			}
+		}
+
     }
 
     // Flush remaining data
@@ -185,8 +188,8 @@ static void writeCompressedDataInFile(TreeNode *node, uint8_t* block, FILE *file
  * @param length_of_seq     Number of sequences in the array.
  * @param output_file_name  Name of the output file.
  */
-static void writeHeaderOfCompressedFile(BinarySequence* sequences, int count, FILE* file) {
-    if (!sequences || count <= 0 || !file) {
+static void writeHeaderOfCompressedFile(BinarySequence** topBinarySeq, int count, FILE* file) {
+    if (!topBinarySeq || count <= 0 || !file) {
         fprintf(stderr, "Error: Invalid inputs in writeHeaderOfCompressedFile\n");
         return;
     }
@@ -194,20 +197,22 @@ static void writeHeaderOfCompressedFile(BinarySequence* sequences, int count, FI
     // Count used sequences
     uint16_t used_count = 0;
     for (int i = 0; i < count; i++) {
-        used_count += sequences[i].isUsed ? 1 : 0;
+        if (topBinarySeq[i] && topBinarySeq[i]->isUsed) {
+            used_count++;
+        }
     }
 
-    // Write count (big-endian for portability)
+    // Write count (big-endian)
     uint8_t count_bytes[2] = {used_count >> 8, used_count & 0xFF};
     fwrite(count_bytes, 1, 2, file);
 
-    uint8_t buffer[BUFFER_SIZE];
+    uint8_t* buffer = create_aligned_buffer();
     size_t buf_pos = 0;
 
     for (int i = 0; i < count; i++) {
-        if (!sequences[i].isUsed) continue;
+        if (!topBinarySeq[i] || !topBinarySeq[i]->isUsed) continue;
 
-        BinarySequence *seq = &sequences[i];
+        BinarySequence *seq = topBinarySeq[i];
         uint8_t length = seq->length;
         uint8_t group = seq->group & 0x03;
         uint8_t code_size = groupCodeSize(group);
@@ -217,22 +222,37 @@ static void writeHeaderOfCompressedFile(BinarySequence* sequences, int count, FI
             continue;
         }
 
-        // Prepare header byte
-        uint8_t header = (length << 5) | (group << 3);
-
-        // Check buffer space
+        // Calculate needed space
         size_t needed = 1 + length + (code_size + 7) / 8;
+
+        // Check buffer space        
         if (buf_pos + needed > BUFFER_SIZE) {
-            fwrite(buffer, 1, buf_pos, file);
+            if (buf_pos > 0) {
+                size_t written = fwrite(buffer, 1, buf_pos, file);
+                if (written != buf_pos) {
+                    fprintf(stderr, "Error writing to file\n");
+                    free(buffer);
+                    return;
+                }
+            }
             buf_pos = 0;
         }
 
-        // Write to buffer
+        // Ensure we don't overflow buffer
+        if (buf_pos + needed > BUFFER_SIZE) {
+            fprintf(stderr, "Error: Sequence too large for buffer\n");
+            continue;
+        }
+
+        // Prepare and write header byte
+        uint8_t header = (length << 5) | (group << 3);
         buffer[buf_pos++] = header;
+        
+        // Write sequence data
         memcpy(buffer + buf_pos, seq->sequence, length);
         buf_pos += length;
         
-        // Write codeword (handles variable code sizes)
+        // Write codeword
         uint16_t codeword = seq->codeword;
         for (int j = (code_size - 1) / 8; j >= 0; j--) {
             buffer[buf_pos++] = (codeword >> (8 * j)) & 0xFF;
@@ -243,8 +263,123 @@ static void writeHeaderOfCompressedFile(BinarySequence* sequences, int count, FI
     if (buf_pos > 0) {
         fwrite(buffer, 1, buf_pos, file);
     }
+    
+    free(buffer);
 }
 
+
+
+
+/**
+ * @brief Get the overhead bits for a group (flag + group bits)
+ * 
+ * @param group The group number (1-4)
+ * @return uint8_t The 3-bit overhead (1 flag bit + 2 group bits)
+ * 
+  * Group 1: 100 (binary) - 0x4
+  * Group 2: 101 (binary) - 0x5
+  * Group 3: 110 (binary) - 0x6
+  * Group 4: 111 (binary) - 0x7
+  */
+static uint8_t groupCodeOverhead(uint8_t group) {
+    switch(group) {
+        case 1: return 0x4;  // 100 (binary)
+        case 2: return 0x5;  // 101 (binary)
+        case 3: return 0x6;  // 110 (binary)
+        case 4: return 0x7;  // 111 (binary)
+        default:
+            fprintf(stderr, "Error: Invalid group %d in groupCodeOverhead\n", group);
+            exit(EXIT_FAILURE);
+    }
+}
+
+/**
+  * @brief Update used count and assign unique codewords to binary sequences
+  * 
+  * @param best_node TreeNode with best compression path 
+  * @param raw_data Pointer to raw data block
+  * @param sequences Array of binary sequences
+  * @param seq_count Number of sequences in array
+  */
+static inline void updateUsedCountAndCodeword(TreeNode *best_node, uint8_t* raw_data, 
+                                           BinarySequence** sequences, int seq_count) {
+    if (!best_node || !raw_data || !sequences || seq_count <= 0) {
+        fprintf(stderr, "Error: Invalid inputs in updateUsedCountAndCodeword\n");
+        return;
+    }
+
+    // Track codeword assignments per group
+    uint16_t next_codeword[TOTAL_GROUPS + 1] = {0};  // Groups 1-4, index 0 unused
+
+    uint32_t block_pos = 0;
+    for (int i = 0; i < best_node->compress_sequence_count && i < COMPRESS_SEQUENCE_LENGTH; i++) {
+        uint16_t seq_len = best_node->compress_sequence[i];
+        
+        if (seq_len == 0 || seq_len > SEQ_LENGTH_LIMIT) {
+            fprintf(stderr, "Warning: Skipping invalid sequence length %d\n", seq_len);
+            continue;
+        }
+
+        if (block_pos + seq_len > BLOCK_SIZE) {
+            fprintf(stderr, "Error: Block overflow at position %u\n", block_pos);
+            break;
+        }
+
+        uint8_t sequence[SEQ_LENGTH_LIMIT];
+        memcpy(sequence, raw_data + block_pos, seq_len);
+        block_pos += seq_len;
+
+        BinarySequence* bin_seq = lookupSequence(sequence, seq_len);
+        if (bin_seq) {
+            // Verify the sequence is within our allocated array
+            for (int j = 0; j < seq_count; j++) {
+                if (sequences[j] == bin_seq) {
+                    // Only assign if not already used
+                    if (!bin_seq->isUsed) {
+                        bin_seq->isUsed = 1;
+                        
+                        // Get group info
+                        uint8_t group = bin_seq->group;
+                        if (group < 1 || group > TOTAL_GROUPS) {
+                            fprintf(stderr, "Error: Invalid group %d for sequence\n", group);
+                            continue;
+                        }
+                        
+                        // Calculate available codeword bits (total bits - overhead)
+                        uint8_t code_size = groupCodeSize(group);
+                        uint16_t max_codeword = (1 << code_size) - 1;
+                        
+                        // Assign next available codeword for this group
+                        if (next_codeword[group] > max_codeword) {
+                            fprintf(stderr, "Error: No more codewords available for group %d\n", group);
+                            continue;
+                        }
+                        
+                        // Combine overhead (flag + group) with codeword
+                        uint8_t overhead = groupCodeOverhead(group);
+                        bin_seq->codeword = (overhead << code_size) | next_codeword[group];
+                        next_codeword[group]++;
+                        
+                        #ifdef DEBUG
+                        printf("\nAssigned codeword to sequence (group %d):\n", group);
+                        printf("\tSequence: { ");
+                        for (int k = 0; k < bin_seq->length; k++) {
+                            printf("%u", bin_seq->sequence[k]);
+                            if (k+1 < bin_seq->length) printf(", ");
+                        }
+                        printf(" }\n");
+                        printf("\tCodeword: 0x%X (overhead: 0x%X, value: 0x%X)\n", 
+                               bin_seq->codeword, overhead, next_codeword[group]-1);
+                        printf("\tTotal bits: %d (data bits: %d)\n", 
+                               groupCodeSize(group), code_size);
+                        #endif
+                    }
+                    break;
+                }
+            }
+        }
+    }
+}
 
 /**
   * @brief Main function to write complete compressed output file
@@ -255,23 +390,25 @@ static void writeHeaderOfCompressedFile(BinarySequence* sequences, int count, FI
   * @param best_node TreeNode with best compression path
   * @param raw_data Pointer to raw data block
   */
- void writeCompressedOutput(const char* filename, BinarySequence* sequences, 
-                           int seq_count, TreeNode *best_node, uint8_t* raw_data) {
-     if (!filename || !sequences || seq_count <= 0 || !best_node || !raw_data) {
-         fprintf(stderr, "Error: Invalid inputs in writeCompressedOutput\n");
-         return;
-     }
- 
-     FILE *file = fopen(filename, "wb");
-     if (!file) {
-         perror("Failed to open output file");
-         return;
-     }
- 
-     writeHeaderOfCompressedFile(sequences, seq_count, file);
-     writeCompressedDataInFile(best_node, raw_data, file);
-     
-     if (fclose(file) != 0) {
-         perror("Warning: Error closing output file");
-     }
- }
+void writeCompressedOutput(const char* filename, BinarySequence** sequences, 
+                         int seq_count, TreeNode *best_node, uint8_t* raw_data) {
+    if (!filename || !sequences || seq_count <= 0 || !best_node || !raw_data) {
+        fprintf(stderr, "Error: Invalid inputs in writeCompressedOutput\n");
+        return;
+    }
+
+    FILE *file = fopen(filename, "wb");
+    if (!file) {
+        perror("Failed to open output file");
+        return;
+    }
+
+    updateUsedCountAndCodeword(best_node, raw_data, sequences, seq_count);
+    writeHeaderOfCompressedFile(sequences, seq_count, file);
+    writeCompressedDataInFile(best_node, raw_data, file);
+    
+    if (fclose(file) != 0) {
+        perror("Warning: Error closing output file");
+    }
+}
+

@@ -18,7 +18,7 @@ typedef struct TreeNode {
     uint8_t isPruned;
 } TreeNode;
 
-void processSecondPass(const char* filename);
-void processBlockSecondPass(uint8_t* block, long blockSize);
+void processSecondPass(const char* filename, BinarySequence** topSequences);
+void processBlockSecondPass(uint8_t* block, long blockSize, BinarySequence** topSequences);
 
 #endif

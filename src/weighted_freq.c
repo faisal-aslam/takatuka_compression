@@ -3,16 +3,23 @@
 #include <string.h>
 #include <limits.h>
 
-int groupCodeSize(int group) {
-	switch(group) {
-		case 1: return GROUP1_CODE_SIZE;
-		case 2: return GROUP2_CODE_SIZE;
-		case 3: return GROUP3_CODE_SIZE;
-		case 4: return GROUP4_CODE_SIZE;
-		default: return INT_MAX;
-	}
+// Returns JUST the codeword bits (excluding flag + group bits)
+uint8_t groupCodeSize(uint8_t group) {
+    switch(group) {
+        case 1: return 4;  // 4-bit codeword
+        case 2: return 4;  // 4-bit codeword
+        case 3: return 4;  // 4-bit codeword
+        case 4: return 12; // 12-bit codeword
+        default:
+            fprintf(stderr, "Invalid group %d\n", group);
+            return 0;
+    }
 }
 
+//Returns overhead of a group.
+uint8_t groupOverHead(uint8_t group) {
+	return 3;
+}
 
 // FNV-1a hash function implementation
 unsigned int fnv1a_hash(uint8_t *sequence, int length) {
@@ -40,12 +47,13 @@ void printTopSequences(BinarySequence **topSequences) {
         for (int j = 0; j < topSequences[i]->length; j++) {
             printf("%02X ", topSequences[i]->sequence[j]);
         }
-        printf("Count(C): %d, Length(L): %d, Freq(C*L):  %d, Group: %d, Savings (L*8-GL)*C: %d bits\n",
+        long savings = topSequences[i]->length*8-(groupCodeSize(topSequences[i]->group)+groupOverHead(topSequences[i]->group))*topSequences[i]->count;
+        printf("Count(C): %d, Length(L): %d, Freq(C*L):  %d, Group: %d, Savings (L*8-GL)*C: %ld bits\n",
                topSequences[i]->count,
                topSequences[i]->length,
                topSequences[i]->frequency,
                topSequences[i]->group,
-               ((topSequences[i]->length*8-groupCodeSize(topSequences[i]->group))*topSequences[i]->count));
+               savings);
     }
     
 }

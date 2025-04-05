@@ -109,7 +109,7 @@ void extractTopSequences(BinarySequence **result) {
         BinarySequence *seq = maxHeap[0];
         maxHeap[0] = maxHeap[--heapSize];
         minHeapify(0);
-        long potential_savings = (seq->length * 8 - groupCodeSize(seq->group)) * seq->count;
+        long potential_savings = (seq->length * 8 - (groupCodeSize(seq->group)+groupOverHead(seq->group))) * seq->count;
         //printf(" \n\n potential_savings=%ld, seq->group (%d) <= TOTAL_GROUPS (%d)", potential_savings, seq->group, TOTAL_GROUPS);
         if (potential_savings >= LEAST_REDUCTION && seq->group <= TOTAL_GROUPS) {
             result[count] = seq;
@@ -183,7 +183,7 @@ static void assignGroupsByFrequency() {
         int code_size = 0;  // Will store the actual code size used
         
         if (elementsInGroup < GROUP1_THRESHOLD) {
-            code_size = GROUP1_CODE_SIZE;
+            code_size = groupCodeSize(1)+groupOverHead(1);
             potential_savings = (temp[i]->length * 8 - code_size) * temp[i]->count;
             
             if (potential_savings > LEAST_REDUCTION) {
@@ -192,7 +192,7 @@ static void assignGroupsByFrequency() {
             }
         }
         else if (elementsInGroup < GROUP2_THRESHOLD) {
-            code_size = GROUP2_CODE_SIZE;
+            code_size = groupCodeSize(2)+groupOverHead(2);
             potential_savings = (temp[i]->length * 8 - code_size) * temp[i]->count;
             
             if (potential_savings > LEAST_REDUCTION) {
@@ -201,7 +201,7 @@ static void assignGroupsByFrequency() {
             }
         }
         else if (elementsInGroup < GROUP3_THRESHOLD) {
-            code_size = GROUP3_CODE_SIZE;
+            code_size = groupCodeSize(3)+groupOverHead(3);
             potential_savings = (temp[i]->length * 8 - code_size) * temp[i]->count;
             
             if (potential_savings > LEAST_REDUCTION) {
@@ -210,7 +210,7 @@ static void assignGroupsByFrequency() {
             }
         }
         else if (elementsInGroup < GROUP4_THRESHOLD) {
-            code_size = GROUP4_CODE_SIZE;
+            code_size = groupCodeSize(4)+groupOverHead(4);
             potential_savings = (temp[i]->length * 8 - code_size) * temp[i]->count;
             
             if (potential_savings > LEAST_REDUCTION) {

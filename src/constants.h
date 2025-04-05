@@ -16,9 +16,11 @@
 #define TOTAL_GROUPS 4
 
 // Codeword sizes
+/*
 #define GROUP1_CODE_SIZE 7
 #define GROUP2_CODE_SIZE 7
 #define GROUP3_CODE_SIZE 7
 #define GROUP4_CODE_SIZE 15
+*/
 
 #endif

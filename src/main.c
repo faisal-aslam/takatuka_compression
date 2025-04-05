@@ -63,7 +63,7 @@ print_results:
 #endif
     printTopSequences(topSequences);
 
-    processSecondPass(argv[1]);
+    processSecondPass(argv[1], topSequences);
 
     // Cleanup
 #ifdef DEBUG

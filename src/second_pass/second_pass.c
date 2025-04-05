@@ -2,6 +2,7 @@
 #include "second_pass.h"
 #include <string.h>
 #include <stdlib.h>
+#include "../write_in_file/write_in_file.h"
 
 // Add these at the beginning of the file, after includes
 #ifndef MIN
@@ -185,7 +186,7 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
 
             // Calculate new savings (in bits)
             uint32_t new_saving = oldNode.saving_so_far + 
-                                (bin_seq->length * 8 - groupCodeSize(bin_seq->group));
+                                (bin_seq->length * 8 - (groupCodeSize(bin_seq->group)+groupOverHead(bin_seq->group)));
 
             // Skip if not better than current best
             if (new_saving <= best_saving[0]) { //In this case our weight will be always zero
@@ -256,7 +257,7 @@ static inline void createRoot(uint8_t* block, int savings, int block_index) {
 }
 
 
-static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint8_t* block, uint32_t block_index) {
+static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint8_t* block, uint32_t block_index, BinarySequence** topSeq) {
     // Find node with maximum savings
     uint32_t max_saving = 0;
     int best_index = 0;
@@ -267,6 +268,10 @@ static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint
             best_index = i;
         }
     }
+    printf("\n calling writeCompressedOutput");
+    writeCompressedOutput("compress.bin", topSeq, MAX_NUMBER_OF_SEQUENCES, 
+                         &source_pool[best_index], block);
+                          
     printf("\n====================== resting to :");
     printNode(&source_pool[best_index], block, 0);
 	//todo add here code to write compressed data in file.	
@@ -274,8 +279,8 @@ static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint
 }
 
 
-void processBlockSecondPass(uint8_t* block, long blockSize) {
-    if (SEQ_LENGTH_LIMIT <= 1 || blockSize <= 0 || block == NULL) {
+void processBlockSecondPass(uint8_t* block, long blockSize, BinarySequence** topSeq) {
+    if (SEQ_LENGTH_LIMIT <= 1 || blockSize <= 0 || block == NULL || !topSeq) {
         return;
     }
     createRoot(block, 0, 0);  // Start with fresh root
@@ -287,9 +292,9 @@ void processBlockSecondPass(uint8_t* block, long blockSize) {
         // Check if we need to prune
         if (blockIndex% COMPRESS_SEQUENCE_LENGTH == 0) {
         	if (isEven) { //valid data is in odd pool as even pool to be process next.
-                resetToBestNode(node_pool_odd, odd_pool_count, block, blockIndex);
+                resetToBestNode(node_pool_odd, odd_pool_count, block, blockIndex, topSeq);
             } else { //valid data is in even pool
-                resetToBestNode(node_pool_even, even_pool_count, block, blockIndex);
+                resetToBestNode(node_pool_even, even_pool_count, block, blockIndex, topSeq);
             }
             isEven = 0; //root is always at even so switch to odd pool next.  
             break;
@@ -311,13 +316,13 @@ void processBlockSecondPass(uint8_t* block, long blockSize) {
     }
     printf("\n------------------------------------------------>Ending \n");
 	if (isEven) { //valid data is in odd pool as even pool to be process next.
-        resetToBestNode(node_pool_odd, odd_pool_count, block, blockIndex);
+        resetToBestNode(node_pool_odd, odd_pool_count, block, blockIndex, topSeq);
     } else { //valid data is in even pool
-        resetToBestNode(node_pool_even, even_pool_count, block, blockIndex);
+        resetToBestNode(node_pool_even, even_pool_count, block, blockIndex, topSeq);
     }
 }
 
-void processSecondPass(const char* filename) {
+void processSecondPass(const char* filename, BinarySequence** topSeq) {
     FILE* file = fopen(filename, "rb");
     if (!file) {
         perror("Failed to open file");
@@ -335,7 +340,7 @@ void processSecondPass(const char* filename) {
         long bytesRead = fread(block, 1, BLOCK_SIZE, file);
         if (bytesRead == 0) break;
 
-        processBlockSecondPass(block, bytesRead);
+        processBlockSecondPass(block, bytesRead, topSeq);
     }
     printf("\n\n\n Potential Savings = %u\n", best_saving_overall);
 
