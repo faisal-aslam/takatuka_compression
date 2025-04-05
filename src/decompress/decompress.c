@@ -147,7 +147,7 @@ static void decompressData(FILE* input, FILE* output,
     size_t out_pos = 0;
 
     while (1) {
-        uint8_t flag = read_bit(&bit_buffer, &bit_pos, input, &byte_buffer, &byte_pos, &bytes_read);
+        uint8_t flag = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
         if (bytes_read == 0 && bit_pos == 0) break;
 
         if (flag == 0) {
@@ -248,4 +248,23 @@ void decompressBinaryFile(const char* input_filename, const char* output_filenam
     if (fclose(output) != 0) {
         perror("Warning: Error closing output file");
     }
+}
+
+int main(int argc, char** argv) {
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <compressed_path> <reconstructed_path>\n", argv[0]);
+        fprintf(stderr, "Where:\n");
+        fprintf(stderr, "  <compressed_path>    Path to compressed input file\n");
+        fprintf(stderr, "  <reconstructed_path> Path for decompressed output file\n");
+        return 1;
+    }
+
+    const char* compressed_path = argv[1];
+    const char* reconstructed_path = argv[2];
+
+    printf("Decompressing %s to %s...\n", compressed_path, reconstructed_path);
+    decompressBinaryFile(compressed_path, reconstructed_path);
+    printf("Decompression complete.\n");
+
+    return 0;
 }

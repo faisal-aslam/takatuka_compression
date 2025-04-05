@@ -48,9 +48,12 @@ debug: CFLAGS += -DDEBUG -g
 debug: $(DEBUG_TARGET)
 
 compress: $(TARGET)
-	@echo "Compression functionality is built into $(TARGET)"
+	@echo "Built compression tool: ./$(TARGET)"
+	@echo "Usage: ./$(TARGET) <input_file> <compressed_output>"
 
 decompress: $(DECOMPRESS_TARGET)
+	@echo "Built decompression tool: ./$(DECOMPRESS_TARGET)"
+	@echo "Usage: ./$(DECOMPRESS_TARGET) <compressed_input> <decompressed_output>"
 
 $(TARGET): $(MAIN_OBJS) $(SECOND_PASS_OBJ) $(WRITE_IN_FILE_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^
@@ -82,11 +85,23 @@ $(BUILD_DIR)/write_in_file/%.o: $(WRITE_IN_FILE_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Decompress compilation
-$(BUILD_DIR)/decompress/%.o: $(DECOMPRESS_DIR)/%.c
+$(BUILD_DIR)/decompress/decompress.o: $(DECOMPRESS_DIR)/decompress.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf $(TARGET) $(DEBUG_TARGET) $(COMPRESS_TARGET) $(DECOMPRESS_TARGET) $(BUILD_DIR) src/combined_*.c ./a.out
+	@rm -rf $(TARGET) $(DEBUG_TARGET) $(COMPRESS_TARGET) $(DECOMPRESS_TARGET) $(BUILD_DIR) src/combined_*.c ./a.out
+	@echo "Cleaned all build artifacts"
 
 -include $(DEPS)
+
+# Help target
+help:
+	@echo "Available targets:"
+	@echo "  all         - Build all targets (default)"
+	@echo "  release     - Build optimized release version"
+	@echo "  debug       - Build debug version"
+	@echo "  compress    - Build compression tool"
+	@echo "  decompress  - Build decompression tool"
+	@echo "  clean       - Remove all build artifacts"
+	@echo "  help        - Show this help message"
