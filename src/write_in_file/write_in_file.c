@@ -232,23 +232,22 @@ static void writeHeaderOfCompressedFile(BinarySequence* sequences, int count, FI
  * @param best_node TreeNode with best compression path
  * @param raw_data Pointer to raw data block
  */
-void writeCompressedOutput(const char* filename, BinarySequence* sequences, 
-                          int seq_count, TreeNode *best_node, uint8_t* raw_data) {
-    if (!filename || !sequences || seq_count <= 0 || !best_node || !raw_data) {
-        fprintf(stderr, "Error: Invalid inputs in writeCompressedOutput\n");
-        return;
+int main(int argc, char** argv) {
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <compressed_path> <reconstructed_path>\n", argv[0]);
+        fprintf(stderr, "Where:\n");
+        fprintf(stderr, "  <compressed_path>    Path to compressed input file\n");
+        fprintf(stderr, "  <reconstructed_path> Path for decompressed output file\n");
+        return 1;
     }
 
-    FILE *file = fopen(filename, "wb");
-    if (!file) {
-        perror("Failed to open output file");
-        return;
-    }
+    const char* compressed_path = argv[1];
+    const char* reconstructed_path = argv[2];
 
-    writeHeaderOfCompressedFile(sequences, seq_count, file);
-    writeCompressedDataInFile(best_node, raw_data, file);
-    
-    if (fclose(file) != 0) {
-        perror("Warning: Error closing output file");
-    }
+    printf("Decompressing %s to %s...\n", compressed_path, reconstructed_path);
+    decompressBinaryFile(compressed_path, reconstructed_path);
+    printf("Decompression complete.\n");
+
+    return 0;
 }
+
