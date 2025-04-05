@@ -246,3 +246,32 @@ static void writeHeaderOfCompressedFile(BinarySequence* sequences, int count, FI
 }
 
 
+/**
+  * @brief Main function to write complete compressed output file
+  * 
+  * @param filename Output file path
+  * @param sequences Array of binary sequences for header
+  * @param seq_count Number of sequences
+  * @param best_node TreeNode with best compression path
+  * @param raw_data Pointer to raw data block
+  */
+ void writeCompressedOutput(const char* filename, BinarySequence* sequences, 
+                           int seq_count, TreeNode *best_node, uint8_t* raw_data) {
+     if (!filename || !sequences || seq_count <= 0 || !best_node || !raw_data) {
+         fprintf(stderr, "Error: Invalid inputs in writeCompressedOutput\n");
+         return;
+     }
+ 
+     FILE *file = fopen(filename, "wb");
+     if (!file) {
+         perror("Failed to open output file");
+         return;
+     }
+ 
+     writeHeaderOfCompressedFile(sequences, seq_count, file);
+     writeCompressedDataInFile(best_node, raw_data, file);
+     
+     if (fclose(file) != 0) {
+         perror("Warning: Error closing output file");
+     }
+ }
