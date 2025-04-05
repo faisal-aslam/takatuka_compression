@@ -7,8 +7,8 @@ CFLAGS = -Wall -Wextra -pedantic -O3 -march=native -flto -funroll-loops \
 LDFLAGS = -flto -O3 -fuse-linker-plugin
 
 # Targets
-TARGET = weighted_freq
-DEBUG_TARGET = weighted_freq-debug
+TARGET = compress
+DEBUG_TARGET = compress-debug
 COMPRESS_TARGET = compress
 DECOMPRESS_TARGET = decompress
 

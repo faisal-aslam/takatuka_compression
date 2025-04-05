@@ -3,12 +3,26 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../weighted_freq.h"
+#include "../second_pass/second_pass.h"
 
-#define BUFFER_SIZE 4096  // Optimal buffer size for efficient disk I/O
-#define MAX_SEQ_LENGTH 8  // Maximum supported sequence length
+#define BUFFER_SIZE (1024 * 1024)  // 1MB buffer for better I/O performance
+#define MAX_SEQ_LENGTH 8
+#define ALIGNMENT 64  // Cache line alignment for AVX/SSE
 
 /**
- * @brief Writes individual bits to a buffered output with bit-level precision
+ * @brief Creates an aligned buffer for optimal memory access
+ */
+static uint8_t* create_aligned_buffer() {
+    uint8_t* buf = aligned_alloc(ALIGNMENT, BUFFER_SIZE);
+    if (!buf) {
+        fprintf(stderr, "Error: Failed to allocate aligned buffer\n");
+        exit(EXIT_FAILURE);
+    }
+    return buf;
+}
+
+/**
+ * @brief Writes individual bits with aligned buffers and optimized flushing
  * 
  * @param bit The bit value (0 or 1) to write
  * @param buffer Pointer to the current byte buffer
@@ -21,17 +35,15 @@
  */
 static inline void write_bit(uint8_t bit, uint8_t* buffer, uint8_t* bit_pos, 
                            FILE* file, uint8_t* byte_buffer, size_t* byte_pos) {
-    // Set the bit in the buffer
     *buffer |= (bit & 1) << (7 - *bit_pos);
     (*bit_pos)++;
     
-    // When byte is full, add to main buffer
     if (*bit_pos == 8) {
         byte_buffer[(*byte_pos)++] = *buffer;
         *buffer = 0;
         *bit_pos = 0;
         
-        // Flush buffer when full
+        // Flush aligned buffer when full
         if (*byte_pos == BUFFER_SIZE) {
             fwrite(byte_buffer, 1, BUFFER_SIZE, file);
             *byte_pos = 0;
@@ -39,7 +51,7 @@ static inline void write_bit(uint8_t bit, uint8_t* buffer, uint8_t* bit_pos,
     }
 }
 
-/**
+ /**
  * @brief Writes compressed data to a file with proper flagging and bit-level organization.
  * 
  * This function processes compressed sequences from a TreeNode and writes them to a file
@@ -75,7 +87,7 @@ static inline void write_bit(uint8_t bit, uint8_t* buffer, uint8_t* bit_pos,
  *     Writes: 0 01000001 0 01000010 (18 bits)
  *   Compressed sequence (group 1):
  *     Writes: 1 01 [4-bit codeword] (7 bits total)
- */
+*/
 static void writeCompressedDataInFile(TreeNode *node, uint8_t* block, FILE *file) {
     if (!node || !block || !file) {
         fprintf(stderr, "Error: Invalid inputs in writeCompressedDataInFile\n");
@@ -84,7 +96,7 @@ static void writeCompressedDataInFile(TreeNode *node, uint8_t* block, FILE *file
 
     uint8_t bit_buffer = 0;
     uint8_t bit_pos = 0;
-    uint8_t byte_buffer[BUFFER_SIZE];
+    uint8_t* byte_buffer = create_aligned_buffer();
     size_t byte_pos = 0;
 
     uint32_t block_pos = 0;
@@ -96,7 +108,6 @@ static void writeCompressedDataInFile(TreeNode *node, uint8_t* block, FILE *file
             continue;
         }
 
-        // Extract sequence safely
         uint8_t sequence[SEQ_LENGTH_LIMIT];
         if (block_pos + seq_len > BLOCK_SIZE) {
             fprintf(stderr, "Error: Block overflow at position %u\n", block_pos);
@@ -108,40 +119,51 @@ static void writeCompressedDataInFile(TreeNode *node, uint8_t* block, FILE *file
         BinarySequence* bin_seq = lookupSequence(sequence, seq_len);
 
         if (!bin_seq) {
-            // Uncompressed sequence - write each byte with leading 0
+            // Process uncompressed sequence
             for (int j = 0; j < seq_len; j++) {
                 write_bit(0, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
-                for (int k = 7; k >= 0; k--) {
-                    write_bit((sequence[j] >> k) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
-                }
+                uint8_t byte = sequence[j];
+                // Unrolled loop for better performance
+                write_bit((byte >> 7) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
+                write_bit((byte >> 6) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
+                write_bit((byte >> 5) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
+                write_bit((byte >> 4) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
+                write_bit((byte >> 3) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
+                write_bit((byte >> 2) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
+                write_bit((byte >> 1) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
+                write_bit(byte & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
             }
         } else {
-            // Compressed sequence
+            // Process compressed sequence
             write_bit(1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
             
-            // Write 2-bit group ID
-            for (int k = 1; k >= 0; k--) {
-                write_bit((bin_seq->group >> k) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
-            }
+            // Write group bits
+            uint8_t group = bin_seq->group;
+            write_bit((group >> 1) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
+            write_bit(group & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
             
-            // Write codeword (excluding 3 overhead bits)
-            uint8_t code_size = groupCodeSize(bin_seq->group) - 3;
+            // Write codeword bits
+            uint8_t code_size = groupCodeSize(group) - 3;
+            uint16_t codeword = bin_seq->codeword;
             for (int k = code_size - 1; k >= 0; k--) {
-                write_bit((bin_seq->codeword >> k) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
+                write_bit((codeword >> k) & 1, &bit_buffer, &bit_pos, file, byte_buffer, &byte_pos);
             }
         }
     }
 
-    // Flush remaining bits by padding with 0 if needed
+    // Flush remaining data
     if (bit_pos > 0) {
         byte_buffer[byte_pos++] = bit_buffer;
     }
-
-    // Final write of any remaining data
     if (byte_pos > 0) {
         fwrite(byte_buffer, 1, byte_pos, file);
     }
+    
+    free(byte_buffer);
 }
+
+
+
 
 /**
  * @brief Writes all used binary sequences (`isUsed = 1`) to a file in a compressed format.
@@ -223,31 +245,4 @@ static void writeHeaderOfCompressedFile(BinarySequence* sequences, int count, FI
     }
 }
 
-/**
- * @brief Main function to write complete compressed output file
- * 
- * @param filename Output file path
- * @param sequences Array of binary sequences for header
- * @param seq_count Number of sequences
- * @param best_node TreeNode with best compression path
- * @param raw_data Pointer to raw data block
- */
-int main(int argc, char** argv) {
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s <compressed_path> <reconstructed_path>\n", argv[0]);
-        fprintf(stderr, "Where:\n");
-        fprintf(stderr, "  <compressed_path>    Path to compressed input file\n");
-        fprintf(stderr, "  <reconstructed_path> Path for decompressed output file\n");
-        return 1;
-    }
-
-    const char* compressed_path = argv[1];
-    const char* reconstructed_path = argv[2];
-
-    printf("Decompressing %s to %s...\n", compressed_path, reconstructed_path);
-    decompressBinaryFile(compressed_path, reconstructed_path);
-    printf("Decompression complete.\n");
-
-    return 0;
-}
 
