@@ -47,7 +47,8 @@ void printTopSequences(BinarySequence **topSequences) {
         for (int j = 0; j < topSequences[i]->length; j++) {
             printf("%02X ", topSequences[i]->sequence[j]);
         }
-        long savings = topSequences[i]->length*8-(groupCodeSize(topSequences[i]->group)+groupOverHead(topSequences[i]->group))*topSequences[i]->count;
+        
+        long savings = (topSequences[i]->length*8-(groupCodeSize(topSequences[i]->group)+groupOverHead(topSequences[i]->group)))*topSequences[i]->count;
         printf("Count(C): %d, Length(L): %d, Freq(C*L):  %d, Group: %d, Savings (L*8-GL)*C: %ld bits\n",
                topSequences[i]->count,
                topSequences[i]->length,
