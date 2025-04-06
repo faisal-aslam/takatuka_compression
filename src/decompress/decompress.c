@@ -49,6 +49,10 @@ static inline uint8_t read_bit(uint8_t* buffer, uint8_t* bit_pos,
            *buffer, *bit_pos, *byte_pos, *bytes_read);
     #endif
     
+    if (*bytes_read == 0) {
+        return -1;  // EOF
+    }
+    
     if (*bit_pos == 8) {
         *bit_pos = 0;
         *buffer = 0;
@@ -265,139 +269,84 @@ static void decompressData(FILE* input, FILE* output,
     size_t byte_pos = 0;
     size_t out_pos = 0;
 
-    #ifdef DEBUG
-    printf("\n=== STARTING DATA DECOMPRESSION ===\n");
-    printf("Initial state: bit_buffer=0x%02X, bit_pos=%d\n", bit_buffer, bit_pos);
-    printf("Initial data buffer: %zu bytes\n", bytes_read);
-    #endif
-
     while (1) {
-        #ifdef DEBUG
-        printf("\n--- Processing new element ---\n");
-        printf("Current buffer: byte_pos=%zu, bytes_read=%zu\n", byte_pos, bytes_read);
-        #endif
+        int read_flag = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
+        if (read_flag == -1) {
+ 		   fprintf(stderr, "Unexpected EOF\n");
+ 		   goto done;
+		}
+        
 
-        uint8_t flag = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
-        #ifdef DEBUG
-        printf("Read flag bit: %d\n", flag);
-        #endif
-
-        if (bytes_read == 0 && bit_pos == 0) {
-            #ifdef DEBUG
-            printf("Reached end of input data\n");
-            #endif
-            break;
-        }
+        uint8_t flag = (uint8_t)read_flag;
 
         if (flag == 0) {
-            #ifdef DEBUG
-            printf("Processing UNCOMPRESSED byte\n");
-            #endif
-            
+            // Read 8 bits (1 byte)
             uint8_t byte = 0;
             for (int i = 0; i < 8; i++) {
-                uint8_t bit = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
-                byte = (byte << 1) | bit;
-                #ifdef DEBUG
-                printf("Read bit %d: %d (byte so far: 0x%02X)\n", i, bit, byte);
-                #endif
+                int b = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
+                if (b == -1) {
+ 				   fprintf(stderr, "Unexpected EOF\n");
+				    goto done;
+				}
+                byte = (byte << 1) | (uint8_t)b;
             }
-            
-            #ifdef DEBUG
-            printf("Complete uncompressed byte: 0x%02X\n", byte);
-            #endif
-            
+
             out_buffer[out_pos++] = byte;
             if (out_pos == BUFFER_SIZE) {
                 fwrite(out_buffer, 1, BUFFER_SIZE, output);
                 out_pos = 0;
             }
         } else {
-            #ifdef DEBUG
-            printf("Processing COMPRESSED sequence\n");
-            #endif
-            
+            // Read group (2 bits)
             uint8_t group = 0;
             for (int i = 0; i < 2; i++) {
-                uint8_t bit = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
-                group = (group << 1) | bit;
-                #ifdef DEBUG
-                printf("Read group bit %d: %d (group so far: %d)\n", i, bit, group);
-                #endif
+                int b = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
+                if (b == -1) {
+				    fprintf(stderr, "Unexpected EOF\n");
+    				goto done;
+                }
+                group = (group << 1) | (uint8_t)b;
             }
-            
-            uint8_t codeword_bits = groupCodeSize(group);
+
+            uint8_t code_size = groupCodeSize(group);
             uint16_t codeword = 0;
-            #ifdef DEBUG
-            printf("Reading %d codeword bits\n", codeword_bits);
-            #endif
-            
-            for (int i = 0; i < codeword_bits; i++) {
-                uint8_t bit = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
-                codeword = (codeword << 1) | bit;
-                #ifdef DEBUG
-                printf("Read codeword bit %d: %d (codeword so far: 0x%04X)\n", i, bit, codeword);
-                #endif
+            for (int i = 0; i < code_size; i++) {
+                int b = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
+                if (b == -1) {
+                    fprintf(stderr, "Unexpected EOF in codeword bits\n");
+                    goto done;
+                }
+                codeword = (codeword << 1) | (uint16_t)b;
             }
-            
-            #ifdef DEBUG
-            printf("Complete pattern: group=%d, codeword=0x%04X\n", group, codeword);
-            printf("Searching %d sequences for match...\n", sequence_count);
-            #endif
-            
+
             int found = 0;
             for (int i = 0; i < sequence_count; i++) {
                 if (sequences[i].group == group && sequences[i].codeword == codeword) {
-                    #ifdef DEBUG
-                    printf("MATCH FOUND at index %d\n", i);
-                    printf("Sequence length: %d\n", sequences[i].length);
-                    printf("Sequence data: ");
-                    for (int j = 0; j < sequences[i].length; j++) {
-                        printf("%02X ", sequences[i].sequence[j]);
-                    }
-                    printf("\n");
-                    #endif
-                    
                     if (out_pos + sequences[i].length > BUFFER_SIZE) {
                         fwrite(out_buffer, 1, out_pos, output);
                         out_pos = 0;
                     }
-                    
                     memcpy(out_buffer + out_pos, sequences[i].sequence, sequences[i].length);
                     out_pos += sequences[i].length;
                     found = 1;
                     break;
                 }
             }
-            
+
             if (!found) {
-                fprintf(stderr, "Error: No matching sequence for group %d codeword 0x%04X\n", 
-                       group, codeword);
-                #ifdef DEBUG
-                printf("Available sequences:\n");
-                for (int i = 0; i < sequence_count; i++) {
-                    printf("  Seq %d: group=%d, codeword=0x%04X, len=%d [", 
-                           i, sequences[i].group, sequences[i].codeword, sequences[i].length);
-                    for (int j = 0; j < sequences[i].length; j++) {
-                        printf("%02X ", sequences[i].sequence[j]);
-                    }
-                    printf("]\n");
-                }
-                #endif
+                fprintf(stderr, "Error: No match for group=%d codeword=0x%04X\n", group, codeword);
+                goto done;
             }
         }
     }
 
+done:
     if (out_pos > 0) {
         fwrite(out_buffer, 1, out_pos, output);
     }
-    
     free(out_buffer);
-    
-    #ifdef DEBUG
-    printf("\n=== DECOMPRESSION COMPLETE ===\n");
-    #endif
 }
+
 
 void decompressBinaryFile(const char* input_filename, const char* output_filename) {
     FILE* input = fopen(input_filename, "rb");
