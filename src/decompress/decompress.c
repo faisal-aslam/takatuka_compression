@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../constants.h"
+#define DEBUG 1
 
 typedef struct {
     uint8_t *sequence;   // The binary sequence
@@ -39,22 +40,37 @@ static uint8_t* create_aligned_buffer() {
     return buf;
 }
 
-// Reads bits from a buffered input (LSB first)
+// Reads bits from a buffered input
 static inline uint8_t read_bit(uint8_t* buffer, uint8_t* bit_pos,
-                             FILE* file, uint8_t* byte_buffer,  // Changed back to single pointer
+                             FILE* file, uint8_t* byte_buffer,
                              size_t* byte_pos, size_t* bytes_read) {
-    // Refill buffer if needed
+    #ifdef DEBUG
+    printf("Before read: buffer=0x%02X, bit_pos=%d, byte_pos=%zu\n", 
+           *buffer, *bit_pos, *byte_pos);
+    #endif
+    
+    if (*bit_pos == 8) {
+        *bit_pos = 0;
+        *buffer = 0;
+    }
+    
     if (*bit_pos == 0) {
         if (*byte_pos >= *bytes_read) {
             *bytes_read = fread(byte_buffer, 1, BUFFER_SIZE, file);
             *byte_pos = 0;
-            if (*bytes_read == 0) return 0; // EOF
+            if (*bytes_read == 0) return 0;
         }
         *buffer = byte_buffer[(*byte_pos)++];
-        *bit_pos = 8;
     }
-    // Extract the bit (LSB first to match write order)
-    return (*buffer >> (--(*bit_pos))) & 1;
+
+    uint8_t bit = (*buffer >> (7 - *bit_pos)) & 1;
+    (*bit_pos)++;
+    
+    #ifdef DEBUG
+    printf("Read bit %d from byte 0x%02X: %d\n", *bit_pos-1, *buffer, bit);
+    #endif
+    
+    return bit;
 }
 
 
@@ -125,9 +141,17 @@ static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count) {
         
         // Read sequence data
         BinarySequence* seq = &sequences[i];
-        seq->length = length;
-        seq->group = group;
-        memcpy(seq->sequence, buffer + buf_pos, length);
+		seq->length = length;
+		seq->group = group;
+		seq->sequence = malloc(length); 
+		if (!seq->sequence) {
+		    fprintf(stderr, "Memory allocation failed for sequence data\n");
+		    for (int j = 0; j < i; ++j) free(sequences[j].sequence);
+    		free(sequences);
+    		return NULL;
+		}
+		memcpy(seq->sequence, buffer + buf_pos, length);
+		     
         buf_pos += length;
         
         // Read codeword (MSB first)
@@ -154,109 +178,207 @@ static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count) {
     return sequences;
 }
 
-
-
-// Decompresses the data and writes binary output
 static void decompressData(FILE* input, FILE* output, 
-                         BinarySequence* sequences, uint16_t sequence_count) {
+                         BinarySequence* sequences, uint16_t sequence_count,
+                         uint8_t* byte_buffer, size_t bytes_read) {
+    // Initialize local variables
     uint8_t bit_buffer = 0;
     uint8_t bit_pos = 0;
-    
-    // Allocate aligned buffers
-    uint8_t* byte_buffer = create_aligned_buffer();
     uint8_t* out_buffer = create_aligned_buffer();
-    
     size_t byte_pos = 0;
-    size_t bytes_read = 0;
     size_t out_pos = 0;
 
+    if (!out_buffer) {
+        fprintf(stderr, "Error: Failed to allocate output buffer\n");
+        return;
+    }
+
+    #ifdef DEBUG
+    printf("\n=== STARTING DECOMPRESSION ===\n");
+    printf("Initial buffer state: bit_buffer=0x%02X, bit_pos=%d\n", bit_buffer, bit_pos);
+    printf("Initial data buffer: %zu bytes available\n", bytes_read);
+    #endif
+    
     while (1) {
+        #ifdef DEBUG
+        printf("\n--- NEW ITERATION ---\n");
+        printf("Current buffer: byte_pos=%zu, bytes_read=%zu\n", byte_pos, bytes_read);
+        #endif
+
         // Read flag bit (MSB first)
         uint8_t flag = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
-        if (bytes_read == 0 && bit_pos == 0) break;
+        #ifdef DEBUG
+        printf("Read flag bit: %d (bit_buffer=0x%02X, bit_pos=%d)\n", flag, bit_buffer, bit_pos);
+        #endif
+
+        if (bytes_read == 0 && bit_pos == 0) {
+            #ifdef DEBUG
+            printf("EOF reached - ending decompression\n");
+            #endif
+            break;
+        }
 
         if (flag == 0) {
+            #ifdef DEBUG
+            printf("Processing UNCOMPRESSED byte\n");
+            #endif
+            
             // Uncompressed byte - read next 8 bits MSB first
             uint8_t byte = 0;
             for (int i = 0; i < 8; i++) {
                 uint8_t bit = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
                 byte = (byte << 1) | bit;
+                #ifdef DEBUG
+                printf("Read bit %d: %d (byte so far: 0x%02X)\n", i, bit, byte);
+                #endif
             }
+            
+            #ifdef DEBUG
+            printf("Complete byte: 0x%02X\n", byte);
+            #endif
             
             // Write to output buffer
             out_buffer[out_pos++] = byte;
             if (out_pos == BUFFER_SIZE) {
+                #ifdef DEBUG
+                printf("Flushing output buffer (full)\n");
+                #endif
                 fwrite(out_buffer, 1, BUFFER_SIZE, output);
                 out_pos = 0;
             }
         } else {
-            // Compressed sequence - read group (2 bits MSB first)
+            #ifdef DEBUG
+            printf("Processing COMPRESSED sequence\n");
+            #endif
+            
+            // Compressed sequence - read group (next 2 bits MSB first)
             uint8_t group = 0;
             for (int i = 0; i < 2; i++) {
                 uint8_t bit = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
                 group = (group << 1) | bit;
+                #ifdef DEBUG
+                printf("Read group bit %d: %d (group so far: %d)\n", i, bit, group);
+                #endif
             }
             
-            // Read codeword (variable length, MSB first)
-            uint8_t code_size = groupCodeSize(group); // Now returns just codeword bits
+            #ifdef DEBUG
+            printf("Complete group: %d\n", group);
+            #endif
+            
+            // Read codeword bits
+            uint8_t codeword_bits = groupCodeSize(group);
             uint16_t codeword = 0;
-            for (int i = 0; i < code_size; i++) {
+            #ifdef DEBUG
+            printf("Reading %d codeword bits\n", codeword_bits);
+            #endif
+            
+            for (int i = 0; i < codeword_bits; i++) {
                 uint8_t bit = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
                 codeword = (codeword << 1) | bit;
+                #ifdef DEBUG
+                printf("Read codeword bit %d: %d (codeword so far: 0x%04X)\n", i, bit, codeword);
+                #endif
             }
+            
+            // Combine flag(1), group(2), and codeword into full_pattern
+            uint16_t full_pattern = (1 << (codeword_bits + 2)) |  // flag bit
+                                   (group << codeword_bits) |     // group bits
+                                   codeword;                      // codeword bits
+            
+            #ifdef DEBUG
+            printf("Full pattern: flag=1, group=%d, codeword=0x%X => full_pattern=0x%X\n",
+                   group, codeword, full_pattern);
+            printf("Sequence count: %d\n", sequence_count);
+            #endif
             
             // Lookup the sequence
             int found = 0;
             for (int i = 0; i < sequence_count; i++) {
-                if (sequences[i].group == group && sequences[i].codeword == codeword) {
+                #ifdef DEBUG
+                printf("Checking sequence %d: group=%d, codeword=0x%X\n",
+                       i, sequences[i].group, sequences[i].codeword);
+                #endif
+                
+                if (sequences[i].group == group && sequences[i].codeword == full_pattern) {
+                    #ifdef DEBUG
+                    printf("MATCH FOUND at index %d\n", i);
+                    printf("Sequence length: %d\n", sequences[i].length);
+                    printf("Sequence data: ");
+                    for (int j = 0; j < sequences[i].length; j++) {
+                        printf("%02X ", sequences[i].sequence[j]);
+                    }
+                    printf("\n");
+                    #endif
+                    
                     // Check buffer space
                     if (out_pos + sequences[i].length > BUFFER_SIZE) {
+                        #ifdef DEBUG
+                        printf("Flushing output buffer before write\n");
+                        #endif
                         fwrite(out_buffer, 1, out_pos, output);
                         out_pos = 0;
                     }
+                    
                     // Write the sequence
                     memcpy(out_buffer + out_pos, sequences[i].sequence, sequences[i].length);
                     out_pos += sequences[i].length;
                     found = 1;
+                    
+                    #ifdef DEBUG
+                    printf("Written %d bytes to output buffer (new out_pos=%zu)\n",
+                           sequences[i].length, out_pos);
+                    #endif
                     break;
                 }
             }
             
             if (!found) {
-                fprintf(stderr, "Error: No matching sequence for group %d, codeword 0x%X\n", 
-                       group, codeword);
-                // Handle error (maybe skip or abort)
+                fprintf(stderr, "ERROR: No matching sequence for group %d, full pattern 0x%X\n", 
+                       group, full_pattern);
+                #ifdef DEBUG
+                printf("Dumping all sequences for comparison:\n");
+                for (int i = 0; i < sequence_count; i++) {
+                    printf("Seq %d: group=%d, codeword=0x%X, len=%d [",
+                           i, sequences[i].group, sequences[i].codeword, sequences[i].length);
+                    for (int j = 0; j < sequences[i].length; j++) {
+                        printf("%02X ", sequences[i].sequence[j]);
+                    }
+                    printf("]\n");
+                }
+                #endif
             }
         }
     }
 
     // Flush remaining output
     if (out_pos > 0) {
+        #ifdef DEBUG
+        printf("Final flush: writing %zu bytes\n", out_pos);
+        #endif
         fwrite(out_buffer, 1, out_pos, output);
     }
     
+    #ifdef DEBUG
+    printf("=== DECOMPRESSION COMPLETE ===\n");
+    #endif
+    
     // Cleanup
-    free(byte_buffer);
     free(out_buffer);
 }
 
-
 // Main decompression function for binary files
 void decompressBinaryFile(const char* input_filename, const char* output_filename) {
-    // Open files in binary mode
+    // Open files
     FILE* input = fopen(input_filename, "rb");
-    if (!input) {
-        perror("Error opening input file");
+    FILE* output = fopen(output_filename, "wb");
+    if (!input || !output) {
+        perror("Error opening files");
+        if (input) fclose(input);
+        if (output) fclose(output);
         return;
     }
-    FILE* output = fopen(output_filename, "wb");    
-    if (!output) {
-        perror("Error opening output file");
-        fclose(input);
-        return;
-    }
-    
-    // Read header to get sequence dictionary
+
+    // Read header
     uint16_t sequence_count;
     BinarySequence* sequences = readHeader(input, &sequence_count);
     if (!sequences) {
@@ -264,18 +386,36 @@ void decompressBinaryFile(const char* input_filename, const char* output_filenam
         fclose(output);
         return;
     }
+
+    #ifdef DEBUG
+    printf("\n=== TRANSITIONING TO DATA SECTION ===\n");
+    printf("Header ends at byte offset: %ld\n", ftell(input));
+    #endif
     
-    // Use aligned buffers for decompression
-    decompressData(input, output, sequences, sequence_count);
+    // Initialize buffer and start decompression
+    uint8_t* byte_buffer = create_aligned_buffer();
+    size_t bytes_read = fread(byte_buffer, 1, BUFFER_SIZE, input);
     
+    #ifdef DEBUG
+    printf("Initial data buffer: bytes_read=%zu\n", bytes_read);
+    if (bytes_read > 0) {
+        printf("First data byte: 0x%02X\n", byte_buffer[0]);
+        printf("Binary: ");
+        for (int i = 7; i >= 0; i--) printf("%d", (byte_buffer[0] >> i) & 1);
+        printf("\n");
+    }
+    #endif
+
+    decompressData(input, output, sequences, sequence_count, byte_buffer, bytes_read);
+
     // Cleanup
+    for (int i = 0; i < sequence_count; i++) {
+        free(sequences[i].sequence);
+    }
     free(sequences);
-    if (fclose(input) != 0) {
-        perror("Warning: Error closing input file");
-    }
-    if (fclose(output) != 0) {
-        perror("Warning: Error closing output file");
-    }
+    free(byte_buffer);
+    fclose(input);
+    fclose(output);
 }
 
 int main(int argc, char** argv) {
