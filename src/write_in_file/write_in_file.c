@@ -427,7 +427,7 @@ static void write_bits(uint16_t data, uint8_t num_bits,
   * Group 3: 110 (binary) - 0x6
   * Group 4: 111 (binary) - 0x7
   */
-static uint8_t groupCodeOverhead(uint8_t group) {
+/*static uint8_t groupCodeOverhead(uint8_t group) {
     switch(group) {
         case 1: return 0x4;  // 100 (binary)
         case 2: return 0x5;  // 101 (binary)
@@ -437,7 +437,7 @@ static uint8_t groupCodeOverhead(uint8_t group) {
             fprintf(stderr, "Error: Invalid group %d in groupCodeOverhead\n", group);
             exit(EXIT_FAILURE);
     }
-}
+}*/
 
 /**
  * @brief Calculates used sequences and assigns group IDs/codewords

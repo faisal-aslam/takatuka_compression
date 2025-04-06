@@ -243,6 +243,9 @@ static uint8_t findEndOfHeaderMarker(FILE* input, uint8_t* byte_buffer, size_t* 
 static void decompressData(FILE* input, FILE* output, 
                          BinarySequence* sequences, uint16_t sequence_count,
                          uint8_t* byte_buffer, size_t* byte_pos, size_t* bytes_read) {
+    #ifdef DEBUG
+    printf("\n\n=== READING Data ===\n");
+    #endif
     uint8_t* out_buffer = create_aligned_buffer();
     size_t out_pos = 0;
     uint8_t bit_buffer = 0;
