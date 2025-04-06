@@ -164,42 +164,25 @@ error_cleanup:
 /**
  * @brief Reads bits from buffer (MSB first)
  */
-static uint16_t read_bits(uint8_t num_bits, uint8_t* bit_buffer, uint8_t* bit_pos,
-                         uint8_t* byte_buffer, size_t* byte_pos, size_t* bytes_read, FILE* file) {
+uint16_t read_bits(uint8_t num_bits, uint8_t* bit_buffer, uint8_t* bit_pos,
+                  uint8_t* byte_buffer, size_t* byte_pos, size_t* bytes_read, FILE* file) {
     uint16_t result = 0;
-    
-    #ifdef DEBUG
-    printf("Reading %d bits: ", num_bits);
-    #endif
     
     for (uint8_t i = 0; i < num_bits; i++) {
         if (*bit_pos == 0) {
             if (*byte_pos >= *bytes_read) {
                 *bytes_read = fread(byte_buffer, 1, BUFFER_SIZE, file);
                 *byte_pos = 0;
-                if (*bytes_read == 0) {
-                    #ifdef DEBUG
-                    printf("\nError: Unexpected EOF\n");
-                    #endif
-                    return 0xFFFF; // Error
-                }
+                if (*bytes_read == 0) return 0xFFFF;
             }
             *bit_buffer = byte_buffer[(*byte_pos)++];
             *bit_pos = 8;
         }
         
-        result = (result << 1) | ((*bit_buffer >> 7) & 1);
-        *bit_buffer <<= 1;
+        // CHANGED THIS LINE - shift before masking
+        result = (result << 1) | ((*bit_buffer >> (*bit_pos - 1)) & 1);
         (*bit_pos)--;
-        
-        #ifdef DEBUG
-        printf("%d", (result & 1));
-        #endif
     }
-    
-    #ifdef DEBUG
-    printf(" -> 0x%04X\n", result);
-    #endif
     
     return result;
 }
@@ -286,6 +269,13 @@ static void decompressData(FILE* input, FILE* output,
             }
 
             uint8_t code_size = groupCodeSize((uint8_t)group);
+			#ifdef DEBUG
+				printf("ABOUT TO READ CODEWORD. CURRENT STATE:\n");
+				printf("Byte position: %zu\n", *byte_pos);
+				printf("Bit position: %d\n", bit_pos);
+				printf("Current byte: 0x%02X\n", byte_buffer[*byte_pos]);
+				printf("Next byte: 0x%02X\n", byte_buffer[*byte_pos+1]);
+			#endif
             uint16_t codeword = read_bits(code_size, &bit_buffer, &bit_pos, byte_buffer, byte_pos, bytes_read, input);
             if (codeword == 0xFFFF) {
                 fprintf(stderr, "Unexpected EOF reading codeword\n");

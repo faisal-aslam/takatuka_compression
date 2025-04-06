@@ -248,6 +248,15 @@ static void writeCompressedDataInFile(TreeNode *node, uint8_t* block, FILE *file
     #endif
 }
 
+#ifdef DEBUG
+// Helper function to print binary representation of a byte
+static void print_binary(uint8_t byte) {
+    for (int i = 7; i >= 0; i--) {
+        printf("%d", (byte >> i) & 1);
+    }
+}
+#endif
+
 /**
  * @brief Writes compressed header with bit-perfect packing and optional padding
  * 
@@ -264,121 +273,112 @@ static void writeCompressedDataInFile(TreeNode *node, uint8_t* block, FILE *file
 static void writeHeaderOfCompressedFile(BinarySequence** topBinarySeq, int seq_count,
                                       uint16_t used_seq_count, FILE* file) {
     if (!topBinarySeq || seq_count <= 0 || !file) return;
-	
-	#ifdef DEBUG
-    /* DEBUG: Header start */
+    
+    #ifdef DEBUG
     printf("=== Writing Header ===\n");
     printf("Total sequences: %d\n", used_seq_count);
     #endif
     
-    // 1. Write sequence count (always 2 full bytes)
+    // 1. Write sequence count (2 bytes big-endian)
     uint8_t count_bytes[2] = {used_seq_count >> 8, used_seq_count & 0xFF};
     fwrite(count_bytes, 1, 2, file);
-   	#ifdef DEBUG
+    
+    #ifdef DEBUG
     printf("Written count: %02X %02X\n", count_bytes[0], count_bytes[1]);
     #endif
 
-    uint8_t bit_buffer = 0;    // Accumulates bits until full byte
-    uint8_t bit_pos = 0;       // Tracks bits in buffer (0-7)
+    uint8_t bit_buffer = 0;
+    uint8_t bit_pos = 0;
     uint8_t byte_buffer[BUFFER_SIZE];
     size_t byte_pos = 0;
 
-    /* Process each sequence */
     for (int i = 0; i < seq_count; i++) {
         if (!topBinarySeq[i] || !topBinarySeq[i]->isUsed) continue;
 
         BinarySequence *seq = topBinarySeq[i];
         uint8_t code_size = groupCodeSize(seq->group);
         
-       	#ifdef DEBUG
-        /* DEBUG: Sequence info */
+        #ifdef DEBUG
         printf("\nSequence %d: ", i);
         for (int j = 0; j < seq->length; j++) printf("%02X ", seq->sequence[j]);
         printf("(len:%d group:%d codeword:%d)\n", seq->length, seq->group, seq->codeword);
-		#endif
+        #endif
 
-        // 1. Write 3-bit length (MSB first)
-       	#ifdef DEBUG
+        // 1. Write 3-bit length
+        #ifdef DEBUG
         printf("Writing length (%d): ", seq->length);
         #endif
         write_bits(seq->length, 3, &bit_buffer, &bit_pos, byte_buffer, &byte_pos);
-       	#ifdef DEBUG
+        
+        #ifdef DEBUG
         printf("-> buffer: %02X, pos: %d\n", bit_buffer, bit_pos);
         #endif
 
-        // 2. Write sequence bytes (handles byte splitting)
+        // 2. Write sequence bytes
         for (int j = 0; j < seq->length; j++) {
-        	#ifdef DEBUG
+            #ifdef DEBUG
             printf("Writing byte %02X: ", seq->sequence[j]);
             #endif
+            
             if (bit_pos == 0) {
+                // Byte-aligned, write directly
                 byte_buffer[byte_pos++] = seq->sequence[j];
                 #ifdef DEBUG
                 printf("(aligned) -> %02X\n", seq->sequence[j]);
                 #endif
             } else {
-                uint8_t first = seq->sequence[j] >> bit_pos;
-                uint8_t second = seq->sequence[j] << (8 - bit_pos);
-                bit_buffer |= first;
-                byte_buffer[byte_pos++] = bit_buffer;
+                // Split across byte boundary
+                byte_buffer[byte_pos++] = bit_buffer | (seq->sequence[j] >> bit_pos);
+                bit_buffer = seq->sequence[j] << (8 - bit_pos);
                 #ifdef DEBUG
-                printf("(split) -> %02X + remaining %02X\n", bit_buffer, second);
+                printf("(split) -> %02X + remaining %02X\n", 
+                       byte_buffer[byte_pos-1], bit_buffer);
                 #endif
-                bit_buffer = second;
             }
         }
 
-        // 3. Write 2-bit group (MSB first)
+        // 3. Write 2-bit group
         #ifdef DEBUG
         printf("Writing group (%d): ", seq->group);
         #endif
         write_bits(seq->group, 2, &bit_buffer, &bit_pos, byte_buffer, &byte_pos);
+        
         #ifdef DEBUG
         printf("-> buffer: %02X, pos: %d\n", bit_buffer, bit_pos);
         #endif
 
-        // 4. Write codeword (MSB first)
+        // 4. Write codeword
         #ifdef DEBUG
         printf("Writing codeword (%d, %d bits): ", seq->codeword, code_size);
         #endif
         write_bits(seq->codeword, code_size, &bit_buffer, &bit_pos, byte_buffer, &byte_pos);
+        
         #ifdef DEBUG
         printf("-> buffer: %02X, pos: %d\n", bit_buffer, bit_pos);
-        #endif
-
-		#ifdef DEBUG
-        /* DEBUG: Current buffer state */
         printf("Current bytes:");
         for (size_t k = 0; k < byte_pos; k++) printf(" %02X", byte_buffer[k]);
         printf("\n");
         #endif
     }
-        /* PADDING: Add zeros to complete final byte if needed */
+
+    // Finalize any remaining bits
     if (bit_pos > 0) {
-        bit_buffer <<= (8 - bit_pos); // Align the bits in the bit buffer
-        byte_buffer[byte_pos++] = bit_buffer; // Write the last, partially filled byte
-
+        byte_buffer[byte_pos++] = bit_buffer;
         #ifdef DEBUG
-        printf("Added padding: %02X (%d bits)\n", bit_buffer, bit_pos);
+        printf("Final padding: %02X (%d bits)\n", bit_buffer, bit_pos);
         #endif
-
-        bit_buffer = 0;
-        bit_pos = 0;
     }
 
-    /* ADD MARKER BYTE 0xFF */
+    // Add end marker
     byte_buffer[byte_pos++] = 0xFF;
-
+    
     #ifdef DEBUG
-    printf("Added end-of-header marker: FF\n");
     printf("\nFinal bytes (%zu):", byte_pos);
     for (size_t i = 0; i < byte_pos; i++) printf(" %02X", byte_buffer[i]);
     printf("\n");
     #endif
 
-    /* Write all completed bytes to file */
     fwrite(byte_buffer, 1, byte_pos, file);
-
 }
 
 /**
@@ -391,29 +391,21 @@ static void writeHeaderOfCompressedFile(BinarySequence** topBinarySeq, int seq_c
  * @param byte_buffer Main output buffer
  * @param byte_pos Position in output buffer
  */
-static void write_bits(uint16_t data, uint8_t num_bits,
-                      uint8_t* bit_buffer, uint8_t* bit_pos,
-                      uint8_t* byte_buffer, size_t* byte_pos) {
-    /* DEBUG: Print each bit */
-    #ifdef DEBUG
-    printf("Bits[%d]: ", num_bits);
-    #endif
-    for (int b = num_bits - 1; b >= 0; b--) {
-	    #ifdef DEBUG
-        printf("%d", (data >> b) & 1);
-        #endif
+static void write_bits(uint16_t value, uint8_t num_bits, uint8_t* bit_buffer, uint8_t* bit_pos,
+                     uint8_t* byte_buffer, size_t* byte_pos) {
+    for (int i = num_bits - 1; i >= 0; i--) {
+        *bit_buffer |= ((value >> i) & 1) << (7 - *bit_pos);
+        (*bit_pos)++;
         
-        *bit_buffer |= ((data >> b) & 1) << (7 - *bit_pos);
-        if (++(*bit_pos) == 8) {
+        if (*bit_pos == 8) {
             byte_buffer[(*byte_pos)++] = *bit_buffer;
             *bit_buffer = 0;
             *bit_pos = 0;
         }
     }
-    #ifdef DEBUG
-    printf("\n");
-    #endif
 }
+
+
 
 
 /**
