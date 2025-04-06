@@ -27,6 +27,11 @@ static inline uint8_t groupCodeSize(uint8_t group) {
 
 #define BUFFER_SIZE (1024 * 1024)
 
+static uint16_t read_bits(uint8_t num_bits, uint8_t* bit_buffer, uint8_t* bit_pos,
+                         uint8_t* byte_buffer, size_t* byte_pos, size_t* bytes_read, FILE* file);
+                         
+static void print_binary(uint8_t byte);
+                         
 static uint8_t* create_aligned_buffer() {
     uint8_t* buf = aligned_alloc(64, BUFFER_SIZE);
     if (!buf) {
@@ -79,11 +84,13 @@ static inline uint8_t read_bit(uint8_t* buffer, uint8_t* bit_pos,
     return bit;
 }
 
+
 static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count) {
     #ifdef DEBUG
     printf("\n=== READING HEADER ===\n");
     #endif
     
+    // Read sequence count (2 bytes big-endian)
     uint8_t count_bytes[2];
     if (fread(count_bytes, 1, 2, file) != 2) {
         fprintf(stderr, "Error: Failed to read sequence count\n");
@@ -93,6 +100,7 @@ static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count) {
     
     #ifdef DEBUG
     printf("Header indicates %d sequences\n", *sequence_count);
+    printf("Count bytes: %02X %02X\n", count_bytes[0], count_bytes[1]);
     #endif
     
     BinarySequence* sequences = calloc(*sequence_count, sizeof(BinarySequence));
@@ -101,109 +109,152 @@ static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count) {
         return NULL;
     }
     
-    uint8_t buffer[BUFFER_SIZE];
-    size_t buf_pos = 0;
-    size_t buf_size = fread(buffer, 1, BUFFER_SIZE, file);
+    uint8_t bit_buffer = 0;
+    uint8_t bit_pos = 0;
+    uint8_t byte_buffer[BUFFER_SIZE];
+    size_t byte_pos = 0;
+    size_t bytes_read = fread(byte_buffer, 1, BUFFER_SIZE, file);
     
     #ifdef DEBUG
-    printf("Initial header buffer load: %zu bytes\n", buf_size);
+    printf("Initial buffer load: %zu bytes\n", bytes_read);
+    if (bytes_read > 0) {
+        printf("First byte: 0x%02X\n", byte_buffer[0]);
+        printf("Binary: ");
+        print_binary(byte_buffer[0]);
+        printf("\n");
+    }
     #endif
-	int i;
+
+    int i;
     for (i = 0; i < *sequence_count; i++) {
         #ifdef DEBUG
         printf("\nProcessing sequence %d/%d\n", i+1, *sequence_count);
-        printf("Current buffer position: %zu/%zu\n", buf_pos, buf_size);
+        printf("Current position: byte %zu, bit %d\n", byte_pos, bit_pos);
         #endif
         
-        if (buf_pos >= buf_size) {
-            buf_size = fread(buffer, 1, BUFFER_SIZE, file);
-            buf_pos = 0;
-            if (buf_size == 0) {
-                fprintf(stderr, "Error: Unexpected EOF in header\n");
-                goto error_cleanup;
-            }
-            #ifdef DEBUG
-            printf("Refilled buffer: %zu bytes\n", buf_size);
-            #endif
-        }
-
-        uint8_t header = buffer[buf_pos++];
-        uint8_t length = header >> 5;
-        uint8_t group = (header >> 3) & 0x03;
-        uint8_t code_size = groupCodeSize(group);
-        
-        #ifdef DEBUG
-        printf("Header byte: 0x%02X\n", header);
-        printf("Decoded - length: %d, group: %d, code_size: %d\n", length, group, code_size);
-        #endif
-        
-        if (length == 0 || length > SEQ_LENGTH_LIMIT) {
-            fprintf(stderr, "Error: Invalid length %d\n", length);
+        // 1. Read 3-bit length (MSB first)
+        uint8_t length = read_bits(3, &bit_buffer, &bit_pos, byte_buffer, &byte_pos, &bytes_read, file);
+        if (length == 0xFF) {
+            fprintf(stderr, "Error: Failed to read length\n");
             goto error_cleanup;
         }
-
-        size_t needed_bytes = length + ((code_size + 7) / 8);
+        sequences[i].length = length;
         
         #ifdef DEBUG
-        printf("Needed bytes for this sequence: %zu\n", needed_bytes);
+        printf("Read length: %d\n", length);
         #endif
-        
-        if (buf_pos + needed_bytes > buf_size) {
-            size_t remaining = buf_size - buf_pos;
-            memmove(buffer, buffer + buf_pos, remaining);
-            buf_size = remaining + fread(buffer + remaining, 1, BUFFER_SIZE - remaining, file);
-            buf_pos = 0;
-            
-            if (buf_size < needed_bytes) {
-                fprintf(stderr, "Error: Insufficient data for sequence\n");
-                goto error_cleanup;
-            }
-            #ifdef DEBUG
-            printf("Buffer realigned, new size: %zu\n", buf_size);
-            #endif
-        }
 
-        BinarySequence* seq = &sequences[i];
-        seq->length = length;
-        seq->group = group;
-        seq->sequence = malloc(length);
-        if (!seq->sequence) {
+        // 2. Read sequence bytes (handles byte splitting)
+        sequences[i].sequence = malloc(length);
+        if (!sequences[i].sequence) {
             fprintf(stderr, "Error: Sequence data allocation failed\n");
             goto error_cleanup;
         }
-        memcpy(seq->sequence, buffer + buf_pos, length);
-        buf_pos += length;
         
+        for (int j = 0; j < length; j++) {
+			int byte_val = read_bits(8, &bit_buffer, &bit_pos, byte_buffer, &byte_pos, &bytes_read, file);
+			if (byte_val == 0xFFFF) {
+				fprintf(stderr, "Error: Failed to read sequence byte\n");
+				goto error_cleanup;
+			}
+			sequences[i].sequence[j] = (uint8_t)byte_val;
+		}
+
         #ifdef DEBUG
-        printf("Sequence data (%d bytes): ", length);
-        for (int j = 0; j < length; j++) printf("%02X ", seq->sequence[j]);
+        printf("Read sequence data (%d bytes): ", length);
+        for (int j = 0; j < length; j++) printf("%02X ", sequences[i].sequence[j]);
         printf("\n");
         #endif
 
-        seq->codeword = 0;
-        uint8_t codeword_bytes = (code_size + 7) / 8;
-        for (int j = 0; j < codeword_bytes; j++) {
-            seq->codeword = (seq->codeword << 8) | buffer[buf_pos++];
+        // 3. Read 2-bit group (MSB first)
+        uint8_t group = read_bits(2, &bit_buffer, &bit_pos, byte_buffer, &byte_pos, &bytes_read, file);
+        if (group == 0xFF) {
+            fprintf(stderr, "Error: Failed to read group\n");
+            goto error_cleanup;
         }
-        if (code_size < 16) {
-            seq->codeword &= (1 << code_size) - 1;
+        sequences[i].group = group;
+        
+        // 4. Read codeword (MSB first)
+        uint8_t code_size = groupCodeSize(group);
+        uint16_t codeword = read_bits(code_size, &bit_buffer, &bit_pos, byte_buffer, &byte_pos, &bytes_read, file);
+        if (codeword == 0xFFFF) {
+            fprintf(stderr, "Error: Failed to read codeword\n");
+            goto error_cleanup;
         }
+        sequences[i].codeword = codeword;
         
         #ifdef DEBUG
-        printf("Codeword: 0x%04X (%d bits)\n", seq->codeword, code_size);
+        printf("Read group: %d, codeword: %d (%d bits)\n", group, codeword, code_size);
         #endif
     }
     
     #ifdef DEBUG
     printf("\n=== HEADER READ COMPLETE ===\n");
+    printf("Final position: byte %zu, bit %d\n", byte_pos, bit_pos);
+    printf("Remaining bytes: %zu\n", bytes_read - byte_pos);
     #endif
+    
     return sequences;
 
 error_cleanup:
-    for (int j = 0; j < i; j++) free(sequences[j].sequence);
+    for (int j = 0; j < i; j++) {
+        if (sequences[j].sequence) free(sequences[j].sequence);
+    }
     free(sequences);
     return NULL;
 }
+
+/**
+ * @brief Reads bits from buffer (MSB first)
+ */
+static uint16_t read_bits(uint8_t num_bits, uint8_t* bit_buffer, uint8_t* bit_pos,
+                         uint8_t* byte_buffer, size_t* byte_pos, size_t* bytes_read, FILE* file) {
+    uint16_t result = 0;
+    
+    #ifdef DEBUG
+    printf("Reading %d bits: ", num_bits);
+    #endif
+    
+    for (uint8_t i = 0; i < num_bits; i++) {
+        if (*bit_pos == 0) {
+            if (*byte_pos >= *bytes_read) {
+                *bytes_read = fread(byte_buffer, 1, BUFFER_SIZE, file);
+                *byte_pos = 0;
+                if (*bytes_read == 0) {
+                    #ifdef DEBUG
+                    printf("\nError: Unexpected EOF\n");
+                    #endif
+                    return 0xFFFF; // Error
+                }
+            }
+            *bit_buffer = byte_buffer[(*byte_pos)++];
+            *bit_pos = 8;
+        }
+        
+        result = (result << 1) | ((*bit_buffer >> 7) & 1);
+        *bit_buffer <<= 1;
+        (*bit_pos)--;
+        
+        #ifdef DEBUG
+        printf("%d", (result & 1));
+        #endif
+    }
+    
+    #ifdef DEBUG
+    printf(" -> 0x%04X\n", result);
+    #endif
+    
+    return result;
+}
+
+// Helper function to print binary representation
+static void print_binary(uint8_t byte) {
+    for (int i = 7; i >= 0; i--) {
+        printf("%d", (byte >> i) & 1);
+    }
+}
+
+
 
 static void decompressData(FILE* input, FILE* output, 
                          BinarySequence* sequences, uint16_t sequence_count,
