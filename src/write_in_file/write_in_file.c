@@ -353,25 +353,32 @@ static void writeHeaderOfCompressedFile(BinarySequence** topBinarySeq, int seq_c
         printf("\n");
         #endif
     }
-
-    /* PADDING: Add zeros to complete final byte if needed */
+        /* PADDING: Add zeros to complete final byte if needed */
     if (bit_pos > 0) {
-        byte_buffer[byte_pos++] = bit_buffer; // Flush remaining bits
+        bit_buffer <<= (8 - bit_pos); // Align the bits in the bit buffer
+        byte_buffer[byte_pos++] = bit_buffer; // Write the last, partially filled byte
+
         #ifdef DEBUG
         printf("Added padding: %02X (%d bits)\n", bit_buffer, bit_pos);
         #endif
-        bit_buffer = bit_pos = 0;
+
+        bit_buffer = 0;
+        bit_pos = 0;
     }
 
-	#ifdef DEBUG
-    /* DEBUG: Final output */
+    /* ADD MARKER BYTE 0xFF */
+    byte_buffer[byte_pos++] = 0xFF;
+
+    #ifdef DEBUG
+    printf("Added end-of-header marker: FF\n");
     printf("\nFinal bytes (%zu):", byte_pos);
     for (size_t i = 0; i < byte_pos; i++) printf(" %02X", byte_buffer[i]);
     printf("\n");
     #endif
-    
+
     /* Write all completed bytes to file */
     fwrite(byte_buffer, 1, byte_pos, file);
+
 }
 
 /**

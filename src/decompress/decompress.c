@@ -27,10 +27,12 @@ static inline uint8_t groupCodeSize(uint8_t group) {
 
 #define BUFFER_SIZE (1024 * 1024)
 
+static uint8_t findEndOfHeaderMarker(FILE* input, uint8_t* byte_buffer, size_t* byte_pos, size_t* bytes_read);
 static uint16_t read_bits(uint8_t num_bits, uint8_t* bit_buffer, uint8_t* bit_pos,
                          uint8_t* byte_buffer, size_t* byte_pos, size_t* bytes_read, FILE* file);
                          
 static void print_binary(uint8_t byte);
+static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count, uint8_t* byte_buffer, size_t* byte_pos, size_t* bytes_read);
                          
 static uint8_t* create_aligned_buffer() {
     uint8_t* buf = aligned_alloc(64, BUFFER_SIZE);
@@ -41,55 +43,7 @@ static uint8_t* create_aligned_buffer() {
     return buf;
 }
 
-static inline uint8_t read_bit(uint8_t* buffer, uint8_t* bit_pos,
-                             FILE* file, uint8_t* byte_buffer,
-                             size_t* byte_pos, size_t* bytes_read) {
-    #ifdef DEBUG
-    printf("[read_bit] Before: buffer=0x%02X, bit_pos=%d, byte_pos=%zu, bytes_read=%zu\n", 
-           *buffer, *bit_pos, *byte_pos, *bytes_read);
-    #endif
-    
-    if (*bytes_read == 0) {
-        return -1;  // EOF
-    }
-    
-    if (*bit_pos == 8) {
-        *bit_pos = 0;
-        *buffer = 0;
-    }
-    
-    if (*bit_pos == 0) {
-        if (*byte_pos >= *bytes_read) {
-            *bytes_read = fread(byte_buffer, 1, BUFFER_SIZE, file);
-            *byte_pos = 0;
-            if (*bytes_read == 0) {
-                #ifdef DEBUG
-                printf("[read_bit] Reached EOF\n");
-                #endif
-                return 0;
-            }
-            #ifdef DEBUG
-            printf("[read_bit] Refilled buffer with %zu bytes\n", *bytes_read);
-            #endif
-        }
-        *buffer = byte_buffer[(*byte_pos)++];
-        #ifdef DEBUG
-        printf("[read_bit] Loaded new byte: 0x%02X\n", *buffer);
-        #endif
-    }
-
-    uint8_t bit = (*buffer >> (7 - *bit_pos)) & 1;
-    (*bit_pos)++;
-    
-    #ifdef DEBUG
-    printf("[read_bit] Read bit %d from byte 0x%02X: %d\n", *bit_pos-1, *buffer, bit);
-    #endif
-    
-    return bit;
-}
-
-
-static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count) {
+static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count, uint8_t* byte_buffer, size_t* byte_pos, size_t* bytes_read) {
     #ifdef DEBUG
     printf("\n=== READING HEADER ===\n");
     #endif
@@ -115,16 +69,15 @@ static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count) {
     
     uint8_t bit_buffer = 0;
     uint8_t bit_pos = 0;
-    uint8_t byte_buffer[BUFFER_SIZE];
-    size_t byte_pos = 0;
-    size_t bytes_read = fread(byte_buffer, 1, BUFFER_SIZE, file);
+    *bytes_read = fread(byte_buffer, 1, BUFFER_SIZE, file);
+    *byte_pos = 0;
     
     #ifdef DEBUG
-    printf("Initial buffer load: %zu bytes\n", bytes_read);
-    if (bytes_read > 0) {
-        printf("First byte: 0x%02X\n", byte_buffer[0]);
+    printf("Initial buffer load: %zu bytes\n", *bytes_read);
+    if (*bytes_read > 0) {
+        printf("First byte: 0x%02X\n", byte_buffer[*byte_pos]);
         printf("Binary: ");
-        print_binary(byte_buffer[0]);
+        print_binary(byte_buffer[*byte_pos]);
         printf("\n");
     }
     #endif
@@ -133,11 +86,11 @@ static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count) {
     for (i = 0; i < *sequence_count; i++) {
         #ifdef DEBUG
         printf("\nProcessing sequence %d/%d\n", i+1, *sequence_count);
-        printf("Current position: byte %zu, bit %d\n", byte_pos, bit_pos);
+        printf("Current position: byte %zu, bit %d\n", *byte_pos, bit_pos);
         #endif
         
         // 1. Read 3-bit length (MSB first)
-        uint8_t length = read_bits(3, &bit_buffer, &bit_pos, byte_buffer, &byte_pos, &bytes_read, file);
+        uint8_t length = read_bits(3, &bit_buffer, &bit_pos, byte_buffer, byte_pos, bytes_read, file);
         if (length == 0xFF) {
             fprintf(stderr, "Error: Failed to read length\n");
             goto error_cleanup;
@@ -148,7 +101,7 @@ static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count) {
         printf("Read length: %d\n", length);
         #endif
 
-        // 2. Read sequence bytes (handles byte splitting)
+        // 2. Read sequence bytes
         sequences[i].sequence = malloc(length);
         if (!sequences[i].sequence) {
             fprintf(stderr, "Error: Sequence data allocation failed\n");
@@ -156,13 +109,13 @@ static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count) {
         }
         
         for (int j = 0; j < length; j++) {
-			int byte_val = read_bits(8, &bit_buffer, &bit_pos, byte_buffer, &byte_pos, &bytes_read, file);
-			if (byte_val == 0xFFFF) {
-				fprintf(stderr, "Error: Failed to read sequence byte\n");
-				goto error_cleanup;
-			}
-			sequences[i].sequence[j] = (uint8_t)byte_val;
-		}
+            uint16_t byte_val = read_bits(8, &bit_buffer, &bit_pos, byte_buffer, byte_pos, bytes_read, file);
+            if (byte_val == 0xFFFF) {
+                fprintf(stderr, "Error: Failed to read sequence byte\n");
+                goto error_cleanup;
+            }
+            sequences[i].sequence[j] = (uint8_t)byte_val;
+        }
 
         #ifdef DEBUG
         printf("Read sequence data (%d bytes): ", length);
@@ -171,7 +124,7 @@ static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count) {
         #endif
 
         // 3. Read 2-bit group (MSB first)
-        uint8_t group = read_bits(2, &bit_buffer, &bit_pos, byte_buffer, &byte_pos, &bytes_read, file);
+        uint8_t group = read_bits(2, &bit_buffer, &bit_pos, byte_buffer, byte_pos, bytes_read, file);
         if (group == 0xFF) {
             fprintf(stderr, "Error: Failed to read group\n");
             goto error_cleanup;
@@ -180,7 +133,7 @@ static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count) {
         
         // 4. Read codeword (MSB first)
         uint8_t code_size = groupCodeSize(group);
-        uint16_t codeword = read_bits(code_size, &bit_buffer, &bit_pos, byte_buffer, &byte_pos, &bytes_read, file);
+        uint16_t codeword = read_bits(code_size, &bit_buffer, &bit_pos, byte_buffer, byte_pos, bytes_read, file);
         if (codeword == 0xFFFF) {
             fprintf(stderr, "Error: Failed to read codeword\n");
             goto error_cleanup;
@@ -194,8 +147,8 @@ static BinarySequence* readHeader(FILE* file, uint16_t* sequence_count) {
     
     #ifdef DEBUG
     printf("\n=== HEADER READ COMPLETE ===\n");
-    printf("Final position: byte %zu, bit %d\n", byte_pos, bit_pos);
-    printf("Remaining bytes: %zu\n", bytes_read - byte_pos);
+    printf("Final position: byte %zu, bit %d\n", *byte_pos, bit_pos);
+    printf("Remaining bytes: %zu\n", *bytes_read - *byte_pos);
     #endif
     
     return sequences;
@@ -258,70 +211,101 @@ static void print_binary(uint8_t byte) {
     }
 }
 
-
+static uint8_t findEndOfHeaderMarker(FILE* input, uint8_t* byte_buffer, size_t* byte_pos, size_t* bytes_read) {
+    #ifdef DEBUG
+    printf("Searching for end-of-header marker (0xFF)\n");
+    #endif
+    
+    while (1) {
+        if (*byte_pos >= *bytes_read) {
+            *bytes_read = fread(byte_buffer, 1, BUFFER_SIZE, input);
+            *byte_pos = 0;
+            if (*bytes_read == 0) {
+                #ifdef DEBUG
+                printf("Reached EOF without finding marker\n");
+                #endif
+                return 0;
+            }
+        }
+        
+        uint8_t current_byte = byte_buffer[*byte_pos];
+        (*byte_pos)++;
+        
+        if (current_byte == 0xFF) {
+            #ifdef DEBUG
+            printf("Found end-of-header marker at byte %zu\n", *byte_pos - 1);
+            #endif
+            return 1;
+        }
+    }
+}
 
 static void decompressData(FILE* input, FILE* output, 
                          BinarySequence* sequences, uint16_t sequence_count,
-                         uint8_t* byte_buffer, size_t bytes_read) {
+                         uint8_t* byte_buffer, size_t* byte_pos, size_t* bytes_read) {
+    uint8_t* out_buffer = create_aligned_buffer();
+    size_t out_pos = 0;
     uint8_t bit_buffer = 0;
     uint8_t bit_pos = 0;
-    uint8_t* out_buffer = create_aligned_buffer();
-    size_t byte_pos = 0;
-    size_t out_pos = 0;
 
     while (1) {
-        int read_flag = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
-        if (read_flag == -1) {
- 		   fprintf(stderr, "Unexpected EOF\n");
- 		   goto done;
-		}
-        
-
-        uint8_t flag = (uint8_t)read_flag;
+        // Read 1-bit flag
+        uint16_t flag = read_bits(1, &bit_buffer, &bit_pos, byte_buffer, byte_pos, bytes_read, input);
+        if (flag == 0xFFFF) {
+            if (*bytes_read == 0) break; // Normal EOF
+            fprintf(stderr, "Unexpected EOF\n");
+            goto done;
+        }
 
         if (flag == 0) {
-            // Read 8 bits (1 byte)
-            uint8_t byte = 0;
-            for (int i = 0; i < 8; i++) {
-                int b = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
-                if (b == -1) {
- 				   fprintf(stderr, "Unexpected EOF\n");
-				    goto done;
-				}
-                byte = (byte << 1) | (uint8_t)b;
+            // Uncompressed data - read 8 bits (1 byte)
+            uint16_t byte = read_bits(8, &bit_buffer, &bit_pos, byte_buffer, byte_pos, bytes_read, input);
+            if (byte == 0xFFFF) {
+                fprintf(stderr, "Unexpected EOF reading uncompressed byte\n");
+                goto done;
             }
 
-            out_buffer[out_pos++] = byte;
+            #ifdef DEBUG
+            printf("Read uncompressed byte: 0x%02X\n", byte);
+            #endif
+
+            out_buffer[out_pos++] = (uint8_t)byte;
             if (out_pos == BUFFER_SIZE) {
                 fwrite(out_buffer, 1, BUFFER_SIZE, output);
                 out_pos = 0;
             }
         } else {
-            // Read group (2 bits)
-            uint8_t group = 0;
-            for (int i = 0; i < 2; i++) {
-                int b = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
-                if (b == -1) {
-				    fprintf(stderr, "Unexpected EOF\n");
-    				goto done;
-                }
-                group = (group << 1) | (uint8_t)b;
+            // Compressed data - read group and codeword
+            uint16_t group = read_bits(2, &bit_buffer, &bit_pos, byte_buffer, byte_pos, bytes_read, input);
+            if (group == 0xFFFF) {
+                fprintf(stderr, "Unexpected EOF reading group\n");
+                goto done;
             }
 
-            uint8_t code_size = groupCodeSize(group);
-            uint16_t codeword = 0;
-            for (int i = 0; i < code_size; i++) {
-                int b = read_bit(&bit_buffer, &bit_pos, input, byte_buffer, &byte_pos, &bytes_read);
-                if (b == -1) {
-                    fprintf(stderr, "Unexpected EOF in codeword bits\n");
-                    goto done;
-                }
-                codeword = (codeword << 1) | (uint16_t)b;
+            uint8_t code_size = groupCodeSize((uint8_t)group);
+            uint16_t codeword = read_bits(code_size, &bit_buffer, &bit_pos, byte_buffer, byte_pos, bytes_read, input);
+            if (codeword == 0xFFFF) {
+                fprintf(stderr, "Unexpected EOF reading codeword\n");
+                goto done;
             }
 
+            #ifdef DEBUG
+            printf("Read compressed data - group: %d, codeword: 0x%04X (%d bits)\n", 
+                  group, codeword, code_size);
+            #endif
+
+            // Find matching sequence
             int found = 0;
             for (int i = 0; i < sequence_count; i++) {
                 if (sequences[i].group == group && sequences[i].codeword == codeword) {
+                    #ifdef DEBUG
+                    printf("Found matching sequence: ");
+                    for (int j = 0; j < sequences[i].length; j++) {
+                        printf("%02X ", sequences[i].sequence[j]);
+                    }
+                    printf("\n");
+                    #endif
+
                     if (out_pos + sequences[i].length > BUFFER_SIZE) {
                         fwrite(out_buffer, 1, out_pos, output);
                         out_pos = 0;
@@ -338,6 +322,14 @@ static void decompressData(FILE* input, FILE* output,
                 goto done;
             }
         }
+
+        #ifdef DEBUG
+        printf("Current output buffer (%zu bytes): ", out_pos);
+        for (size_t i = 0; i < out_pos; i++) {
+            printf("%02X ", out_buffer[i]);
+        }
+        printf("\n");
+        #endif
     }
 
 done:
@@ -346,7 +338,6 @@ done:
     }
     free(out_buffer);
 }
-
 
 void decompressBinaryFile(const char* input_filename, const char* output_filename) {
     FILE* input = fopen(input_filename, "rb");
@@ -358,23 +349,34 @@ void decompressBinaryFile(const char* input_filename, const char* output_filenam
         return;
     }
 
+    uint8_t* byte_buffer = create_aligned_buffer();
+    size_t byte_pos = 0;
+    size_t bytes_read = 0;
+
     uint16_t sequence_count;
-    BinarySequence* sequences = readHeader(input, &sequence_count);
+    BinarySequence* sequences = readHeader(input, &sequence_count, byte_buffer, &byte_pos, &bytes_read);
     if (!sequences) {
         fclose(input);
         fclose(output);
+        free(byte_buffer);
         return;
     }
-
-    uint8_t* byte_buffer = create_aligned_buffer();
-    size_t bytes_read = fread(byte_buffer, 1, BUFFER_SIZE, input);
     
     #ifdef DEBUG
     printf("\nTransitioning to data section at offset %ld\n", ftell(input));
     printf("Initial data buffer contains %zu bytes\n", bytes_read);
     #endif
 
-    decompressData(input, output, sequences, sequence_count, byte_buffer, bytes_read);
+    // Find the end-of-header marker (0xFF)
+    if (findEndOfHeaderMarker(input, byte_buffer, &byte_pos, &bytes_read)) {
+        #ifdef DEBUG
+        printf("Starting data decompression at byte %zu\n", byte_pos);
+        #endif
+        
+        decompressData(input, output, sequences, sequence_count, byte_buffer, &byte_pos, &bytes_read);
+    } else {
+        fprintf(stderr, "Error: Could not find end-of-header marker\n");
+    }
 
     for (int i = 0; i < sequence_count; i++) {
         free(sequences[i].sequence);
