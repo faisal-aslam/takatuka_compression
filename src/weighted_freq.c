@@ -2,6 +2,7 @@
 #include "weighted_freq.h"
 #include <string.h>
 #include <limits.h>
+#include "debug/print_stack_trace.h"
 
 // Returns JUST the codeword bits (excluding flag + group bits)
 uint8_t groupCodeSize(uint8_t group) {
@@ -11,10 +12,13 @@ uint8_t groupCodeSize(uint8_t group) {
         case 3: return 4;  // 4-bit codeword
         case 4: return 12; // 12-bit codeword
         default:
-            fprintf(stderr, "Invalid group %d\n", group);
+            fprintf(stderr, "Invalid group %d Exiting!\n", group);
+            print_stacktrace();
+            exit(0);
             return 0;
     }
 }
+
 
 //Returns overhead of a group.
 uint8_t groupOverHead(uint8_t group) {

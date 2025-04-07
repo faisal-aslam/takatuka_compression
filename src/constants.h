@@ -4,7 +4,7 @@
 #define SEQ_LENGTH_START 2
 #define SEQ_LENGTH_LIMIT 5 //a.k.a k
 #define BLOCK_SIZE (1 << 20)
-#define LEAST_REDUCTION 8
+#define LEAST_REDUCTION 16
 
 // Group definitions
 #define GROUP1_THRESHOLD 16

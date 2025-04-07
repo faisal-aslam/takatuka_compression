@@ -269,13 +269,15 @@ static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint
         }
     }
     printf("\n calling writeCompressedOutput");
+    printf("\n====================== resting to :");
+    printNode(&source_pool[best_index], block, 0);
+    
     writeCompressedOutput("compress.bin", topSeq, MAX_NUMBER_OF_SEQUENCES, 
                          &source_pool[best_index], block);
                           
-    printf("\n====================== resting to :");
-    printNode(&source_pool[best_index], block, 0);
-	//todo add here code to write compressed data in file.	
 	createRoot(block, max_saving, block_index);  
+	//todo this will be gone later on. Just for testing keep it here time being.
+	exit(1);
 }
 
 

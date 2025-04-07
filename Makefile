@@ -1,15 +1,21 @@
 # Compiler and base flags
 CC = gcc
-CFLAGS = -Wall -Wextra -pedantic -O3 -march=native -flto -funroll-loops \
-         -fomit-frame-pointer -MMD -I./src \
-         -fno-signed-zeros -fno-trapping-math -fassociative-math -fno-math-errno \
-         -fstrict-aliasing -ftree-vectorize -fno-stack-protector
-LDFLAGS = -flto -O3 -fuse-linker-plugin
+
+# Release flags (optimized)
+CFLAGS_RELEASE = -Wall -Wextra -pedantic -O3 -march=native -flto -funroll-loops \
+                 -fomit-frame-pointer -MMD -I./src \
+                 -fno-signed-zeros -fno-trapping-math -fassociative-math -fno-math-errno \
+                 -fstrict-aliasing -ftree-vectorize -fno-stack-protector
+LDFLAGS_RELEASE = -flto -O3 -fuse-linker-plugin
+
+# Debug flags (for debugging with stack traces)
+CFLAGS_DEBUG = -Wall -Wextra -pedantic -g -rdynamic -O0 -I./src -MMD -DDEBUG \
+               -fno-omit-frame-pointer -fno-inline
+LDFLAGS_DEBUG = -g -rdynamic
 
 # Targets
 TARGET = compress
 DEBUG_TARGET = compress-debug
-COMPRESS_TARGET = compress
 DECOMPRESS_TARGET = decompress
 
 # Directory structure
@@ -27,81 +33,101 @@ DEBUG_SRCS = $(wildcard $(DEBUG_DIR)/*.c)
 WRITE_IN_FILE_SRCS = $(wildcard $(WRITE_IN_FILE_DIR)/*.c)
 DECOMPRESS_SRCS = $(DECOMPRESS_DIR)/decompress.c
 
-# Object files
-MAIN_OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(MAIN_SRCS))
-SECOND_PASS_OBJ = $(patsubst $(SECOND_PASS_DIR)/%.c,$(BUILD_DIR)/second_pass/%.o,$(SECOND_PASS_SRCS))
-DEBUG_OBJS = $(patsubst $(DEBUG_DIR)/%.c,$(BUILD_DIR)/debug/%.o,$(DEBUG_SRCS))
-WRITE_IN_FILE_OBJS = $(patsubst $(WRITE_IN_FILE_DIR)/%.c,$(BUILD_DIR)/write_in_file/%.o,$(WRITE_IN_FILE_SRCS))
-DECOMPRESS_OBJ = $(BUILD_DIR)/decompress/decompress.o
+# Object files (separate release/debug builds)
+RELEASE_OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/release/%.o,$(MAIN_SRCS)) \
+               $(patsubst $(SECOND_PASS_DIR)/%.c,$(BUILD_DIR)/release/second_pass/%.o,$(SECOND_PASS_SRCS)) \
+               $(patsubst $(WRITE_IN_FILE_DIR)/%.c,$(BUILD_DIR)/release/write_in_file/%.o,$(WRITE_IN_FILE_SRCS))
+
+DEBUG_OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/debug/%.o,$(MAIN_SRCS)) \
+             $(patsubst $(SECOND_PASS_DIR)/%.c,$(BUILD_DIR)/debug/second_pass/%.o,$(SECOND_PASS_SRCS)) \
+             $(patsubst $(WRITE_IN_FILE_DIR)/%.c,$(BUILD_DIR)/debug/write_in_file/%.o,$(WRITE_IN_FILE_SRCS)) \
+             $(patsubst $(DEBUG_DIR)/%.c,$(BUILD_DIR)/debug/debug/%.o,$(DEBUG_SRCS))
+
+DECOMPRESS_OBJ = $(BUILD_DIR)/release/decompress/decompress.o
 
 # Dependencies
-DEPS = $(MAIN_OBJS:.o=.d) $(SECOND_PASS_OBJ:.o=.d) $(DEBUG_OBJS:.o=.d) $(WRITE_IN_FILE_OBJS:.o=.d) $(DECOMPRESS_OBJ:.o=.d)
+DEPS = $(RELEASE_OBJS:.o=.d) $(DEBUG_OBJS:.o=.d) $(DECOMPRESS_OBJ:.o=.d)
 
-.PHONY: all clean release debug compress decompress
+# [Previous sections remain the same until the targets]
 
-all: $(TARGET)
+.PHONY: all clean release debug compress decompress help
 
-release: CFLAGS += -DNDEBUG
+all: release
+
 release: $(TARGET)
+	@echo "Built release version: ./$(TARGET)"
 
-debug: CFLAGS += -DDEBUG -g
 debug: $(DEBUG_TARGET)
+	@echo "Built debug version: ./$(DEBUG_TARGET)"
+
 
 compress: $(TARGET)
 	@echo "Built compression tool: ./$(TARGET)"
-	@echo "Usage: ./$(TARGET) <input_file> <compressed_output>"
+	@echo "Usage: ./$(TARGET) <input_file>"
 
 decompress: $(DECOMPRESS_TARGET)
 	@echo "Built decompression tool: ./$(DECOMPRESS_TARGET)"
 	@echo "Usage: ./$(DECOMPRESS_TARGET) <compressed_input> <decompressed_output>"
 
-$(TARGET): $(MAIN_OBJS) $(SECOND_PASS_OBJ) $(WRITE_IN_FILE_OBJS)
+$(TARGET): CFLAGS = $(CFLAGS_RELEASE)
+$(TARGET): LDFLAGS = $(LDFLAGS_RELEASE)
+$(TARGET): $(RELEASE_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^
 
-$(DEBUG_TARGET): $(MAIN_OBJS) $(SECOND_PASS_OBJ) $(DEBUG_OBJS) $(WRITE_IN_FILE_OBJS)
+$(DEBUG_TARGET): CFLAGS = $(CFLAGS_DEBUG)
+$(DEBUG_TARGET): LDFLAGS = $(LDFLAGS_DEBUG)
+$(DEBUG_TARGET): $(DEBUG_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^
 
 $(DECOMPRESS_TARGET): $(DECOMPRESS_OBJ)
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS_RELEASE) -o $@ $^
 
-# Main source compilation
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+# Release build rules
+$(BUILD_DIR)/release/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS_RELEASE) -c $< -o $@
 
-# Second pass compilation
-$(BUILD_DIR)/second_pass/%.o: $(SECOND_PASS_DIR)/%.c
+$(BUILD_DIR)/release/second_pass/%.o: $(SECOND_PASS_DIR)/%.c
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS_RELEASE) -c $< -o $@
 
-# Debug source compilation
-$(BUILD_DIR)/debug/%.o: $(DEBUG_DIR)/%.c
+$(BUILD_DIR)/release/write_in_file/%.o: $(WRITE_IN_FILE_DIR)/%.c
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -DDEBUG -g -c $< -o $@
+	$(CC) $(CFLAGS_RELEASE) -c $< -o $@
 
-# Write in file compilation
-$(BUILD_DIR)/write_in_file/%.o: $(WRITE_IN_FILE_DIR)/%.c
+$(BUILD_DIR)/release/decompress/%.o: $(DECOMPRESS_DIR)/%.c
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS_RELEASE) -c $< -o $@
 
-# Decompress compilation
-$(BUILD_DIR)/decompress/decompress.o: $(DECOMPRESS_DIR)/decompress.c
+# Debug build rules
+$(BUILD_DIR)/debug/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS_DEBUG) -c $< -o $@
+
+$(BUILD_DIR)/debug/second_pass/%.o: $(SECOND_PASS_DIR)/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS_DEBUG) -c $< -o $@
+
+$(BUILD_DIR)/debug/write_in_file/%.o: $(WRITE_IN_FILE_DIR)/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS_DEBUG) -c $< -o $@
+
+$(BUILD_DIR)/debug/debug/%.o: $(DEBUG_DIR)/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS_DEBUG) -c $< -o $@
 
 clean:
-	@rm -rf $(TARGET) $(DEBUG_TARGET) $(COMPRESS_TARGET) $(DECOMPRESS_TARGET) $(BUILD_DIR) src/combined_*.c ./a.out
+	@rm -rf $(BUILD_DIR) $(TARGET) $(DEBUG_TARGET) $(DECOMPRESS_TARGET)
 	@echo "Cleaned all build artifacts"
 
 -include $(DEPS)
 
-# Help target
 help:
 	@echo "Available targets:"
-	@echo "  all         - Build all targets (default)"
+	@echo "  all         - Build release version (default)"
 	@echo "  release     - Build optimized release version"
-	@echo "  debug       - Build debug version"
-	@echo "  compress    - Build compression tool"
+	@echo "  debug       - Build debug version with stack traces"
+	@echo "  compress    - Build compression tool (release)"
 	@echo "  decompress  - Build decompression tool"
 	@echo "  clean       - Remove all build artifacts"
 	@echo "  help        - Show this help message"
