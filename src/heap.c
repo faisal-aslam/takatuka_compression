@@ -151,7 +151,7 @@ void extractTopSequences(BinarySequence **result) {
             free(seq);
         }
     }
-	printf("\n Sequences found = %d", count);
+	printf("\n Sequences found = %d\n", count);
     while (count < MAX_NUMBER_OF_SEQUENCES) {
         result[count++] = NULL;
     }
@@ -167,66 +167,52 @@ void cleanupHeap() {
     }
 }
 
-/* Assigns groups by sorting only the top MAX_NUMBER_OF_SEQUENCES sequences */
+static inline int assignGroupHelper(int *elementsInGroup, int group, int current_index) {
+    int code_size = groupCodeSize(group) + groupOverHead(group);
+    long potential_savings = (maxHeap[current_index]->length * 8 - code_size) * maxHeap[current_index]->count;
+    
+    if (potential_savings > LEAST_REDUCTION) {
+        maxHeap[current_index]->group = group;
+        (*elementsInGroup)++;
+        return 1;
+    }
+    return 0;
+}
+
 static void assignGroupsByFrequency() {
-    // Temporary array for sorting
-    BinarySequence **temp = malloc(heapSize * sizeof(BinarySequence *));
-    memcpy(temp, maxHeap, heapSize * sizeof(BinarySequence *));
-    
-    // Sort just the top sequences
-    qsort(temp, heapSize, sizeof(BinarySequence *), compareByFrequency);
-    
+    BinarySequence **validSeqs = malloc(heapSize * sizeof(BinarySequence *));
+    int validCount = 0;
     int elementsInGroup = 0;
     
     for (int i = 0; i < heapSize; i++) {
-        long potential_savings = 0;
-        int code_size = 0;  // Will store the actual code size used
+        uint8_t assigned_group = 0;
         
         if (elementsInGroup < GROUP1_THRESHOLD) {
-            code_size = groupCodeSize(1)+groupOverHead(1);
-            potential_savings = (temp[i]->length * 8 - code_size) * temp[i]->count;
-            
-            if (potential_savings > LEAST_REDUCTION) {
-                temp[i]->group = 1;
-                elementsInGroup++;
-            }
-        }
+            assigned_group = assignGroupHelper(&elementsInGroup, 1, i);
+        } 
         else if (elementsInGroup < GROUP2_THRESHOLD) {
-            code_size = groupCodeSize(2)+groupOverHead(2);
-            potential_savings = (temp[i]->length * 8 - code_size) * temp[i]->count;
-            
-            if (potential_savings > LEAST_REDUCTION) {
-                temp[i]->group = 2;
-                elementsInGroup++;
-            }
-        }
+            assigned_group = assignGroupHelper(&elementsInGroup, 2, i);
+        } 
         else if (elementsInGroup < GROUP3_THRESHOLD) {
-            code_size = groupCodeSize(3)+groupOverHead(3);
-            potential_savings = (temp[i]->length * 8 - code_size) * temp[i]->count;
-            
-            if (potential_savings > LEAST_REDUCTION) {
-                temp[i]->group = 3;
-                elementsInGroup++;
-            }
-        }
+            assigned_group = assignGroupHelper(&elementsInGroup, 3, i);
+        } 
         else if (elementsInGroup < GROUP4_THRESHOLD) {
-            code_size = groupCodeSize(4)+groupOverHead(4);
-            potential_savings = (temp[i]->length * 8 - code_size) * temp[i]->count;
-            
-            if (potential_savings > LEAST_REDUCTION) {
-                temp[i]->group = 4;
-                elementsInGroup++;
-            }
+            assigned_group = assignGroupHelper(&elementsInGroup, 4, i);
         }
         
-        // Debug output to verify calculations
-        printf("Sequence %d: len=%d, cnt=%d, group=%d, code_size=%d\n",
-               i, temp[i]->length, temp[i]->count, temp[i]->group, 
-               code_size);
+        if (assigned_group) {
+            validSeqs[validCount++] = maxHeap[i];
+        } else {
+            free(maxHeap[i]->sequence);
+            free(maxHeap[i]);
+        }
     }
     
-    free(temp);
+    memcpy(maxHeap, validSeqs, validCount * sizeof(BinarySequence *));
+    heapSize = validCount;
+    free(validSeqs);
 }
+
 
 /* Compare function for sorting by weighted frequency (descending) */
 static int compareByFrequency(const void *a, const void *b) {

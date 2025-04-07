@@ -112,7 +112,9 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
 		best_index[i] = -1;
 	}
  
-
+	#ifdef DEBUG_PRINT
+   	printf("\nold_node_count= %d", old_node_count);
+	#endif
 
     int new_nodes_count = 0;
     for (int j = 0; j < old_node_count; j++) {
@@ -124,6 +126,12 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
             continue;
         }
 
+		#ifdef DEBUG_PRINT        
+        printf("\n******************** Processing OLD node ************");
+        printNode(&oldNode, block, block_index);
+        printf("\n******************************************************");
+		#endif
+		
         // Rest of the function remains the same...
         // =====================================================
         // 1. Create non-compressed node (sequence extension)
@@ -168,7 +176,13 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
 
                 // Store in pool
                 memcpy(&new_pool[new_nodes_count], &newNode, sizeof(TreeNode));
-                new_nodes_count++;
+               
+                #ifdef DEBUG_PRINT
+	            printNode(&new_pool[new_nodes_count], block, block_index);
+				#endif
+				
+     			new_nodes_count++;
+
             }
         }
 
@@ -226,6 +240,12 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
 
             // Store in pool
             memcpy(&new_pool[new_nodes_count], &newNode, sizeof(TreeNode));
+            
+            #ifdef DEBUG_PRINT
+            printNode(&new_pool[new_nodes_count], block, block_index);
+            printf("to copy = %d-%d+%d=%d", oldNode.compress_sequence_count, oldNode.incoming_weight, k, to_copy);
+			#endif
+			
             new_nodes_count++;
         }
     }
@@ -275,7 +295,7 @@ static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint
     writeCompressedOutput("compress.bin", topSeq, MAX_NUMBER_OF_SEQUENCES, 
                          &source_pool[best_index], block);
                           
-	createRoot(block, max_saving, block_index);  
+	//createRoot(block, max_saving, block_index);  
 	//todo this will be gone later on. Just for testing keep it here time being.
 	exit(1);
 }
@@ -290,16 +310,18 @@ void processBlockSecondPass(uint8_t* block, long blockSize, BinarySequence** top
     
 
     uint32_t blockIndex;
+    uint8_t restedOnce = 0;
     for (blockIndex = 1; blockIndex < blockSize; blockIndex++) {
-        // Check if we need to prune
+        // Check if we need to reset
         if (blockIndex% COMPRESS_SEQUENCE_LENGTH == 0) {
+           restedOnce = 1;
+        	printf("\n\n\n Reached limit blockIndex=%u, COMPRESS_SEQUENCE_LENGTH=%d \n", blockIndex, COMPRESS_SEQUENCE_LENGTH);
         	if (isEven) { //valid data is in odd pool as even pool to be process next.
                 resetToBestNode(node_pool_odd, odd_pool_count, block, blockIndex, topSeq);
             } else { //valid data is in even pool
                 resetToBestNode(node_pool_even, even_pool_count, block, blockIndex, topSeq);
             }
             isEven = 0; //root is always at even so switch to odd pool next.  
-            break;
         }
 
 #ifdef DEBUG_PRINT
@@ -317,10 +339,12 @@ void processBlockSecondPass(uint8_t* block, long blockSize, BinarySequence** top
         isEven = !isEven;  // Alternate pools
     }
     printf("\n------------------------------------------------>Ending \n");
-	if (isEven) { //valid data is in odd pool as even pool to be process next.
-        resetToBestNode(node_pool_odd, odd_pool_count, block, blockIndex, topSeq);
-    } else { //valid data is in even pool
-        resetToBestNode(node_pool_even, even_pool_count, block, blockIndex, topSeq);
+    if (!restedOnce) {
+		if (isEven) { //valid data is in odd pool as even pool to be process next.
+    	    resetToBestNode(node_pool_odd, odd_pool_count, block, blockIndex, topSeq);
+    	} else { //valid data is in even pool
+    	    resetToBestNode(node_pool_even, even_pool_count, block, blockIndex, topSeq);
+    	}
     }
 }
 
