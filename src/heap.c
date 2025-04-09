@@ -213,10 +213,3 @@ static void assignGroupsByFrequency() {
     free(validSeqs);
 }
 
-
-/* Compare function for sorting by weighted frequency (descending) */
-static int compareByFrequency(const void *a, const void *b) {
-    const BinarySequence *seqA = *(const BinarySequence **)a;
-    const BinarySequence *seqB = *(const BinarySequence **)b;
-    return seqB->frequency - seqA->frequency;  // Descending order
-}
