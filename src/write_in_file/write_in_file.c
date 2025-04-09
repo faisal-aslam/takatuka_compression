@@ -209,7 +209,7 @@ static void writeCompressedDataInFile(TreeNode *node, uint8_t* block, FILE *file
         printf("After sequence %d: bit_buffer=%02X bit_pos=%d byte_pos=%zu\n",
               i, bit_buffer, bit_pos, byte_pos);
         
-        // Show complete bytes when buffer reaches certain points
+        /* Show complete bytes when buffer reaches certain points
         if (byte_pos > 0 && (byte_pos % 16 == 0 || byte_pos > BUFFER_SIZE - 8)) {
             printf("Current byte buffer (%zu bytes):\n", byte_pos);
             for (size_t j = 0; j < byte_pos; j++) {
@@ -217,7 +217,7 @@ static void writeCompressedDataInFile(TreeNode *node, uint8_t* block, FILE *file
                 if ((j+1) % 16 == 0) printf("\n");
             }
             printf("\n");
-        }
+        }*/
         #endif
     }
 
@@ -462,7 +462,7 @@ static int calcUsedAndAssignGroupID(TreeNode *node, uint8_t* block, uint32_t blo
             used_count++;
             
             // Validate group
-            if (bin_seq->group < 1 || bin_seq->group > TOTAL_GROUPS) {
+            if (bin_seq->group < 0 || bin_seq->group > TOTAL_GROUPS-1) {
                 fprintf(stderr, "Error: Invalid group %d for sequence\n", bin_seq->group);
                 continue;
             }
@@ -480,14 +480,18 @@ static int calcUsedAndAssignGroupID(TreeNode *node, uint8_t* block, uint32_t blo
             // Assign codeword
             bin_seq->codeword = next_codeword[bin_seq->group]++;
             
-            #ifdef DEBUG
-            printf("Assigned: Seq[");
-            for (int k = 0; k < seq_len; k++) printf("%02X ", sequence[k]);
-            printf("] -> Group %d, Codeword %d\n", bin_seq->group, bin_seq->codeword);
-            #endif
         }
     }
     
+    #ifdef DEBUG
+    printf("\n\n");
+    for (int k = 0; k < TOTAL_GROUPS; k++) {
+    	printf("\n group=%d, total_codewords=%d", k, next_codeword[k]); 
+    }	
+    printf("\n\n");
+    #endif
+
+
     return used_count;
 }
 
@@ -549,11 +553,12 @@ void writeCompressedOutput(const char* filename, BinarySequence** sequences,
         perror("Failed to open output file");
         return;
     }
-    printf("\n In Write compressed Output. Going to print the best node \n");
+    printf("\n ==== Starting compressed output writing === \n");
 	//printNode(best_node, raw_data, 0);
     int used_count = calcUsedAndAssignGroupID(best_node, raw_data, 0);
     writeHeaderOfCompressedFile(sequences, seq_count, used_count, file);
     writeCompressedDataInFile(best_node, raw_data, file);
+    printf("\n === Writing compressed output completed ==\n");
    
     if (fclose(file) != 0) {
         perror("Warning: Error closing output file");

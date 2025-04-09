@@ -194,7 +194,7 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
             
             // Validate sequence exists
             BinarySequence* bin_seq = isValidSequence(seq_len, block, block_index);
-            if (!bin_seq || bin_seq->group > TOTAL_GROUPS) {
+            if (!bin_seq || bin_seq->group >= TOTAL_GROUPS) {
                 continue;
             }
 

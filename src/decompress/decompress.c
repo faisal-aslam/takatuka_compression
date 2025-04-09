@@ -269,13 +269,7 @@ static void decompressData(FILE* input, FILE* output,
             }
 
             uint8_t code_size = groupCodeSize((uint8_t)group);
-			#ifdef DEBUG
-				printf("ABOUT TO READ CODEWORD. CURRENT STATE:\n");
-				printf("Byte position: %zu\n", *byte_pos);
-				printf("Bit position: %d\n", bit_pos);
-				printf("Current byte: 0x%02X\n", byte_buffer[*byte_pos]);
-				printf("Next byte: 0x%02X\n", byte_buffer[*byte_pos+1]);
-			#endif
+			
             uint16_t codeword = read_bits(code_size, &bit_buffer, &bit_pos, byte_buffer, byte_pos, bytes_read, input);
             if (codeword == 0xFFFF) {
                 fprintf(stderr, "Unexpected EOF reading codeword\n");
@@ -317,10 +311,10 @@ static void decompressData(FILE* input, FILE* output,
         }
 
         #ifdef DEBUG
-        printf("Current output buffer (%zu bytes): ", out_pos);
-        for (size_t i = 0; i < out_pos; i++) {
-            printf("%02X ", out_buffer[i]);
-        }
+        //printf("Current output buffer (%zu bytes): ", out_pos);
+        //for (size_t i = 0; i < out_pos; i++) {
+          //  printf("%02X ", out_buffer[i]);
+        //}
         printf("\n");
         #endif
     }
