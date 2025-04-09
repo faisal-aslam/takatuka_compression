@@ -27,13 +27,29 @@ process_files() {
 process_files "."
 
 # Process second_pass files
+
 if [[ -d "second_pass" ]]; then
+    echo -e "second_pass \n"
     process_files "second_pass"
 fi
 
+
 # Process debug files
 if [[ -d "debug" ]]; then
+    echo -e "debug \n"
     process_files "debug"
+fi
+
+# Process decompress files
+if [[ -d "decompress" ]]; then
+    echo -e "decompress \n"
+    process_files "decompress"
+fi
+
+# Process write_in_file files
+if [[ -d "write_in_file" ]]; then
+    echo -e "write_in_file \n"
+    process_files "write_in_file"
 fi
 
 echo "Combined all .h and .c files into $output_file"

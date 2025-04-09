@@ -277,7 +277,7 @@ static inline void createRoot(uint8_t* block, int savings, int block_index) {
 }
 
 
-static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint8_t* block, uint32_t block_index, BinarySequence** topSeq) {
+static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint8_t* block, uint32_t block_index) {
     // Find node with maximum savings
     uint32_t max_saving = 0;
     int best_index = 0;
@@ -292,8 +292,8 @@ static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint
     printf("\n====================== resting to :");
     printNode(&source_pool[best_index], block, 0);
     
-    writeCompressedOutput("compress.bin", topSeq, MAX_NUMBER_OF_SEQUENCES, 
-                         &source_pool[best_index], block);
+    //writeCompressedOutput("compress.bin", topSeq, MAX_NUMBER_OF_SEQUENCES, 
+      //                   &source_pool[best_index], block);
                           
 	//createRoot(block, max_saving, block_index);  
 	//todo this will be gone later on. Just for testing keep it here time being.
@@ -301,8 +301,8 @@ static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint
 }
 
 
-void processBlockSecondPass(uint8_t* block, long blockSize, BinarySequence** topSeq) {
-    if (SEQ_LENGTH_LIMIT <= 1 || blockSize <= 0 || block == NULL || !topSeq) {
+void processBlockSecondPass(uint8_t* block, long blockSize) {
+    if (SEQ_LENGTH_LIMIT <= 1 || blockSize <= 0 || block == NULL) {
         return;
     }
     createRoot(block, 0, 0);  // Start with fresh root
@@ -314,12 +314,12 @@ void processBlockSecondPass(uint8_t* block, long blockSize, BinarySequence** top
     for (blockIndex = 1; blockIndex < blockSize; blockIndex++) {
         // Check if we need to reset
         if (blockIndex% COMPRESS_SEQUENCE_LENGTH == 0) {
-           restedOnce = 1;
+           restedOnce = 1; //todo for testing. Should be remove later.
         	printf("\n\n\n Reached limit blockIndex=%u, COMPRESS_SEQUENCE_LENGTH=%d \n", blockIndex, COMPRESS_SEQUENCE_LENGTH);
         	if (isEven) { //valid data is in odd pool as even pool to be process next.
-                resetToBestNode(node_pool_odd, odd_pool_count, block, blockIndex, topSeq);
+                resetToBestNode(node_pool_odd, odd_pool_count, block, blockIndex);
             } else { //valid data is in even pool
-                resetToBestNode(node_pool_even, even_pool_count, block, blockIndex, topSeq);
+                resetToBestNode(node_pool_even, even_pool_count, block, blockIndex);
             }
             isEven = 0; //root is always at even so switch to odd pool next.  
         }
@@ -341,14 +341,14 @@ void processBlockSecondPass(uint8_t* block, long blockSize, BinarySequence** top
     printf("\n------------------------------------------------>Ending \n");
     if (!restedOnce) {
 		if (isEven) { //valid data is in odd pool as even pool to be process next.
-    	    resetToBestNode(node_pool_odd, odd_pool_count, block, blockIndex, topSeq);
+    	    resetToBestNode(node_pool_odd, odd_pool_count, block, blockIndex);
     	} else { //valid data is in even pool
-    	    resetToBestNode(node_pool_even, even_pool_count, block, blockIndex, topSeq);
+    	    resetToBestNode(node_pool_even, even_pool_count, block, blockIndex);
     	}
     }
 }
 
-void processSecondPass(const char* filename, BinarySequence** topSeq) {
+void processSecondPass(const char* filename) {
     FILE* file = fopen(filename, "rb");
     if (!file) {
         perror("Failed to open file");
@@ -366,7 +366,7 @@ void processSecondPass(const char* filename, BinarySequence** topSeq) {
         long bytesRead = fread(block, 1, BLOCK_SIZE, file);
         if (bytesRead == 0) break;
 
-        processBlockSecondPass(block, bytesRead, topSeq);
+        processBlockSecondPass(block, bytesRead);
     }
     printf("\n\n\n Potential Savings = %u\n", best_saving_overall);
 
