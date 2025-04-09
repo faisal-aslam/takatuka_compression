@@ -7,10 +7,10 @@
 // Returns JUST the codeword bits (excluding flag + group bits)
 uint8_t groupCodeSize(uint8_t group) {
     switch(group) {
+        case 0: return 4;  // 4-bit codeword
         case 1: return 4;  // 4-bit codeword
         case 2: return 4;  // 4-bit codeword
-        case 3: return 4;  // 4-bit codeword
-        case 4: return 12; // 12-bit codeword
+        case 3: return 12; // 12-bit codeword
         default:
             fprintf(stderr, "Invalid group %d Exiting!\n", group);
             print_stacktrace();

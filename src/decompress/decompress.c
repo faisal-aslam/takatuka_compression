@@ -15,10 +15,10 @@ typedef struct {
 
 static inline uint8_t groupCodeSize(uint8_t group) {
     switch(group) {
+        case 0: return 4;
         case 1: return 4;
         case 2: return 4;
-        case 3: return 4;
-        case 4: return 12;
+        case 3: return 12;
         default:
             fprintf(stderr, "Invalid group %d\n", group);
             return 0;

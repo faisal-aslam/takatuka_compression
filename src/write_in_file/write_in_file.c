@@ -72,7 +72,7 @@ static inline void write_bit(uint8_t bit, uint8_t* buffer, uint8_t* bit_pos,
  * 
  * 2. For compressed sequences:
  *    - Sequence starts with '1' flag (1 bit)
- *    - Followed by 2-bit group ID (values 1-4)
+ *    - Followed by 2-bit group ID (values 0-3)
  *    - Then the actual codeword (groupCodeSize(group))
  * @param node The TreeNode containing compression metadata with:
  *             - compress_sequence: Array of sequence lengths
@@ -405,32 +405,6 @@ static void write_bits(uint16_t value, uint8_t num_bits, uint8_t* bit_buffer, ui
     }
 }
 
-
-
-
-/**
- * @brief Get the overhead bits for a group (flag + group bits)
- * 
- * @param group The group number (1-4)
- * @return uint8_t The 3-bit overhead (1 flag bit + 2 group bits)
- * 
-  * Group 1: 100 (binary) - 0x4
-  * Group 2: 101 (binary) - 0x5
-  * Group 3: 110 (binary) - 0x6
-  * Group 4: 111 (binary) - 0x7
-  */
-/*static uint8_t groupCodeOverhead(uint8_t group) {
-    switch(group) {
-        case 1: return 0x4;  // 100 (binary)
-        case 2: return 0x5;  // 101 (binary)
-        case 3: return 0x6;  // 110 (binary)
-        case 4: return 0x7;  // 111 (binary)
-        default:
-            fprintf(stderr, "Error: Invalid group %d in groupCodeOverhead\n", group);
-            exit(EXIT_FAILURE);
-    }
-}*/
-
 /**
  * @brief Calculates used sequences and assigns group IDs/codewords
  * 
@@ -452,7 +426,7 @@ static int calcUsedAndAssignGroupID(TreeNode *node, uint8_t* block, uint32_t blo
     }
 
     // Initialize codeword counters for each group
-    uint16_t next_codeword[TOTAL_GROUPS + 1] = {0};  // Groups 1-4
+    uint16_t next_codeword[TOTAL_GROUPS] = {0};  // Groups 0-3
     int used_count = 0;
 
     // Process each sequence in the node

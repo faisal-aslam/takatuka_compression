@@ -188,16 +188,16 @@ static void assignGroupsByFrequency() {
         uint8_t assigned_group = 0;
         
         if (elementsInGroup < GROUP1_THRESHOLD) {
-            assigned_group = assignGroupHelper(&elementsInGroup, 1, i);
+            assigned_group = assignGroupHelper(&elementsInGroup, 0, i);
         } 
         else if (elementsInGroup < GROUP2_THRESHOLD) {
-            assigned_group = assignGroupHelper(&elementsInGroup, 2, i);
+            assigned_group = assignGroupHelper(&elementsInGroup, 1, i);
         } 
         else if (elementsInGroup < GROUP3_THRESHOLD) {
-            assigned_group = assignGroupHelper(&elementsInGroup, 3, i);
+            assigned_group = assignGroupHelper(&elementsInGroup, 2, i);
         } 
         else if (elementsInGroup < GROUP4_THRESHOLD) {
-            assigned_group = assignGroupHelper(&elementsInGroup, 4, i);
+            assigned_group = assignGroupHelper(&elementsInGroup, 3, i);
         }
         
         if (assigned_group) {
