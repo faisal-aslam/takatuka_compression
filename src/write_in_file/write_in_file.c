@@ -496,41 +496,6 @@ static int calcUsedAndAssignGroupID(TreeNode *node, uint8_t* block, uint32_t blo
 }
 
 
-static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
-    if (!node) {
-        printf("[NULL NODE]\n");
-        return;
-    }
-    
-    // Use direct values but add bounds checking
-    printf("\n Node :");
-    printf("saving_so_far=%u, incoming_weight=%d, isPruned=%d, compress_seq_count=%d", 
-           node->saving_so_far, 
-           node->incoming_weight, 
-           node->isPruned, 
-           (node->compress_sequence_count < COMPRESS_SEQUENCE_LENGTH) ? node->compress_sequence_count : 0);
-             
-    // Bounds checking
-    if (node->compress_sequence_count > COMPRESS_SEQUENCE_LENGTH) {
-        printf("\n\t[ERROR: Invalid compress_sequence_count]");
-        return;
-    }
-    
-    for (int i=0; i < node->compress_sequence_count; i++) {
-        printf("\n\tNode compressed = %d", node->compress_sequence[i]);
-        printf("\t { ");
-        for (int j=0; j < node->compress_sequence[i]; j++) {
-            if (block && (block_index + j) < BLOCK_SIZE) {
-                printf("0x%x", block[block_index + j]);
-            } else {
-                printf("[INVALID]");
-            }
-            if (j+1 < node->compress_sequence[i]) printf(", ");
-        }
-        printf(" }, ");
-    }
-}
-
 
 /**
   * @brief Main function to write complete compressed output file
@@ -554,7 +519,6 @@ void writeCompressedOutput(const char* filename, BinarySequence** sequences,
         return;
     }
     printf("\n ==== Starting compressed output writing === \n");
-	//printNode(best_node, raw_data, 0);
     int used_count = calcUsedAndAssignGroupID(best_node, raw_data, 0);
     writeHeaderOfCompressedFile(sequences, seq_count, used_count, file);
     writeCompressedDataInFile(best_node, raw_data, file);

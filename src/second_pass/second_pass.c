@@ -22,8 +22,8 @@ int odd_pool_count = 0;
 uint32_t best_saving_overall = 0;
 
 static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
-    if (!node) {
-        printf("[NULL NODE]\n");
+    if (!node || !block) {
+        fprintf(stderr, "[NULL NODE or block]\n");
         return;
     }
     
@@ -41,14 +41,15 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
         return;
     }
     
+    int currentNode = 0;
     for (int i=0; i < node->compress_sequence_count; i++) {
         printf("\n\tNode compressed = %d", node->compress_sequence[i]);
         printf("\t { ");
         for (int j=0; j < node->compress_sequence[i]; j++) {
-            if (block && (block_index + j) < BLOCK_SIZE) {
-                printf("0x%x", block[block_index + j]);
+            if (block && (block_index + currentNode) < BLOCK_SIZE) {
+                printf("0x%x", block[block_index + currentNode++]);
             } else {
-                printf("[INVALID]");
+                fprintf(stderr, "[Invalid node accessed=%ld] \n", block_index + currentNode++);
             }
             if (j+1 < node->compress_sequence[i]) printf(", ");
         }
