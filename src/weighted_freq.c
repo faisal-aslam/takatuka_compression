@@ -22,6 +22,7 @@ uint8_t groupCodeSize(uint8_t group) {
 
 //Returns overhead of a group.
 uint8_t groupOverHead(uint8_t group) {
+	(void)group; // Suppressing unused parameter warning. In future we might need it.
 	return 3;
 }
 

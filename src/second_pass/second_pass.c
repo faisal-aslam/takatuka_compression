@@ -56,7 +56,7 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
     }
 }
 
-static inline void copyNodeCompressSeq(TreeNode *NodeA, TreeNode *NodeB, uint8_t bytes_to_copy) {
+static inline void copyNodeCompressSeq(TreeNode *NodeA, TreeNode *NodeB, uint16_t bytes_to_copy) {
     if (!NodeA || !NodeB || bytes_to_copy == 0 || bytes_to_copy > COMPRESS_SEQUENCE_LENGTH) {
         return;
     }
