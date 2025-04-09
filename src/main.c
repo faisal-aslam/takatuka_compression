@@ -13,36 +13,62 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Initialize common components
-    initializeHashTable();
-    initializeSequenceMap();
-    
     BinarySequence **topSequences;
     int sequenceCount = 0;
 
 #ifdef DEBUG
-    // DEBUG path - try to load from file first
     topSequences = load_debug_sequences(DEBUG_SEQUENCE_FILE, &sequenceCount);
     if (!topSequences) {
         fprintf(stderr, "Debug load failed, falling back to normal processing\n");
-        // Fall through to normal processing
-#endif
-    // Normal processing path (used in both DEBUG fallthrough and non-DEBUG)
-    if (!topSequences) {
+        // Continue with normal processing
+        initializeHashTable();
         processFileInBlocks(argv[1]);
         buildMinHeap();
         topSequences = malloc(MAX_NUMBER_OF_SEQUENCES * sizeof(BinarySequence *));
         extractTopSequences(topSequences);
         sequenceCount = MAX_NUMBER_OF_SEQUENCES;
+    } else {
+        // Initialize sequence map with debug sequences
+        initializeSequenceMap();
+        for (int i = 0; i < sequenceCount; i++) {
+            if (topSequences[i]) {
+                unsigned int hashValue = fnv1a_hash(topSequences[i]->sequence, 
+                                                  topSequences[i]->length);
+                SequenceMapEntry *entry = calloc(1, sizeof(SequenceMapEntry));
+                entry->key = malloc(topSequences[i]->length);
+                if (!entry->key) {
+                    free(entry);
+                    continue;
+                }
+                memcpy(entry->key, topSequences[i]->sequence, topSequences[i]->length);
+                entry->key_length = topSequences[i]->length;
+                entry->sequence = topSequences[i];
+                sequenceMap[hashValue] = entry;
+            }
+        }
     }
-#ifdef DEBUG
-    }
+#else
+    // Normal processing path
+    initializeHashTable();
+    processFileInBlocks(argv[1]);
+    buildMinHeap();
+    topSequences = malloc(MAX_NUMBER_OF_SEQUENCES * sizeof(BinarySequence *));
+    extractTopSequences(topSequences);
+    sequenceCount = MAX_NUMBER_OF_SEQUENCES;
 #endif
 
+
+#ifdef DEBUG
+print_results:
+#endif
     printTopSequences(topSequences);
+
     processSecondPass(argv[1], topSequences);
 
-    // Common cleanup
+    // Cleanup
+#ifdef DEBUG
+    free_debug_sequences(topSequences, sequenceCount);
+#else
     for (int i = 0; i < sequenceCount; i++) {
         if (topSequences[i]) {
             free(topSequences[i]->sequence);
@@ -50,9 +76,8 @@ int main(int argc, char *argv[]) {
         }
     }
     free(topSequences);
+#endif
     
-    cleanupHashTable();
     freeSequenceMap();
     return 0;
 }
-
