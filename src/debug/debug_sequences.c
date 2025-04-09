@@ -1,8 +1,10 @@
-#include "debug_sequences.h"
-#include "../constants.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "debug_sequences.h"
+#include "../constants.h"
+
 
 void free_debug_sequences(BinarySequence** sequences, int count) {
     if (!sequences) return;
@@ -17,94 +19,88 @@ void free_debug_sequences(BinarySequence** sequences, int count) {
 }
 
 BinarySequence** load_debug_sequences(const char* filename, int* count) {
-    /* Open the debug sequences file for reading */
     FILE* file = fopen(filename, "r");
     if (!file) {
         perror("Failed to open debug sequence file");
         return NULL;
     }
 
-    /* Allocate memory for the sequence pointers array */
     BinarySequence** sequences = calloc(MAX_NUMBER_OF_SEQUENCES, sizeof(BinarySequence*));
     if (!sequences) {
         perror("Memory allocation failed for sequences array");
         fclose(file);
         return NULL;
     }
-    
+
     *count = 0;
     char line[256];
-    
-    /* Read the file line by line until we reach MAX_NUMBER_OF_SEQUENCES */
-	while (*count < MAX_NUMBER_OF_SEQUENCES && fgets(line, sizeof(line), file)) {
+
+    while (*count < MAX_NUMBER_OF_SEQUENCES && fgets(line, sizeof(line), file)) {
+        // === Skip comment lines and empty lines ===
+        char* trimmed = line;
+        while (isspace(*trimmed)) trimmed++; // Skip leading whitespace
+        if (*trimmed == '#' || *trimmed == '\0' || *trimmed == '\n') {
+            continue; // Skip comments and empty lines
+        }
 
         int length, cnt, group;
         unsigned int bytes[SEQ_LENGTH_LIMIT];
         int matched;
-        
-        /* Parse sequences of length 2 (2 bytes + metadata) */
-        matched = sscanf(line, "length=%d, 0x%02x, 0x%02x, count=%d, group=%d",
-                       &length, &bytes[0], &bytes[1], &cnt, &group);
-        
-        /* Handle successfully parsed 2-byte sequences */
+
+        matched = sscanf(trimmed, "length=%d, 0x%02x, 0x%02x, count=%d, group=%d",
+                         &length, &bytes[0], &bytes[1], &cnt, &group);
+
         if (matched == 5) {
-            /* Validate sequence length before processing */
             if (length != 2) {
                 fprintf(stderr, "Warning: Length mismatch in 2-byte sequence parser\n");
                 continue;
             }
 
-            /* Allocate memory for the new sequence */
             sequences[*count] = calloc(1, sizeof(BinarySequence));
             if (!sequences[*count]) {
                 perror("Failed to allocate BinarySequence");
                 break;
             }
 
-            /* Store the sequence bytes */
             sequences[*count]->sequence = malloc(length);
             if (!sequences[*count]->sequence) {
                 free(sequences[*count]);
                 break;
             }
-            
-            /* Copy sequence data and metadata */
+
             for (int i = 0; i < length; i++) {
                 sequences[*count]->sequence[i] = (uint8_t)bytes[i];
             }
+
             sequences[*count]->length = length;
             sequences[*count]->count = cnt;
             sequences[*count]->frequency = length * cnt;
             sequences[*count]->group = group;
             (*count)++;
         }
-        /* Parse sequences of length 3 (3 bytes + metadata) */
-        else if ((matched = sscanf(line, "length=%d, 0x%02x, 0x%02x, 0x%02x, count=%d, group=%d",
-                                 &length, &bytes[0], &bytes[1], &bytes[2], &cnt, &group)) == 6) {
-            /* Validate sequence length before processing */
+        else if ((matched = sscanf(trimmed, "length=%d, 0x%02x, 0x%02x, 0x%02x, count=%d, group=%d",
+                                   &length, &bytes[0], &bytes[1], &bytes[2], &cnt, &group)) == 6) {
             if (length != 3) {
                 fprintf(stderr, "Warning: Length mismatch in 3-byte sequence parser\n");
                 continue;
             }
 
-            /* Allocate memory for the new sequence */
             sequences[*count] = calloc(1, sizeof(BinarySequence));
             if (!sequences[*count]) {
                 perror("Failed to allocate BinarySequence");
                 break;
             }
 
-            /* Store the sequence bytes */
             sequences[*count]->sequence = malloc(length);
             if (!sequences[*count]->sequence) {
                 free(sequences[*count]);
                 break;
             }
-            
-            /* Copy sequence data and metadata */
+
             for (int i = 0; i < length; i++) {
                 sequences[*count]->sequence[i] = (uint8_t)bytes[i];
             }
+
             sequences[*count]->length = length;
             sequences[*count]->count = cnt;
             sequences[*count]->frequency = length * cnt;
@@ -112,10 +108,11 @@ BinarySequence** load_debug_sequences(const char* filename, int* count) {
             (*count)++;
         }
         else {
-            fprintf(stderr, "Warning: Failed to parse line: %s", line);
+            fprintf(stderr, "Warning: Failed to parse line: %s", trimmed);
         }
     }
 
     fclose(file);
     return sequences;
 }
+
