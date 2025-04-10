@@ -57,80 +57,100 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
 }
 
 /**
-* - If the new seq does not exist in the map of the node. Then we do not compress.
-* ---- Put it in the map. Also in the map add sequence location location in the Tree.
-* ---- Savings = minus * number of bytes  (as we have to add 0 before each byte)
-* - If the new seq exists in the map.
-* ---- Add in map its location.
-* ---- Savings = (length in bytes *8) - (groupCodeSize(group)+groupOverHead(group))
-* ----- In all other locations update above savings calculation.
-* ----- In the branch update variable headerOverhead 
-* ------ If the length is in one byte. Use group 1. Otherwise use group 4.
-*/
+ * Calculates savings for a given binary sequence in a compression context.
+ *
+ * - If the sequence is not present in the node's map:
+ *     - Adds it to the map with initial location and frequency.
+ *     - Computes negative savings (expansion cost).
+ * - If the sequence already exists:
+ *     - Adds the new location to the map.
+ *     - Updates frequency and calculates compression savings.
+ *     - If it is the first time compressing this sequence, updates the header overhead.
+ *
+ * Returns:
+ *     The number of bits saved (positive if compression helps, negative if not).
+ */
 static inline long calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, TreeNode *oldNode, int* headerOverhead) {
-	long savings;
-	/*
-	* Step 1: We check if the input is correct. If not then we return with error.
-	*/
-	if (!newBinSeq || seq_length<= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH  || !oldNode) {
-		fprintf(stderr, "\n invalid input to function calculateSavings ");
-		return 0;
-	}
-	
-	/**
-	* Step 2: Find new sequence in the map. 
-	*/
-	BinSeqMap *map = oldNode->map; //get map from old node.
-	if (!map) { //check if map is null.
-		fprintf(stderr, "\n map in the node was null. ");
-		return 0;
-	}
-	BinSeqKey key; 
-	memcpy(key.binary_sequence, newBinSeq, seq_length); //creating key.
-	key.length = seq_length;
-	BinSeqValue* binSeqVal = binseq_map_get(map, key); //value of the key
-	
-	/**
-	* When value is null. That means we never encountered this sequence.
-	*/
-	if (!binSeqVal) {
-		//create new value.
-		binSeqVal = calloc(1, sizeof(BinSeqValue));
-		if (!binSeqVal) {
-			fprintf(stderr, "\n unable to create BinSeqValue. ");
-			return 0;			
-		}
-		//update frequency as 1 (as this is the first occurance of seq).
-		binSeqVal->frequency = 1;
-		//adding location in the map
-		binSeqVal->seqLocation[seqLocationLength++] = oldNode->compress_sequence_count;
-		int success = binseq_map_put(map, key, binSeqVal);
-		if (!success) {
-			fprintf(stderr, "\n map is full. Cannot update it. ");
-			return 0;			
-		}
-		//as the data is not compressed so savings 
-		savings = -seq_length; //in this case we have -ve savings
-	} else { //already found in the map.
-		int group = seq_length==1?1:4;
-		if (binSeqVal->frequency == 1) {
-			//We are compressing it first time, so add headerOverhead.
-			*headerOverhead = getHeaderOverhead(group, seq_length);
-			//update previous saving calculations.
-			//todo
-		}
-		//update frequency
-		binSeqVal->frequency++;
-		//adding location in the map
-		binSeqVal->seqLocation[seqLocationLength++] = oldNode->compress_sequence_count;
-		savings = (seq_length*8+seq_length)-(groupCodeSize(group)+groupOverHead(group));
-		if (savings < 0) {
-			fprintf(stderr, "\n Negative savings! ");
-			return 0;
-		}
-	}
+    // Step 1: Validate inputs
+    if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !oldNode || !headerOverhead) {
+        fprintf(stderr, "\n[Error] Invalid input to function calculateSavings.\n");
+        return 0;
+    }
 
-	return 0;
+    BinSeqMap *map = oldNode->map;
+    if (!map) {
+        fprintf(stderr, "\n[Error] Map in the TreeNode is NULL.\n");
+        return 0;
+    }
+
+    // Step 2: Construct key for the binary sequence
+    BinSeqKey key = { .length = seq_length };
+    memcpy(key.binary_sequence, newBinSeq, seq_length);
+
+    BinSeqValue* binSeqVal = binseq_map_get(map, key);
+    long savings = 0;
+
+    if (!binSeqVal) {
+        // Sequence not found: insert it with negative savings (expansion due to overhead)
+
+        binSeqVal = (BinSeqValue*)calloc(1, sizeof(BinSeqValue));
+        if (!binSeqVal) {
+            fprintf(stderr, "\n[Error] Memory allocation failed for BinSeqValue.\n");
+            return 0;
+        }
+
+        binSeqVal->frequency = 1;
+
+        if (seqLocationLength >= MAX_SEQ_LOCATIONS) {
+            fprintf(stderr, "\n[Error] Exceeded maximum allowed sequence locations.\n");
+            free(binSeqVal);
+            return 0;
+        }
+
+        binSeqVal->seqLocation[seqLocationLength++] = oldNode->compress_sequence_count;
+
+        if (!binseq_map_put(map, key, binSeqVal)) {
+            fprintf(stderr, "\n[Error] Failed to insert sequence into map (possibly full).\n");
+            free(binSeqVal);
+            return 0;
+        }
+
+        // Expansion overhead: we need to add a zero before every byte in original
+        // (1 extra bit per byte). So cost is (1 * number of bytes) in bits = seq_length bits
+        savings = -(long)(seq_length * 8);
+    } else {
+        // Sequence found: compute compression savings
+
+        int group = (seq_length == 1) ? 1 : 4;
+
+        if (binSeqVal->frequency == 1) {
+            // First compression usage of this sequence: update header overhead
+            *headerOverhead = getHeaderOverhead(group, seq_length);
+            // You could optionally update savings of all existing locations here.
+        }
+
+        if (seqLocationLength >= MAX_SEQ_LOCATIONS) {
+            fprintf(stderr, "\n[Error] Exceeded maximum allowed sequence locations.\n");
+            return 0;
+        }
+
+        binSeqVal->seqLocation[seqLocationLength++] = oldNode->compress_sequence_count;
+        binSeqVal->frequency++;
+
+        // Calculate actual savings:
+        // Original size in bits = 8 bits per byte + 1 extra bit (prefix) = seq_length * 9
+        // Compressed size = groupCodeSize + groupOverhead
+        long originalSizeBits = (long)(seq_length * 8 + seq_length);
+        long compressedSizeBits = (long)(groupCodeSize(group) + groupOverHead(group));
+        savings = originalSizeBits - compressedSizeBits;
+
+        if (savings < 0) {
+            fprintf(stderr, "\n[Warning] Negative savings detected for sequence.\n");
+            return 0;
+        }
+    }
+
+    return savings;
 }
 
 
@@ -357,7 +377,9 @@ static inline void createRoot(uint8_t* block, int savings, int block_index) {
     TreeNode root = {0};  // Zero-initialize all fields
     root.compress_sequence[0] = 1;
     root.compress_sequence_count = 1;
-    root.saving_so_far = calculateSavings(&root, 0);
+    //calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, TreeNode *oldNode, int* headerOverhead)
+    int headerOverhead = 0;
+    root.saving_so_far = calculateSavings(&block[0], 1, NULL,  &root, 0, headerOverhead);
     root.map = binseq_map_create(1); //create map of root.
     root.incoming_weight = 1;
     
