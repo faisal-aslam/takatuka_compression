@@ -4,6 +4,23 @@
 #include <limits.h>
 #include "debug/print_stack_trace.h"
 
+/*
+ *    - 3-bit length
+ *    - N bytes of sequence data
+ *    - 2-bit group
+ *    - groupCodeSize()
+*/
+uint8_t getHeaderOverhead(uint8_t group, uint16_t seq_length) {
+	if (group >= 0 && group < TOTAL_GROUPS) {
+		return 3+seq_length+2+groupCodeSize(group);
+	} else {		
+        fprintf(stderr, "Invalid group %d Exiting!\n", group);
+        print_stacktrace();
+        exit(0);
+        return 0;
+    }
+}
+
 // Returns JUST the codeword bits (excluding flag + group bits)
 uint8_t groupCodeSize(uint8_t group) {
     switch(group) {

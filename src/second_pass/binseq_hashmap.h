@@ -14,9 +14,9 @@ typedef struct {
 } BinSeqKey;
 
 typedef struct {
-    // Replace this with your actual value fields
     int frequency;
-    float weight;
+    uint32_t seqLocation[COMPRESS_SEQUENCE_LENGTH];
+    uint16_t seqLocationLength;
 } BinSeqValue;
 
 typedef struct BinSeqMap BinSeqMap;

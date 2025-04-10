@@ -58,26 +58,17 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
 
 /**
 * - If the new seq does not exist in the map of the node. Then we do not compress.
-* ---- Put it in the map. Also in the map add node's location in the branch.
+* ---- Put it in the map. Also in the map add sequence location location in the Tree.
 * ---- Savings = minus * number of bytes  (as we have to add 0 before each byte)
 * - If the new seq exists in the map.
 * ---- Add in map its location.
-* ---- Savings = (length in bytes *8) - groupCodeSize()
+* ---- Savings = (length in bytes *8) - (groupCodeSize(group)+groupOverHead(group))
 * ----- In all other locations update above savings calculation.
 * ----- In the branch update variable headerOverhead 
-		 *    - 3-bit length
-		 *    - N bytes of sequence data
-		 *    - 2-bit group
-		 *    - groupCodeSize()
-* ------ If the length is in one byte. Use group 1. Otherwise use group 2.
-*
-* Now what we need to make above changes. 
-* 1) we need new binary sequence and its length. We can get it from newNode but it will not work if newNode is yet not created.
-* 2) we need map that we can get from the oldNode
-* 3) In the TreeNode we need to add another field to record header overhead. This field will be called uint32_t headOverhead
-* 4) In the map, the key is sequence, the value will contain an array of all the places in that binary sequence exist in the Tree. 
+* ------ If the length is in one byte. Use group 1. Otherwise use group 4.
 */
-static inline uint32_t calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, TreeNode *oldNode) {
+static inline long calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, TreeNode *oldNode, int* headerOverhead) {
+	long savings;
 	/*
 	* Step 1: We check if the input is correct. If not then we return with error.
 	*/
@@ -94,18 +85,50 @@ static inline uint32_t calculateSavings(uint8_t* newBinSeq, uint16_t seq_length,
 		fprintf(stderr, "\n map in the node was null. ");
 		return 0;
 	}
-	BinSeqKey key;
-	malloc(key.binary_sequence, newBinSeq, length); //creating key.
-	key.length = length;
-	BinSeqValue* binSeqVal = binseq_map_get(map, key);
-	/* When we compress.
-	           // Calculate new savings (in bits)
-	            uint32_t new_saving = oldNode.saving_so_far + 
-	                                (bin_seq->length * 8 - (groupCodeSize(bin_seq->group)+groupOverHead(bin_seq->group)));
+	BinSeqKey key; 
+	memcpy(key.binary_sequence, newBinSeq, seq_length); //creating key.
+	key.length = seq_length;
+	BinSeqValue* binSeqVal = binseq_map_get(map, key); //value of the key
 	
-	   When we do not compress.
-	 		uint32_t new_saving = oldNode.saving_so_far;
+	/**
+	* When value is null. That means we never encountered this sequence.
 	*/
+	if (!binSeqVal) {
+		//create new value.
+		binSeqVal = calloc(1, sizeof(BinSeqValue));
+		if (!binSeqVal) {
+			fprintf(stderr, "\n unable to create BinSeqValue. ");
+			return 0;			
+		}
+		//update frequency as 1 (as this is the first occurance of seq).
+		binSeqVal->frequency = 1;
+		//adding location in the map
+		binSeqVal->seqLocation[seqLocationLength++] = oldNode->compress_sequence_count;
+		int success = binseq_map_put(map, key, binSeqVal);
+		if (!success) {
+			fprintf(stderr, "\n map is full. Cannot update it. ");
+			return 0;			
+		}
+		//as the data is not compressed so savings 
+		savings = -seq_length; //in this case we have -ve savings
+	} else { //already found in the map.
+		int group = seq_length==1?1:4;
+		if (binSeqVal->frequency == 1) {
+			//We are compressing it first time, so add headerOverhead.
+			*headerOverhead = getHeaderOverhead(group, seq_length);
+			//update previous saving calculations.
+			//todo
+		}
+		//update frequency
+		binSeqVal->frequency++;
+		//adding location in the map
+		binSeqVal->seqLocation[seqLocationLength++] = oldNode->compress_sequence_count;
+		savings = (seq_length*8+seq_length)-(groupCodeSize(group)+groupOverHead(group));
+		if (savings < 0) {
+			fprintf(stderr, "\n Negative savings! ");
+			return 0;
+		}
+	}
 
 	return 0;
 }
