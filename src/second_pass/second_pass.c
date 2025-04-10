@@ -77,15 +77,31 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
 * 3) In the TreeNode we need to add another field to record header overhead. This field will be called uint32_t headOverhead
 * 4) In the map, the key is sequence, the value will contain an array of all the places in that binary sequence exist in the Tree. 
 */
-static inline uint32_t calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, TreeNode *oldNode, TreeNode *newNode, uint32_t oldSavings) {
-/* When we compress.
-           // Calculate new savings (in bits)
-            uint32_t new_saving = oldNode.saving_so_far + 
-                                (bin_seq->length * 8 - (groupCodeSize(bin_seq->group)+groupOverHead(bin_seq->group)));
-
-   When we do not compress.
- 		uint32_t new_saving = oldNode.saving_so_far;
-*/
+static inline uint32_t calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, TreeNode *oldNode) {
+	/*
+	* Step 1: We check if the input is correct. If not then we return with error.
+	*/
+	if (!newBinSeq || seq_length<= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH  || !oldNode) {
+		fprintf(stderr, "\n invalid input to function calculateSavings ");
+		return 0;
+	}
+	
+	/**
+	* Step 2: Find new sequence in the map. 
+	*/
+	BinSeqMap *map = oldNode->map; //get map from old node.
+	if (!map) {
+		fprintf(stderr, "\n map in the node was null. ");
+		return 0;
+	}
+	/* When we compress.
+	           // Calculate new savings (in bits)
+	            uint32_t new_saving = oldNode.saving_so_far + 
+	                                (bin_seq->length * 8 - (groupCodeSize(bin_seq->group)+groupOverHead(bin_seq->group)));
+	
+	   When we do not compress.
+	 		uint32_t new_saving = oldNode.saving_so_far;
+	*/
 
 	return 0;
 }
