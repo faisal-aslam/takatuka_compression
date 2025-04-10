@@ -85,9 +85,9 @@ static inline void copyNodeData(TreeNode *sourceNode, TreeNode *destNode, uint16
     destNode->compress_sequence_count = bytes_to_copy;
     
     /*
-    * Step 2: Copy binary sequences map 
+    * Step 2: Copy binary sequences map. Increase size of new map by +1
     */
-    copyMap(sourceNode, destNode);
+    copyMap(sourceNode, destNode, 1);
     
     /*
     * Step 3: Most importantly, carefully calculate new savings.
@@ -296,7 +296,8 @@ static inline void createRoot(uint8_t* block, int savings, int block_index) {
     TreeNode root = {0};  // Zero-initialize all fields
     root.compress_sequence[0] = 1;
     root.compress_sequence_count = 1;
-    root.saving_so_far = savings;
+    root.saving_so_far = calculateSavings(&root, 0);
+    root.map = binseq_map_create(1); //create map of root.
     root.incoming_weight = 1;
     
     // Copy to pool

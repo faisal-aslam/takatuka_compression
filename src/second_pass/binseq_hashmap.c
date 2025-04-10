@@ -76,15 +76,19 @@ int binseq_map_contains(BinSeqMap *map, BinSeqKey key) {
 }
 
 
-void copyMap(struct TreeNode* mapSource, struct TreeNode* mapTarget) {
+void copyMap(struct TreeNode* mapSource, struct TreeNode* mapTarget, int increaseSize) {
     if (!mapSource || !mapSource->map) return;
 
     BinSeqMap *source = mapSource->map;
-    BinSeqMap *target = binseq_map_create(source->capacity);
+
+    // Add increaseSize to the capacity
+    size_t new_capacity = source->capacity + increaseSize;
+    BinSeqMap *target = binseq_map_create(new_capacity);
     if (!target) {
-    	fprintf(stderr, "\n unable to create BinSeqMap in function copyMap \n");
-    	return;
-	}
+        fprintf(stderr, "\nUnable to create BinSeqMap in function copyMap\n");
+        return;
+    }
+
     for (size_t i = 0; i < source->capacity; i++) {
         Entry *entry = &source->entries[i];
         if (entry->used) {
