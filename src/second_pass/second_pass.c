@@ -90,10 +90,14 @@ static inline uint32_t calculateSavings(uint8_t* newBinSeq, uint16_t seq_length,
 	* Step 2: Find new sequence in the map. 
 	*/
 	BinSeqMap *map = oldNode->map; //get map from old node.
-	if (!map) {
+	if (!map) { //check if map is null.
 		fprintf(stderr, "\n map in the node was null. ");
 		return 0;
 	}
+	BinSeqKey key;
+	malloc(key.binary_sequence, newBinSeq, length); //creating key.
+	key.length = length;
+	BinSeqValue* binSeqVal = binseq_map_get(map, key);
 	/* When we compress.
 	           // Calculate new savings (in bits)
 	            uint32_t new_saving = oldNode.saving_so_far + 
