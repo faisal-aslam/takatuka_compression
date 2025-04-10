@@ -57,7 +57,19 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
 }
 
 /**
-* If a node provide compression of 
+* - If the node does not exist in the map. Then we do not compress.
+* ---- Put it in the map. Also in the map add node's location in the branch.
+* ---- Savings = minus * number of bytes  (as we have to add 0 before each byte)
+* - If the node exists in the map.
+* ---- Add in map its location.
+* ---- Savings = (length in bytes *8) - groupCodeSize()
+* ----- In all other locations update above savings calculation.
+* ----- In the branch update variable headerOverhead 
+		 *    - 3-bit length
+		 *    - N bytes of sequence data
+		 *    - 2-bit group
+		 *    - groupCodeSize()
+* ------ If the lenght is in one byte. Use group 1. Otherwise use group 2.
 */
 static inline uint32_t calculateSavings(TreeNode *newNode, uint32_t oldSavings) {
 /* When we compress.
