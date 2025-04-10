@@ -57,10 +57,10 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
 }
 
 /**
-* - If the node does not exist in the map. Then we do not compress.
+* - If the new seq does not exist in the map of the node. Then we do not compress.
 * ---- Put it in the map. Also in the map add node's location in the branch.
 * ---- Savings = minus * number of bytes  (as we have to add 0 before each byte)
-* - If the node exists in the map.
+* - If the new seq exists in the map.
 * ---- Add in map its location.
 * ---- Savings = (length in bytes *8) - groupCodeSize()
 * ----- In all other locations update above savings calculation.
@@ -69,9 +69,15 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
 		 *    - N bytes of sequence data
 		 *    - 2-bit group
 		 *    - groupCodeSize()
-* ------ If the lenght is in one byte. Use group 1. Otherwise use group 2.
+* ------ If the length is in one byte. Use group 1. Otherwise use group 2.
+*
+* Now what we need to make above changes. 
+* 1) we need new binary sequence and its length. We can get it from newNode but it will not work if newNode is yet not created.
+* 2) we need map that we can get from the oldNode
+* 3) In the TreeNode we need to add another field to record header overhead. This field will be called uint32_t headOverhead
+* 4) In the map, the key is sequence, the value will contain an array of all the places in that binary sequence exist in the Tree. 
 */
-static inline uint32_t calculateSavings(TreeNode *newNode, uint32_t oldSavings) {
+static inline uint32_t calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, TreeNode *oldNode, TreeNode *newNode, uint32_t oldSavings) {
 /* When we compress.
            // Calculate new savings (in bits)
             uint32_t new_saving = oldNode.saving_so_far + 
