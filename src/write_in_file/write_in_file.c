@@ -462,7 +462,7 @@ static int calcUsedAndAssignGroupID(TreeNode *node, uint8_t* block, uint32_t blo
             used_count++;
             
             // Validate group
-            if (bin_seq->group < 0 || bin_seq->group > TOTAL_GROUPS-1) {
+            if (bin_seq->group >= TOTAL_GROUPS) {
                 fprintf(stderr, "Error: Invalid group %d for sequence\n", bin_seq->group);
                 continue;
             }

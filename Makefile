@@ -117,7 +117,7 @@ $(BUILD_DIR)/debug/debug/%.o: $(DEBUG_DIR)/%.c
 	$(CC) $(CFLAGS_DEBUG) -c $< -o $@
 
 clean:
-	@rm -rf $(BUILD_DIR) $(TARGET) $(DEBUG_TARGET) $(DECOMPRESS_TARGET)
+	@rm -rf $(BUILD_DIR) $(TARGET) $(DEBUG_TARGET) $(DECOMPRESS_TARGET) src/combined_code.c
 	@echo "Cleaned all build artifacts"
 
 -include $(DEPS)

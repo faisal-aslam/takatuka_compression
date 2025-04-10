@@ -56,16 +56,48 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
     }
 }
 
-static inline void copyNodeCompressSeq(TreeNode *NodeA, TreeNode *NodeB, uint16_t bytes_to_copy) {
-    if (!NodeA || !NodeB || bytes_to_copy == 0 || bytes_to_copy > COMPRESS_SEQUENCE_LENGTH) {
+/**
+* If a node provide compression of 
+*/
+static inline uint32_t calculateSavings(TreeNode *newNode, uint32_t oldSavings) {
+/* When we compress.
+           // Calculate new savings (in bits)
+            uint32_t new_saving = oldNode.saving_so_far + 
+                                (bin_seq->length * 8 - (groupCodeSize(bin_seq->group)+groupOverHead(bin_seq->group)));
+
+   When we do not compress.
+ 		uint32_t new_saving = oldNode.saving_so_far;
+*/
+
+	return 0;
+}
+
+
+static inline void copyNodeData(TreeNode *sourceNode, TreeNode *destNode, uint16_t bytes_to_copy) {
+  	// check input.
+    if (!sourceNode || !destNode || bytes_to_copy == 0 || bytes_to_copy > COMPRESS_SEQUENCE_LENGTH) {
         return;
     }
+    /*
+    * Step 1: Copy sequences and update destNode sequence count.
+    */
+    memcpy(destNode->compress_sequence, sourceNode->compress_sequence, bytes_to_copy); 
+    destNode->compress_sequence_count = bytes_to_copy;
     
-    // Copy all valid data from NodeA to NodeB
-    memcpy(NodeB->compress_sequence, NodeA->compress_sequence, bytes_to_copy);
+    /*
+    * Step 2: Copy binary sequences map 
+    */
+    copyMap(sourceNode, destNode);
     
-    // Update NodeB's count to match NodeA's
-    NodeB->compress_sequence_count = bytes_to_copy;
+    /*
+    * Step 3: Most importantly, carefully calculate new savings.
+    */
+    destNode->saving_so_far = calculateSavings(destNode, sourceNode->saving_so_far);
+     
+    /*
+    * By default prune is false.
+    */
+    destNode->isPruned = 0;
 }
 
 
@@ -85,6 +117,7 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
 
     return lookupSequence(lastSequence, sequence_length);
 }
+
 
 /**
  * Creates new tree nodes while enforcing pruning strategy
@@ -145,7 +178,7 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
                 new_weight = SEQ_LENGTH_LIMIT - 1;
             }
 
-            uint32_t new_saving = oldNode.saving_so_far;
+            uint32_t new_saving = calculateSavings(&oldNode, oldNode.saving_so_far);
 
             // Only keep if better than existing nodes with same weight
             if (best_index[new_weight] == -1 || new_saving > best_saving[new_weight]) {
@@ -160,11 +193,9 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
 
                 // Configure new node
                 newNode.incoming_weight = new_weight;
-                newNode.saving_so_far = new_saving;
-                newNode.isPruned = 0;
-
-                // Copy compression history safely
-                copyNodeCompressSeq(&oldNode, &newNode, oldNode.compress_sequence_count);
+               
+				// Copy node's data to the new node. 
+                copyNodeData(&oldNode, &newNode, oldNode.compress_sequence_count);
 
                 // Add new uncompressed byte (length=1)
                 if (newNode.compress_sequence_count < COMPRESS_SEQUENCE_LENGTH) {
@@ -199,8 +230,8 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
             }
 
             // Calculate new savings (in bits)
-            uint32_t new_saving = oldNode.saving_so_far + 
-                                (bin_seq->length * 8 - (groupCodeSize(bin_seq->group)+groupOverHead(bin_seq->group)));
+            uint32_t new_saving = calculateSavings(&oldNode, oldNode.saving_so_far); 
+            //oldNode.saving_so_far + (bin_seq->length * 8 - (groupCodeSize(bin_seq->group)+groupOverHead(bin_seq->group)));
 
             // Skip if not better than current best
             if (new_saving <= best_saving[0]) { //In this case our weight will be always zero
@@ -223,12 +254,14 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
 
             // Configure new node
             newNode.incoming_weight = 0; // Reset weight after compression
-            newNode.saving_so_far = new_saving;
-            newNode.isPruned = 0;
+            
 
             // Copy relevant compression history
             int to_copy = oldNode.compress_sequence_count - oldNode.incoming_weight + k;
-            copyNodeCompressSeq(&oldNode, &newNode, to_copy);
+            
+        	// Copy node's data to the new node. 
+            copyNodeData(&oldNode, &newNode, to_copy);
+
 
             // Add new compressed sequence
             if (newNode.compress_sequence_count < COMPRESS_SEQUENCE_LENGTH) {

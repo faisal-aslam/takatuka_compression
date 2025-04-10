@@ -1,7 +1,10 @@
 #include "binseq_hashmap.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include "xxhash.h"
+#include "tree_node.h" 
+
 
 typedef struct {
     BinSeqKey key;
@@ -70,5 +73,35 @@ BinSeqValue *binseq_map_get(BinSeqMap *map, BinSeqKey key) {
 
 int binseq_map_contains(BinSeqMap *map, BinSeqKey key) {
     return binseq_map_get(map, key) != NULL;
+}
+
+
+void copyMap(struct TreeNode* mapSource, struct TreeNode* mapTarget) {
+    if (!mapSource || !mapSource->map) return;
+
+    BinSeqMap *source = mapSource->map;
+    BinSeqMap *target = binseq_map_create(source->capacity);
+    if (!target) {
+    	fprintf(stderr, "\n unable to create BinSeqMap in function copyMap \n");
+    	return;
+	}
+    for (size_t i = 0; i < source->capacity; i++) {
+        Entry *entry = &source->entries[i];
+        if (entry->used) {
+            BinSeqKey keyCopy;
+            keyCopy.length = entry->key.length;
+            keyCopy.binary_sequence = malloc(keyCopy.length);
+            if (!keyCopy.binary_sequence) continue;
+            memcpy(keyCopy.binary_sequence, entry->key.binary_sequence, keyCopy.length);
+
+            binseq_map_put(target, keyCopy, entry->value);
+        }
+    }
+
+    // Free old map if needed, or assign directly if not already set
+    if (mapTarget->map) {
+        binseq_map_free(mapTarget->map);
+    }
+    mapTarget->map = target;
 }
 
