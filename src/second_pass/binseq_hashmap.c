@@ -18,6 +18,23 @@ struct BinSeqMap {
     size_t size;
 };
 
+size_t get_map_size(BinSeqMap* map) {
+	if (!map) {
+        fprintf(stderr, "Error: Map is NULL\n");
+		return 0;
+	}
+	return map->size;
+}
+
+size_t get_map_capacity(BinSeqMap* map) {
+	if (!map) {
+        fprintf(stderr, "Error: Map is NULL\n");
+		return 0;
+	}
+	return map->capacity;
+}
+
+
 static inline uint64_t binseq_hash(BinSeqKey key) {
     if (key.binary_sequence == NULL || key.length == 0) {
         fprintf(stderr, "Error: Invalid key in binseq_hash\n");
@@ -79,16 +96,21 @@ BinSeqMap *binseq_map_create(size_t capacity) {
 void binseq_map_free(BinSeqMap *map) {
     if (!map) return;
     
-    // Free all keys in the map
+    // Free all keys and values in the map
     for (size_t i = 0; i < map->capacity; i++) {
         if (map->entries[i].used) {
+            // Free the key's binary sequence
             free_key(map->entries[i].key);
+            
+            // Free the value's location array
+            free_binseq_value(map->entries[i].value);
         }
     }
     
     free(map->entries);
     free(map);
 }
+
 
 // Internal function to resize the map when it gets too full
 static int binseq_map_resize(BinSeqMap *map, size_t new_capacity) {
@@ -128,13 +150,18 @@ static int binseq_map_resize(BinSeqMap *map, size_t new_capacity) {
 }
 
 int binseq_map_put(BinSeqMap *map, BinSeqKey key, BinSeqValue value) {
-    if (!map || !key.binary_sequence || key.length == 0) return 0;
+    if (!map || !key.binary_sequence || key.length == 0) {
+        free_key(key);
+        free_binseq_value(value);  // Free the value's location array
+        return 0;
+    }
     
-    // Resize if load factor > 0.7
+    // Resize if needed
     if (map->size * 10 > map->capacity * 7) {
         if (!binseq_map_resize(map, map->capacity * 2)) {
-            fprintf(stderr, "Warning: map resize failed\n");
-            // Continue anyway, but performance will degrade
+            free_key(key);
+            free_binseq_value(value);
+            return 0;
         }
     }
     
@@ -146,26 +173,54 @@ int binseq_map_put(BinSeqMap *map, BinSeqKey key, BinSeqValue value) {
         Entry *entry = &map->entries[try];
         
         if (!entry->used) {
-            // Create a copy of the key
-            BinSeqKey key_copy = copy_key(key);
-            if (!key_copy.binary_sequence) return 0;
+            // Take ownership of the key
+            entry->key = key;
             
-            entry->key = key_copy;
-            entry->value = value;
+            // Take ownership of the value's location array
+            entry->value.frequency = value.frequency;
+            entry->value.seqLocation = value.seqLocation;
+            entry->value.seqLocationLength = value.seqLocationLength;
+            entry->value.seqLocationCapacity = value.seqLocationCapacity;
+            
+            // Zero out the source value to prevent double-free
+            value.seqLocation = NULL;
+            value.seqLocationLength = 0;
+            value.seqLocationCapacity = 0;
+            
             entry->used = 1;
             map->size++;
             return 1;
         }
         
         if (binseq_equal(entry->key, key)) {
-            // Update existing entry
-            entry->value = value;
+            // Free the passed key since we won't use it
+            free_key(key);
+            
+            // Free the old value's location array
+            free_binseq_value(entry->value);
+            
+            // Take ownership of the new value's location array
+            entry->value.frequency = value.frequency;
+            entry->value.seqLocation = value.seqLocation;
+            entry->value.seqLocationLength = value.seqLocationLength;
+            entry->value.seqLocationCapacity = value.seqLocationCapacity;
+            
+            // Zero out the source value
+            value.seqLocation = NULL;
+            value.seqLocationLength = 0;
+            value.seqLocationCapacity = 0;
+            
             return 1;
         }
     }
     
-    return 0;  // Shouldn't happen if resize works
+    // If we get here, the map is full
+    free_key(key);
+    free_binseq_value(value);
+    return 0;
 }
+
+
 
 BinSeqValue *binseq_map_get(BinSeqMap *map, BinSeqKey key) {
     if (!map || !key.binary_sequence || key.length == 0) return NULL;
@@ -187,14 +242,18 @@ BinSeqValue *binseq_map_get(BinSeqMap *map, BinSeqKey key) {
 }
 
 void copyMap(struct TreeNode* mapSource, struct TreeNode* mapTarget) {
-    if (!mapSource || !mapTarget || !mapSource->map) return;
+    if (!mapSource || !mapTarget || !mapSource->map) {
+        fprintf(stderr, "\ncopyMap parameters are not correct !mapSource=%d !mapTarget=%d !mapSource->map=%d\n", !mapSource, !mapTarget, !mapSource->map);
+    	return;
+    }
+    
     
     BinSeqMap *source = mapSource->map;
     size_t new_capacity = source->capacity + 1;
     
     BinSeqMap *target = binseq_map_create(new_capacity);
     if (!target) {
-        fprintf(stderr, "Failed to create target map in copyMap\n");
+        fprintf(stderr, "\nFailed to create target map in copyMap\n");
         return;
     }
     
@@ -206,8 +265,10 @@ void copyMap(struct TreeNode* mapSource, struct TreeNode* mapTarget) {
             
             if (!binseq_map_put(target, key_copy, entry->value)) {
                 free_key(key_copy);
-                fprintf(stderr, "Failed to insert entry during copyMap\n");
-            }
+                fprintf(stderr, "\nFailed to insert entry during copyMap\n");
+            } 
+		    free_key(key_copy);  //the map has made its own copy}         
+            
         }
     }
     
@@ -222,22 +283,21 @@ BinSeqKey create_binseq_key(const uint8_t* sequence, uint16_t length) {
     BinSeqKey key = {0};
     
     if (!sequence || length == 0 || length > COMPRESS_SEQUENCE_LENGTH) {
-    	fprintf(stderr, "create_binseq_key has invalid parameters\n");
-        key.length = 0; // Mark as invalid
-        return key;
+        fprintf(stderr, "create_binseq_key: Invalid parameters\n");
+        return key;  // Return zeroed key
     }
 
-    key.length = length;
     key.binary_sequence = malloc(length);
     if (!key.binary_sequence) {
-        	fprintf(stderr, "create_binseq_key unable to malloc key\n");
-            key.length = 0; // Mark as invalid if allocation fails
-            return key;
+        fprintf(stderr, "create_binseq_key: Memory allocation failed\n");
+        key.length = 0;  // Mark as invalid
+        return key;
     }
+    
     memcpy(key.binary_sequence, sequence, length);
+    key.length = length;
     return key;
 }
-
 
 void free_key(BinSeqKey key) {
     if (key.binary_sequence) {
@@ -247,24 +307,23 @@ void free_key(BinSeqKey key) {
     }
 }
 
-
 BinSeqValue create_binseq_value(int frequency, const uint32_t* locations, uint16_t location_count) {
     BinSeqValue value = {0};
     value.frequency = frequency;
     value.seqLocationLength = location_count;
-    value.seqLocationCapacity = location_count > 0 ? location_count : 4;  // start with small buffer
+    value.seqLocationCapacity = location_count > 0 ? location_count : 4;
 
-    value.seqLocation = malloc(value.seqLocationCapacity * sizeof(uint32_t));
-    if (!value.seqLocation) {
-        fprintf(stderr, "Failed to allocate seqLocation\n");
-        value.seqLocationLength = 0;
-        value.seqLocationCapacity = 0;
-        return value;
-    }
-
-    if (locations && location_count > 0) {
+    if (location_count > 0) {
+        value.seqLocation = malloc(value.seqLocationCapacity * sizeof(uint32_t));
+        if (!value.seqLocation) {
+            fprintf(stderr, "Failed to allocate seqLocation\n");
+            value.seqLocationLength = 0;
+            value.seqLocationCapacity = 0;
+            return value;
+        }
         memcpy(value.seqLocation, locations, location_count * sizeof(uint32_t));
     }
+    // Else seqLocation remains NULL
 
     return value;
 }

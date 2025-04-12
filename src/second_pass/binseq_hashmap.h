@@ -30,6 +30,10 @@ typedef struct BinSeqMap BinSeqMap;
 */
 BinSeqMap *binseq_map_create(size_t capacity);
 
+/**
+* Puts a key-value pair into the map. The map takes ownership of both
+* the key and value, and will free them when destroyed.
+*/
 int binseq_map_put(BinSeqMap *map, BinSeqKey key, BinSeqValue value);
 
 BinSeqValue *binseq_map_get(BinSeqMap *map, BinSeqKey key);
@@ -44,6 +48,9 @@ BinSeqValue create_binseq_value(int frequency, const uint32_t* locations, uint16
 int binseq_value_append_location(BinSeqValue *value, uint32_t loc);
 
 void binseq_map_print(BinSeqMap *map);
+
+size_t get_map_size(BinSeqMap* map);
+size_t get_map_capacity(BinSeqMap* map);
 
 /**
 * Functions to free map, value, and keys.

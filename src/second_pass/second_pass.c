@@ -55,6 +55,17 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
     binseq_map_print(node->map);
 }
 
+void cleanup_node_pools() {
+    for (int i = 0; i < MAX_TREE_NODES; i++) {
+        if (node_pool_even[i].map) {
+            binseq_map_free(node_pool_even[i].map);
+        }
+        if (node_pool_odd[i].map) {
+            binseq_map_free(node_pool_odd[i].map);
+        }
+    }
+}
+
 /**
  * Calculates potential savings of compressing a sequence, WITHOUT modifying any data.
  * Returns:
@@ -102,15 +113,13 @@ static int insertMapValue(uint8_t* newBinSeq, uint16_t seq_length, TreeNode *nod
 
     BinSeqKey key = create_binseq_key(newBinSeq, seq_length);
     uint32_t loc = block_index;
-    BinSeqValue newVal = create_binseq_value(1, &loc, 1);
     
-    if (!binseq_map_put(node->map, key, newVal)) {
-        fprintf(stderr, "\nUnable to create map \n");
-        free_key(key);
-        return 0;
-    }
+	BinSeqValue newVal = create_binseq_value(1, &loc, 1);
 
-    free_key(key);
+	if (!binseq_map_put(node->map, key, newVal)) {
+		return 0;
+	}
+    
     return 1;
 }
 
@@ -137,125 +146,10 @@ static int updateMapValue(BinSeqValue* binSeqVal, int block_index, uint16_t seq_
 } 
 
 
-/**
- * Calculates savings for a given binary sequence in a compression context.
- *
- * - If the sequence is not present in the node's map:
- *     - Adds it to the map with initial location and frequency.
- *     - Computes negative savings (expansion cost).
- * - If the sequence already exists:
- *     - Adds the new location to the map.
- *     - Updates frequency and calculates compression savings.
- *     - If it is the first time compressing this sequence, updates the header overhead.
- *
- * Returns:
- *     The number of bits saved (positive if compression helps, negative if not).
- *
-static inline long calculateSavings_OLD(uint8_t* newBinSeq, uint16_t seq_length, TreeNode *oldNode, int* headerOverhead) {
-    // Step 1: Validate inputs
-    if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !oldNode || !headerOverhead) {
-        fprintf(stderr, "\n[Error] Invalid input to function calculateSavings.\n");
-        return 0;
-    }
-
-    BinSeqMap *map = oldNode->map;
-    if (!map) {
-        fprintf(stderr, "\n[Error] Map in the TreeNode is NULL.\n");
-        return 0;
-    }
-
-    // Step 2: Construct key for the binary sequence
-    BinSeqKey key = { .length = seq_length };
-    memcpy(key.binary_sequence, newBinSeq, seq_length);
-
-    BinSeqValue* binSeqVal = binseq_map_get(map, key);
-    long savings = 0;
-
-    if (!binSeqVal) {
-        // Sequence not found: insert it with negative savings (expansion due to overhead)
-
-        binSeqVal = (BinSeqValue*)calloc(1, sizeof(BinSeqValue));
-        if (!binSeqVal) {
-            fprintf(stderr, "\n[Error] Memory allocation failed for BinSeqValue.\n");
-            return 0;
-        }
-
-        binSeqVal->frequency = 1;
-
-        if (seqLocationLength >= MAX_SEQ_LOCATIONS) {
-            fprintf(stderr, "\n[Error] Exceeded maximum allowed sequence locations.\n");
-            free(binSeqVal);
-            return 0;
-        }
-
-        binSeqVal->seqLocation[seqLocationLength++] = oldNode->compress_sequence_count;
-
-        if (!binseq_map_put(map, key, binSeqVal)) {
-            fprintf(stderr, "\n[Error] Failed to insert sequence into map (possibly full).\n");
-            free(binSeqVal);
-            return 0;
-        }
-
-        // Expansion overhead: we need to add a zero before every byte in original
-        // (1 extra bit per byte). So cost is (1 * number of bytes) in bits = seq_length bits
-        savings = -(long)(seq_length * 8);
-    } else {
-        // Sequence found: compute compression savings
-
-        int group = (seq_length == 1) ? 1 : 4;
-
-        if (binSeqVal->frequency == 1) {
-            // First compression usage of this sequence: update header overhead
-            *headerOverhead = getHeaderOverhead(group, seq_length);
-            // You could optionally update savings of all existing locations here.
-        }
-
-        if (seqLocationLength >= MAX_SEQ_LOCATIONS) {
-            fprintf(stderr, "\n[Error] Exceeded maximum allowed sequence locations.\n");
-            return 0;
-        }
-
-        binSeqVal->seqLocation[seqLocationLength++] = oldNode->compress_sequence_count;
-        binSeqVal->frequency++;
-
-        // Calculate actual savings:
-        // Original size in bits = 8 bits per byte + 1 extra bit (prefix) = seq_length * 9
-        // Compressed size = groupCodeSize + groupOverhead
-        long originalSizeBits = (long)(seq_length * 8 + seq_length);
-        long compressedSizeBits = (long)(groupCodeSize(group) + groupOverHead(group));
-        savings = originalSizeBits - compressedSizeBits;
-
-        if (savings < 0) {
-            fprintf(stderr, "\n[Warning] Negative savings detected for sequence.\n");
-            return 0;
-        }
-    }
-
-    return savings;
-}
-*/
-
-/*
-long savings = calculateSavings(seq, seq_len, oldNode);
-
-BinSeqKey key = { .length = seq_len };
-memcpy(key.binary_sequence, seq, seq_len);
-BinSeqValue* existing = binseq_map_get(oldNode->map, key);
-
-if (!existing) {
-    BinSeqValue* newVal = insertNewSequence(seq, seq_len, oldNode, oldNode->compress_sequence_count);
-    if (!newVal) {
-        fprintf(stderr, "Failed to insert new sequence.\n");
-        // handle error
-    }
-} else {
-    updateExistingSequence(existing, oldNode->compress_sequence_count, seq_len, &headerOverhead);
-}
-*/
-
 static inline void copyNodeData(TreeNode *sourceNode, TreeNode *destNode, uint16_t bytes_to_copy, long newSavings) {
     // check input.
-    if (!sourceNode || !destNode || bytes_to_copy == 0 || bytes_to_copy > COMPRESS_SEQUENCE_LENGTH) {
+    if (!sourceNode || !destNode || bytes_to_copy == 0 || bytes_to_copy > COMPRESS_SEQUENCE_LENGTH || bytes_to_copy < sourceNode->compress_sequence_count ) {
+    	fprintf(stderr, "\n Unable to copy node \n");
         return;
     }
     /*
@@ -317,8 +211,8 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
     }
 
     // Initialize tracking arrays  
-    long best_saving[(block_index+1)*(block_index+2)];
-    int best_index[(block_index+1)*(block_index+2)];
+    int best_index[SEQ_LENGTH_LIMIT+1];
+	int32_t best_saving[SEQ_LENGTH_LIMIT+1]; //savings should not be un-signed as it may be negative. 
     
     int best_length = sizeof(best_saving)/sizeof(best_saving[0]);
     
@@ -398,13 +292,11 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
                 } else { // New sequence
                     uint32_t locs[1] = {block_index};
                     BinSeqValue newValue = create_binseq_value(1, locs, 1);
-                    if (!binseq_map_put(newNode.map, key, newValue)) {
-                        fprintf(stderr, "Unable to update the map\n");
-                        free_key(key);
-                        continue;
-                    }
+					if (!binseq_map_put(newNode.map, key, newValue)) {
+					    fprintf(stderr, "ERROR! Unable to update the map-1\n");
+					    continue;
+					}
                 }
-                free_key(key);
 
                 // Store in pool
                 memcpy(&new_pool[new_nodes_count], &newNode, sizeof(TreeNode));
@@ -425,23 +317,37 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
             
             // Validate sequence length
             if (seq_len < SEQ_LENGTH_START || seq_len > SEQ_LENGTH_LIMIT) {
-                continue;
+           		fprintf(stderr, "Invalid seq length \n");
+			    exit(EXIT_FAILURE); 
             }
             
             // Check if we have enough bytes left in block
             if (block_index + 1 < seq_len) {
-                continue;
+	            fprintf(stderr, "Invalid seq_len=%d at block_index=%d\n", seq_len, block_index);
+			    exit(EXIT_FAILURE); 
             }
             
             // Create Binary Sequence
             uint8_t* seq_start = &block[block_index + 1 - seq_len];
             BinSeqKey key = create_binseq_key(seq_start, seq_len);
             
+            #ifdef DEBUG
+			printf("\nCreating key for seq_len=%d, data=", seq_len);
+			for (int i = 0; i < seq_len; i++) printf("%02x ", seq_start[i]);
+			printf("\n");
+			#endif
+			
+		    // Add key validation check
+			if (!key.binary_sequence || key.length != seq_len) {
+			    fprintf(stderr, "Invalid key created for sequence\n");
+			    exit(EXIT_FAILURE); 
+			}
+            
             // Calculate new savings (in bits)
             long new_saving = (calculateSavings(seq_start, seq_len, oldNode->map) + oldNode->saving_so_far) - oldNode->headerOverhead; 
 
-            // Skip if not better than current best
-            if (new_saving <= best_saving[0]) { // In this case our weight will be always zero
+            // Skip if not better than current best (a.k.a Prunning)
+            if (new_saving <= best_saving[0]) { // In this case our weight will be always zero.
                 free_key(key);
                 continue;
             }
@@ -483,21 +389,28 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
                 }
             } else { // New sequence
                 uint32_t locs[1] = {block_index + 1 - seq_len};
+                
                 BinSeqValue newValue = create_binseq_value(1, locs, 1);
-                if (!binseq_map_put(newNode.map, key, newValue)) {
-                    fprintf(stderr, "Unable to update the map\n");
-                    free_key(key);
-                    continue;
-                }
+				
+
+				#ifdef DEBUG
+				printf("\nMap state before put: size=%zu, capacity=%zu\n", 
+			    get_map_size(newNode.map), get_map_capacity(newNode.map));
+				binseq_map_print(newNode.map);
+				#endif
+				
+				if (!binseq_map_put(newNode.map, key, newValue)) {
+					fprintf(stderr, "\nERROR! Unable to update the map-2\n");
+				    continue;
+				}
             }
-            free_key(key);
 
             // Store in pool
             memcpy(&new_pool[new_nodes_count], &newNode, sizeof(TreeNode));
             
             #ifdef DEBUG_PRINT
             printNode(&new_pool[new_nodes_count], block, block_index);
-            printf("to copy = %d-%d+%d=%d", oldNode->compress_sequence_count, oldNode->incoming_weight, k, to_copy);
+            //printf("to copy = %d-%d+%d=%d", oldNode->compress_sequence_count, oldNode->incoming_weight, k, to_copy);
             #endif
             
             new_nodes_count++;
@@ -525,7 +438,7 @@ static uint8_t* createBinSeq(uint16_t seq_len, uint8_t* block, uint32_t block_in
 }
 
 static inline void createRoot(uint8_t* block, long savings, int block_index) {
-    printf("\nCreate root ");
+
     if (!block) {
         fprintf(stderr, "Error: block is NULL in createRoot\n");
         return;
@@ -540,33 +453,29 @@ static inline void createRoot(uint8_t* block, long savings, int block_index) {
     root.headerOverhead = 4; //the 4-bytes about the number of sequences in header.
     root.compress_sequence[0] = 1;
     root.compress_sequence_count = 1;
-    root.map = binseq_map_create(1); //create map of root.
+    root.map = binseq_map_create(16); //create map of root.
     if (!root.map) {
-        fprintf(stderr, "Error: Failed to create map for root node\n");
-        return;
-    }
+	    fprintf(stderr, "FATAL: Failed to create root map\n");
+	    exit(EXIT_FAILURE);
+	}
     
     root.saving_so_far = calculateSavings(&block[0], 1, root.map);
     root.incoming_weight = 1;
     
 	uint32_t locs[1] = {0};
 	BinSeqKey key = create_binseq_key(&block[0], 1);
+	
 	BinSeqValue value = create_binseq_value(1, locs, 1);
-
 	if (!binseq_map_put(root.map, key, value)) {
-		fprintf(stderr, "Unable to update the map\n");
-		free_key(key);  // cleanup if put fails
-		free_binseq_value(value);
-		return;
+    	return;
 	}
 
-    
     // Copy to pool
     memcpy(&node_pool_even[0], &root, sizeof(TreeNode));
     even_pool_count = 1;
     odd_pool_count = 0;
-    printf("\n End copying the pool. Going to print the node ");
-    printf("\n\n\n*************** new root created ********************");
+
+    printf("\n\n*************** new root created ********************");
     printNode(&node_pool_even[0], block, block_index);    
     printf("\n*******************************************************************");
 }
@@ -599,11 +508,12 @@ static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint
 void processBlockSecondPass(uint8_t* block, long blockSize) {
     if (SEQ_LENGTH_LIMIT <= 1 || blockSize <= 0 || block == NULL) {
         fprintf(stderr, "Error: Invalid parameters in processBlockSecondPass\n");
+        cleanup_node_pools();  // Add this
         return;
     }
     createRoot(block, 0, 0);  // Start with fresh root
     uint8_t isEven = 0;  // We create root at even, and then switch to odd.
-    if(1) return;
+
 
     uint32_t blockIndex;
     uint8_t restedOnce = 0;
@@ -632,6 +542,7 @@ void processBlockSecondPass(uint8_t* block, long blockSize) {
             odd_pool_count = createNodes(node_pool_even, node_pool_odd,
                                        even_pool_count, block, blockIndex+1);
         }
+        if(1) return;
         isEven = !isEven;  // Alternate pools
     }
     printf("\n------------------------------------------------>Ending \n");
@@ -642,12 +553,15 @@ void processBlockSecondPass(uint8_t* block, long blockSize) {
     	    resetToBestNode(node_pool_even, even_pool_count, block, blockIndex);
     	}
     }
+    //cleanup.
+    cleanup_node_pools();
 }
 
 void processSecondPass(const char* filename) {
     FILE* file = fopen(filename, "rb");
     if (!file) {
         perror("Failed to open file");
+        cleanup_node_pools(); 
         return;
     }
 
@@ -655,6 +569,7 @@ void processSecondPass(const char* filename) {
     if (!block) {
         perror("Failed to allocate memory for block");
         fclose(file);
+        cleanup_node_pools();  // Add this
         return;
     }
 
