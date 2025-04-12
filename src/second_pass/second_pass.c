@@ -63,25 +63,40 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
  *   - negative savings if compression is not beneficial or invalid
  */
 static long calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap *map) {
-    if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !map)
+    if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !map) {
+        fprintf(stderr, "Error: Invalid parameters in calculateSavings\n");
         return 0;
-
-    BinSeqKey key = { .length = seq_length };
+    }
+    
+    // Create the key properly
+    BinSeqKey key;
+    key.length = seq_length;
+    key.binary_sequence = malloc(seq_length);
+    if (!key.binary_sequence) {
+        fprintf(stderr, "Error: Failed to allocate memory for key in calculateSavings\n");
+        return 0;
+    }
     memcpy(key.binary_sequence, newBinSeq, seq_length);
-
+    
     BinSeqValue* binSeqVal = binseq_map_get(map, key);
-
+    long savings = 0;
+    
     if (!binSeqVal) {
-        // Sequence not seen before → expansion overhead (e.g. zero before every byte)
-        return -(long)(seq_length * 8);
+        savings = -(long)(seq_length * 8); //in this case savings should be negative.
     } else {
         int group = (seq_length == 1) ? 1 : 4;
         long originalSizeBits = (long)(seq_length * 8 + seq_length);
         long compressedSizeBits = (long)(groupCodeSize(group) + groupOverHead(group));
-        long savings = originalSizeBits - compressedSizeBits;
-
-        return (savings > 0) ? savings : 0;
+        savings = originalSizeBits - compressedSizeBits;
+        if (savings < 0) {
+            fprintf(stderr, "\nSavings is less than zero after compression \n");
+            free(key.binary_sequence);
+            return 0;
+        }
     }
+    
+    free(key.binary_sequence); // Clean up
+    return savings; //sending positive or negative savings.
 }
 
 /**
@@ -467,26 +482,41 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
  
 
 static inline void createRoot(uint8_t* block, long savings, int block_index) {
+    printf("\nCreate root ");
+    if (!block) {
+        fprintf(stderr, "Error: block is NULL in createRoot\n");
+        return;
+    }
+
     // Clear both pools completely
     memset(node_pool_even, 0, sizeof(node_pool_even));
     memset(node_pool_odd, 0, sizeof(node_pool_odd));
     
+    printf("\nClears the pools  ");
     // Initialize root node properly
     TreeNode root = {0};  // Zero-initialize all fields
+    printf("\n Initialization ");
     root.compress_sequence[0] = 1;
     root.compress_sequence_count = 1;
-    int headerOverhead = 0;
+    printf("\n Sequences  ");
     root.map = binseq_map_create(1); //create map of root.
+    if (!root.map) {
+        fprintf(stderr, "Error: Failed to create map for root node\n");
+        return;
+    }
+    
+    printf("\n Calculate savings Start ");
     root.saving_so_far = calculateSavings(&block[0], 1, root.map);
+    printf("\n Calculate savings End ");
     root.incoming_weight = 1;
     
     // Copy to pool
     memcpy(&node_pool_even[0], &root, sizeof(TreeNode));
     even_pool_count = 1;
     odd_pool_count = 0;
-    
+    printf("\n End copying the pool. Going to print the node ");
     printf("\n\n\n*************** new root created ********************");
-    printNode(&node_pool_even[0], block, block_index);	
+    printNode(&node_pool_even[0], block, block_index);    
     printf("\n*******************************************************************");
 }
 
@@ -517,11 +547,12 @@ static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint
 
 void processBlockSecondPass(uint8_t* block, long blockSize) {
     if (SEQ_LENGTH_LIMIT <= 1 || blockSize <= 0 || block == NULL) {
+        fprintf(stderr, "Error: Invalid parameters in processBlockSecondPass\n");
         return;
     }
     createRoot(block, 0, 0);  // Start with fresh root
     uint8_t isEven = 0;  // We create root at even, and then switch to odd.
-    
+    if(1) return;
 
     uint32_t blockIndex;
     uint8_t restedOnce = 0;

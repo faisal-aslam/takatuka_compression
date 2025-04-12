@@ -3,14 +3,15 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
 #include "xxhash.h"
-#define COMPRESS_SEQUENCE_LENGTH 10000 //We have to prune tree whenever we reach this length. 
+#define COMPRESS_SEQUENCE_LENGTH 10000 //We have to prune tree whenever we reach this length.
 
 // Forward declaration instead of including tree_node.h
 struct TreeNode;
 
 typedef struct {
-    uint8_t *binary_sequence;
+    uint8_t* binary_sequence;
     uint16_t length;
 } BinSeqKey;
 
@@ -28,6 +29,8 @@ int binseq_map_put(BinSeqMap *map, BinSeqKey key, BinSeqValue value);
 BinSeqValue *binseq_map_get(BinSeqMap *map, BinSeqKey key);
 int binseq_map_contains(BinSeqMap *map, BinSeqKey key);
 void copyMap(struct TreeNode* mapSource, struct TreeNode* mapTarget, int increaseSize);
+BinSeqKey create_binseq_key(const uint8_t* data, uint16_t length);
+void free_key(BinSeqKey key);
 
 #endif
 
