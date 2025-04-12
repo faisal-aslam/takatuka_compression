@@ -504,7 +504,7 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
     
     // Use direct values but add bounds checking
     printf("\n Node :");
-    printf("saving_so_far=%u, incoming_weight=%d, isPruned=%d, compress_seq_count=%d", 
+    printf("saving_so_far=%ld, incoming_weight=%d, isPruned=%d, compress_seq_count=%d", 
            node->saving_so_far, 
            node->incoming_weight, 
            node->isPruned, 

@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "xxhash.h"
+#define COMPRESS_SEQUENCE_LENGTH 10000 //We have to prune tree whenever we reach this length. 
 
 // Forward declaration instead of including tree_node.h
 struct TreeNode;

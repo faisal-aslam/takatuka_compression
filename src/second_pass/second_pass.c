@@ -29,7 +29,7 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
     
     // Use direct values but add bounds checking
     printf("\n Node :");
-    printf("saving_so_far=%u, incoming_weight=%d, isPruned=%d, compress_seq_count=%d", 
+    printf("saving_so_far=%ld, incoming_weight=%d, isPruned=%d, compress_seq_count=%d", 
            node->saving_so_far, 
            node->incoming_weight, 
            node->isPruned, 
@@ -88,7 +88,7 @@ static long calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap 
  * Inserts a new sequence into the node's map. Returns a pointer to the newly created BinSeqValue.
  * Updates seqLocation and sets frequency = 1.
  * On failure, returns NULL.
- */
+ *
 static BinSeqValue* insertNewSequence(uint8_t* newBinSeq, uint16_t seq_length, TreeNode *node, int compressIndex) {
     if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !node || !node->map)
         return NULL;
@@ -115,11 +115,12 @@ static BinSeqValue* insertNewSequence(uint8_t* newBinSeq, uint16_t seq_length, T
 
     return newVal;
 }
+*/
 
 /**
  * Updates frequency and location for a known existing sequence in the map.
  * Also updates header overhead if this is the first time it is compressed.
- */
+ *
 void updateExistingSequence(BinSeqValue* binSeqVal, int compressIndex, uint16_t seq_length, int* headerOverhead) {
     if (!binSeqVal || seqLocationLength >= MAX_SEQ_LOCATIONS) return;
 
@@ -132,7 +133,7 @@ void updateExistingSequence(BinSeqValue* binSeqVal, int compressIndex, uint16_t 
     binSeqVal->seqLocation[seqLocationLength++] = compressIndex;
     binSeqVal->frequency++;
 }
-
+*/
 /**
  * Calculates savings for a given binary sequence in a compression context.
  *
@@ -146,7 +147,7 @@ void updateExistingSequence(BinSeqValue* binSeqVal, int compressIndex, uint16_t 
  *
  * Returns:
  *     The number of bits saved (positive if compression helps, negative if not).
- */
+ *
 static inline long calculateSavings_OLD(uint8_t* newBinSeq, uint16_t seq_length, TreeNode *oldNode, int* headerOverhead) {
     // Step 1: Validate inputs
     if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !oldNode || !headerOverhead) {
@@ -229,6 +230,7 @@ static inline long calculateSavings_OLD(uint8_t* newBinSeq, uint16_t seq_length,
 
     return savings;
 }
+*/
 
 /*
 long savings = calculateSavings(seq, seq_len, oldNode);
@@ -267,7 +269,8 @@ static inline void copyNodeData(TreeNode *sourceNode, TreeNode *destNode, uint16
     /*
     * Step 3: Most importantly, carefully calculate new savings.
     */
-    destNode->saving_so_far = calculateSavings(destNode, sourceNode->saving_so_far);
+    //static long calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap *map) 
+    //todo destNode->saving_so_far = calculateSavings(destNode, sourceNode->saving_so_far);
      
     /*
     * By default prune is false.
@@ -352,8 +355,8 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
             if (new_weight >= SEQ_LENGTH_LIMIT) {
                 new_weight = SEQ_LENGTH_LIMIT - 1;
             }
-
-            uint32_t new_saving = calculateSavings(&oldNode, oldNode.saving_so_far);
+			//static long calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap *map) 
+            uint32_t new_saving = 0; //todo calculateSavings(&oldNode, oldNode.saving_so_far);
 
             // Only keep if better than existing nodes with same weight
             if (best_index[new_weight] == -1 || new_saving > best_saving[new_weight]) {
@@ -405,7 +408,8 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
             }
 
             // Calculate new savings (in bits)
-            uint32_t new_saving = calculateSavings(&oldNode, oldNode.saving_so_far); 
+            //static long calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap *map) 
+            uint32_t new_saving = 0;//todo calculateSavings(&oldNode, oldNode.saving_so_far); 
             //oldNode.saving_so_far + (bin_seq->length * 8 - (groupCodeSize(bin_seq->group)+groupOverHead(bin_seq->group)));
 
             // Skip if not better than current best
@@ -462,7 +466,7 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
 }
  
 
-static inline void createRoot(uint8_t* block, int savings, int block_index) {
+static inline void createRoot(uint8_t* block, long savings, int block_index) {
     // Clear both pools completely
     memset(node_pool_even, 0, sizeof(node_pool_even));
     memset(node_pool_odd, 0, sizeof(node_pool_odd));
