@@ -11,7 +11,7 @@ typedef struct TreeNode {
     long saving_so_far; //it can be negative. 
     uint16_t incoming_weight;
     uint8_t isPruned;
-    uint32_t headerOverhead;
+    int headerOverhead;
     BinSeqMap *map;
 } TreeNode;
 

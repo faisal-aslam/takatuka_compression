@@ -19,8 +19,6 @@ TreeNode node_pool_odd[MAX_TREE_NODES] = {0};
 int even_pool_count = 0;
 int odd_pool_count = 0;
 
-uint32_t best_saving_overall = 0;
-
 static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
     if (!node) {
         printf("[NULL NODE]\n");
@@ -54,6 +52,7 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
         }
         printf(" }, ");
     }
+    binseq_map_print(node->map);
 }
 
 /**
@@ -68,21 +67,15 @@ static long calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap 
         return 0;
     }
     
-    // Create the key properly
-    BinSeqKey key;
-    key.length = seq_length;
-    key.binary_sequence = malloc(seq_length);
-    if (!key.binary_sequence) {
-        fprintf(stderr, "Error: Failed to allocate memory for key in calculateSavings\n");
-        return 0;
-    }
-    memcpy(key.binary_sequence, newBinSeq, seq_length);
-    
+    // Create the key
+    BinSeqKey key = create_binseq_key(newBinSeq, seq_length);  
+     
     BinSeqValue* binSeqVal = binseq_map_get(map, key);
     long savings = 0;
     
     if (!binSeqVal) {
-        savings = -(long)(seq_length * 8); //in this case savings should be negative.
+	    //in this case savings will be negative as each uncompress byte will start with an extra 0. (9-bits for a byte).
+        savings = -(long)(seq_length); 
     } else {
         int group = (seq_length == 1) ? 1 : 4;
         long originalSizeBits = (long)(seq_length * 8 + seq_length);
@@ -102,53 +95,48 @@ static long calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap 
 /**
  * Inserts a new sequence into the node's map. Returns a pointer to the newly created BinSeqValue.
  * Updates seqLocation and sets frequency = 1.
- * On failure, returns NULL.
- *
-static BinSeqValue* insertNewSequence(uint8_t* newBinSeq, uint16_t seq_length, TreeNode *node, int compressIndex) {
-    if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !node || !node->map)
-        return NULL;
+ * On failure, returns 0.
+ */
+static int insertMapValue(uint8_t* newBinSeq, uint16_t seq_length, TreeNode *node, int block_index) {
+    if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !node || !node->map) return 0;
 
-    BinSeqKey key = { .length = seq_length };
-    memcpy(key.binary_sequence, newBinSeq, seq_length);
-
-    BinSeqValue* newVal = (BinSeqValue*)calloc(1, sizeof(BinSeqValue));
-    if (!newVal) return NULL;
-
-    newVal->frequency = 1;
-
-    if (seqLocationLength >= MAX_SEQ_LOCATIONS) {
-        free(newVal);
-        return NULL;
-    }
-
-    newVal->seqLocation[seqLocationLength++] = compressIndex;
-
+    BinSeqKey key = create_binseq_key(newBinSeq, seq_length);
+    uint32_t loc = block_index;
+    BinSeqValue newVal = create_binseq_value(1, &loc, 1);
+    
     if (!binseq_map_put(node->map, key, newVal)) {
-        free(newVal);
-        return NULL;
+        fprintf(stderr, "\nUnable to create map \n");
+        free_key(key);
+        return 0;
     }
 
-    return newVal;
+    free_key(key);
+    return 1;
 }
-*/
 
 /**
  * Updates frequency and location for a known existing sequence in the map.
  * Also updates header overhead if this is the first time it is compressed.
- *
-void updateExistingSequence(BinSeqValue* binSeqVal, int compressIndex, uint16_t seq_length, int* headerOverhead) {
-    if (!binSeqVal || seqLocationLength >= MAX_SEQ_LOCATIONS) return;
-
+ */
+static int updateMapValue(BinSeqValue* binSeqVal, int block_index, uint16_t seq_length, int* headerOverhead) {
+    if (!binSeqVal || !headerOverhead) {
+    	fprintf(stderr, "\n Incorrect input to function updateMapValue");
+    	return 0;
+    }
     int group = (seq_length == 1) ? 1 : 4;
 
-    if (binSeqVal->frequency == 1 && headerOverhead) {
-        *headerOverhead = getHeaderOverhead(group, seq_length);
+    if (binSeqVal->frequency == 1) {
+        *headerOverhead += getHeaderOverhead(group, seq_length);
     }
 
-    binSeqVal->seqLocation[seqLocationLength++] = compressIndex;
+    if (!binseq_value_append_location(binSeqVal, block_index)) {
+        fprintf(stderr, "Failed to append location to sequence\n");
+    }
     binSeqVal->frequency++;
-}
-*/
+    return 1;
+} 
+
+
 /**
  * Calculates savings for a given binary sequence in a compression context.
  *
@@ -265,7 +253,7 @@ if (!existing) {
 }
 */
 
-static inline void copyNodeData(TreeNode *sourceNode, TreeNode *destNode, uint16_t bytes_to_copy) {
+static inline void copyNodeData(TreeNode *sourceNode, TreeNode *destNode, uint16_t bytes_to_copy, long newSavings) {
     // check input.
     if (!sourceNode || !destNode || bytes_to_copy == 0 || bytes_to_copy > COMPRESS_SEQUENCE_LENGTH) {
         return;
@@ -279,13 +267,12 @@ static inline void copyNodeData(TreeNode *sourceNode, TreeNode *destNode, uint16
     /*
     * Step 2: Copy binary sequences map. Increase size of new map by +1
     */
-    copyMap(sourceNode, destNode, 1);
+    copyMap(sourceNode, destNode);
     
     /*
-    * Step 3: Most importantly, carefully calculate new savings.
+    * Step 3: set new savings.
     */
-    //static long calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap *map) 
-    //todo destNode->saving_so_far = calculateSavings(destNode, sourceNode->saving_so_far);
+    destNode->saving_so_far = newSavings;
      
     /*
     * By default prune is false.
@@ -322,43 +309,43 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
  * @param block_index      Position in block
  * @return                 Number of nodes created in new_pool
  */
- static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_count,
-                      uint8_t* block, uint32_t block_index) {
+static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_count,
+                     uint8_t* block, uint32_t block_index) {
     // Validate inputs
     if (!old_pool || !new_pool || !block || old_node_count < 0) {
         return 0;
     }
 
     // Initialize tracking arrays  
-	long best_saving[COMPRESS_SEQUENCE_LENGTH] = {0};
-	int best_index[COMPRESS_SEQUENCE_LENGTH] = {-1};
-
-	for (int i = 0; i < COMPRESS_SEQUENCE_LENGTH; i++) {
-		best_saving[i] = 0;
-		best_index[i] = -1;
-	}
+    long best_saving[(block_index+1)*(block_index+2)];
+    int best_index[(block_index+1)*(block_index+2)];
+    
+    int best_length = sizeof(best_saving)/sizeof(best_saving[0]);
+    
+    for (int i = 0; i < best_length; i++) {
+        best_saving[i] = LONG_MIN; //savings can be negative.
+        best_index[i] = -1;
+    }
  
-	#ifdef DEBUG_PRINT
-   	printf("\nold_node_count= %d", old_node_count);
-	#endif
+    #ifdef DEBUG_PRINT
+    printf("\nold_node_count= %d", old_node_count);
+    #endif
 
     int new_nodes_count = 0;
     for (int j = 0; j < old_node_count; j++) {
+        TreeNode *oldNode = &old_pool[j];  
         
-        TreeNode oldNode = old_pool[j];  
-        
-        // Skip pruned nodes - now safe to check isPruned
-        if (oldNode.isPruned) {
+        // Skip pruned nodes
+        if (oldNode->isPruned) {
             continue;
         }
 
-		#ifdef DEBUG_PRINT        
+        #ifdef DEBUG_PRINT        
         printf("\n******************** Processing OLD node ************");
-        printNode(&oldNode, block, block_index);
+        printNode(oldNode, block, block_index);
         printf("\n******************************************************");
-		#endif
-		
-        // Rest of the function remains the same...
+        #endif
+        
         // =====================================================
         // 1. Create non-compressed node (sequence extension)
         // =====================================================
@@ -366,12 +353,13 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
             TreeNode newNode = {0}; // Fully zero-initialized
             
             // Calculate new weight (capped at SEQ_LENGTH_LIMIT-1)
-            uint8_t new_weight = oldNode.incoming_weight + 1;
+            uint8_t new_weight = oldNode->incoming_weight + 1;
             if (new_weight >= SEQ_LENGTH_LIMIT) {
                 new_weight = SEQ_LENGTH_LIMIT - 1;
             }
-			//static long calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap *map) 
-            uint32_t new_saving = 0; //todo calculateSavings(&oldNode, oldNode.saving_so_far);
+            
+            // Calculate overall savings - headerOverhead. It can be negative.
+            long new_saving = (calculateSavings(&block[block_index], 1, oldNode->map) + oldNode->saving_so_far) - oldNode->headerOverhead;
 
             // Only keep if better than existing nodes with same weight
             if (best_index[new_weight] == -1 || new_saving > best_saving[new_weight]) {
@@ -386,9 +374,10 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
 
                 // Configure new node
                 newNode.incoming_weight = new_weight;
+                newNode.headerOverhead = oldNode->headerOverhead;
                
-		// Copy node's data to the new node. 
-                copyNodeData(&oldNode, &newNode, oldNode.compress_sequence_count);
+                // Copy node's data to the new node. 
+                copyNodeData(oldNode, &newNode, oldNode->compress_sequence_count, new_saving);
 
                 // Add new uncompressed byte (length=1)
                 if (newNode.compress_sequence_count < COMPRESS_SEQUENCE_LENGTH) {
@@ -398,37 +387,62 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
                         newNode.compress_sequence_count, COMPRESS_SEQUENCE_LENGTH);
                 }
 
+                // Update node map
+                BinSeqKey key = create_binseq_key(&block[block_index], 1);
+                BinSeqValue* value = binseq_map_get(newNode.map, key);
+                
+                if (value) { // If value exists (already in map)
+                    if (!updateMapValue(value, block_index, 1, &newNode.headerOverhead)) {
+                        fprintf(stderr, "Failed to append location to existing sequence\n");
+                    }
+                } else { // New sequence
+                    uint32_t locs[1] = {block_index};
+                    BinSeqValue newValue = create_binseq_value(1, locs, 1);
+                    if (!binseq_map_put(newNode.map, key, newValue)) {
+                        fprintf(stderr, "Unable to update the map\n");
+                        free_key(key);
+                        continue;
+                    }
+                }
+                free_key(key);
+
                 // Store in pool
                 memcpy(&new_pool[new_nodes_count], &newNode, sizeof(TreeNode));
                
                 #ifdef DEBUG_PRINT
-	            printNode(&new_pool[new_nodes_count], block, block_index);
-				#endif
-				
-     			new_nodes_count++;
-
+                printNode(&new_pool[new_nodes_count], block, block_index);
+                #endif
+                
+                new_nodes_count++;
             }
         }
 
         // =====================================================
         // 2. Create compressed nodes (if valid sequences exist)
         // =====================================================
-        for (int k = 0; k < oldNode.incoming_weight; k++) {
-            uint16_t seq_len = oldNode.incoming_weight + 1 - k;
+        for (int k = 0; k < oldNode->incoming_weight; k++) {
+            uint16_t seq_len = oldNode->incoming_weight + 1 - k;
             
-            // Validate sequence exists
-            BinarySequence* bin_seq = isValidSequence(seq_len, block, block_index);
-            if (!bin_seq || bin_seq->group >= TOTAL_GROUPS) {
+            // Validate sequence length
+            if (seq_len < SEQ_LENGTH_START || seq_len > SEQ_LENGTH_LIMIT) {
                 continue;
             }
-
+            
+            // Check if we have enough bytes left in block
+            if (block_index + 1 < seq_len) {
+                continue;
+            }
+            
+            // Create Binary Sequence
+            uint8_t* seq_start = &block[block_index + 1 - seq_len];
+            BinSeqKey key = create_binseq_key(seq_start, seq_len);
+            
             // Calculate new savings (in bits)
-            //static long calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap *map) 
-            uint32_t new_saving = 0;//todo calculateSavings(&oldNode, oldNode.saving_so_far); 
-            //oldNode.saving_so_far + (bin_seq->length * 8 - (groupCodeSize(bin_seq->group)+groupOverHead(bin_seq->group)));
+            long new_saving = (calculateSavings(seq_start, seq_len, oldNode->map) + oldNode->saving_so_far) - oldNode->headerOverhead; 
 
             // Skip if not better than current best
-            if (new_saving <= best_saving[0]) { //In this case our weight will be always zero
+            if (new_saving <= best_saving[0]) { // In this case our weight will be always zero
+                free_key(key);
                 continue;
             }
 
@@ -442,20 +456,16 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
             // Update tracking
             best_saving[0] = new_saving;
             best_index[0] = new_nodes_count;
-            if (new_saving > best_saving_overall) {
-                best_saving_overall = new_saving;
-            }
 
             // Configure new node
             newNode.incoming_weight = 0; // Reset weight after compression
-            
+            newNode.headerOverhead = oldNode->headerOverhead;
 
             // Copy relevant compression history
-            int to_copy = oldNode.compress_sequence_count - oldNode.incoming_weight + k;
-            
-        	// Copy node's data to the new node. 
-            copyNodeData(&oldNode, &newNode, to_copy);
-
+            int to_copy = oldNode->compress_sequence_count - oldNode->incoming_weight + k;
+            if (to_copy > 0 && to_copy <= COMPRESS_SEQUENCE_LENGTH) {
+    	        copyNodeData(oldNode, &newNode, to_copy, new_saving);
+            }
 
             // Add new compressed sequence
             if (newNode.compress_sequence_count < COMPRESS_SEQUENCE_LENGTH) {
@@ -465,21 +475,54 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
                     newNode.compress_sequence_count, COMPRESS_SEQUENCE_LENGTH);
             }
 
+            // Update node map
+            BinSeqValue* value = binseq_map_get(newNode.map, key);
+            if (value) { // If value exists (already in map)
+                if (!updateMapValue(value, block_index, seq_len, &newNode.headerOverhead)) {
+                    fprintf(stderr, "Failed to append location to existing sequence\n");
+                }
+            } else { // New sequence
+                uint32_t locs[1] = {block_index + 1 - seq_len};
+                BinSeqValue newValue = create_binseq_value(1, locs, 1);
+                if (!binseq_map_put(newNode.map, key, newValue)) {
+                    fprintf(stderr, "Unable to update the map\n");
+                    free_key(key);
+                    continue;
+                }
+            }
+            free_key(key);
+
             // Store in pool
             memcpy(&new_pool[new_nodes_count], &newNode, sizeof(TreeNode));
             
             #ifdef DEBUG_PRINT
             printNode(&new_pool[new_nodes_count], block, block_index);
-            printf("to copy = %d-%d+%d=%d", oldNode.compress_sequence_count, oldNode.incoming_weight, k, to_copy);
-			#endif
-			
+            printf("to copy = %d-%d+%d=%d", oldNode->compress_sequence_count, oldNode->incoming_weight, k, to_copy);
+            #endif
+            
             new_nodes_count++;
         }
     }
 
     return new_nodes_count;
 }
- 
+
+/**
+ * Creates a binary sequence from the block at given position
+ */
+static uint8_t* createBinSeq(uint16_t seq_len, uint8_t* block, uint32_t block_index) {
+    if (!block || seq_len == 0 || block_index + 1 < seq_len) {
+        return NULL;
+    }
+    
+    uint8_t* seq = malloc(seq_len);
+    if (!seq) {
+        return NULL;
+    }
+    
+    memcpy(seq, &block[block_index + 1 - seq_len], seq_len);
+    return seq;
+}
 
 static inline void createRoot(uint8_t* block, long savings, int block_index) {
     printf("\nCreate root ");
@@ -492,23 +535,31 @@ static inline void createRoot(uint8_t* block, long savings, int block_index) {
     memset(node_pool_even, 0, sizeof(node_pool_even));
     memset(node_pool_odd, 0, sizeof(node_pool_odd));
     
-    printf("\nClears the pools  ");
     // Initialize root node properly
     TreeNode root = {0};  // Zero-initialize all fields
-    printf("\n Initialization ");
+    root.headerOverhead = 4; //the 4-bytes about the number of sequences in header.
     root.compress_sequence[0] = 1;
     root.compress_sequence_count = 1;
-    printf("\n Sequences  ");
     root.map = binseq_map_create(1); //create map of root.
     if (!root.map) {
         fprintf(stderr, "Error: Failed to create map for root node\n");
         return;
     }
     
-    printf("\n Calculate savings Start ");
     root.saving_so_far = calculateSavings(&block[0], 1, root.map);
-    printf("\n Calculate savings End ");
     root.incoming_weight = 1;
+    
+	uint32_t locs[1] = {0};
+	BinSeqKey key = create_binseq_key(&block[0], 1);
+	BinSeqValue value = create_binseq_value(1, locs, 1);
+
+	if (!binseq_map_put(root.map, key, value)) {
+		fprintf(stderr, "Unable to update the map\n");
+		free_key(key);  // cleanup if put fails
+		free_binseq_value(value);
+		return;
+	}
+
     
     // Copy to pool
     memcpy(&node_pool_even[0], &root, sizeof(TreeNode));
@@ -613,7 +664,7 @@ void processSecondPass(const char* filename) {
 
         processBlockSecondPass(block, bytesRead);
     }
-    printf("\n\n\n Potential Savings = %u\n", best_saving_overall);
+    //printf("\n\n\n Potential Savings = %u\n", best_saving_overall);
 
     free(block);
     fclose(file);

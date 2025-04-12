@@ -1,3 +1,4 @@
+// ----> binseq_hashmap.c 
 #include "binseq_hashmap.h"
 #include <stdlib.h>
 #include <string.h>
@@ -185,15 +186,11 @@ BinSeqValue *binseq_map_get(BinSeqMap *map, BinSeqKey key) {
     return NULL;
 }
 
-int binseq_map_contains(BinSeqMap *map, BinSeqKey key) {
-    return binseq_map_get(map, key) != NULL;
-}
-
-void copyMap(struct TreeNode* mapSource, struct TreeNode* mapTarget, int increaseSize) {
+void copyMap(struct TreeNode* mapSource, struct TreeNode* mapTarget) {
     if (!mapSource || !mapTarget || !mapSource->map) return;
     
     BinSeqMap *source = mapSource->map;
-    size_t new_capacity = source->capacity + (increaseSize > 0 ? increaseSize : 0);
+    size_t new_capacity = source->capacity + 1;
     
     BinSeqMap *target = binseq_map_create(new_capacity);
     if (!target) {
@@ -221,10 +218,10 @@ void copyMap(struct TreeNode* mapSource, struct TreeNode* mapTarget, int increas
     mapTarget->map = target;
 }
 
-BinSeqKey create_binseq_key(const uint8_t* data, uint16_t length) {
+BinSeqKey create_binseq_key(const uint8_t* sequence, uint16_t length) {
     BinSeqKey key = {0};
     
-    if (!data || length == 0 || length > COMPRESS_SEQUENCE_LENGTH) {
+    if (!sequence || length == 0 || length > COMPRESS_SEQUENCE_LENGTH) {
     	fprintf(stderr, "create_binseq_key has invalid parameters\n");
         key.length = 0; // Mark as invalid
         return key;
@@ -237,7 +234,7 @@ BinSeqKey create_binseq_key(const uint8_t* data, uint16_t length) {
             key.length = 0; // Mark as invalid if allocation fails
             return key;
     }
-    memcpy(key.binary_sequence, data, length);
+    memcpy(key.binary_sequence, sequence, length);
     return key;
 }
 
@@ -248,5 +245,106 @@ void free_key(BinSeqKey key) {
     } else {
         fprintf(stderr, "Warning: Attempted to free NULL binary_sequence\n");
     }
+}
+
+
+BinSeqValue create_binseq_value(int frequency, const uint32_t* locations, uint16_t location_count) {
+    BinSeqValue value = {0};
+    value.frequency = frequency;
+    value.seqLocationLength = location_count;
+    value.seqLocationCapacity = location_count > 0 ? location_count : 4;  // start with small buffer
+
+    value.seqLocation = malloc(value.seqLocationCapacity * sizeof(uint32_t));
+    if (!value.seqLocation) {
+        fprintf(stderr, "Failed to allocate seqLocation\n");
+        value.seqLocationLength = 0;
+        value.seqLocationCapacity = 0;
+        return value;
+    }
+
+    if (locations && location_count > 0) {
+        memcpy(value.seqLocation, locations, location_count * sizeof(uint32_t));
+    }
+
+    return value;
+}
+
+int binseq_value_append_location(BinSeqValue *value, uint32_t loc) {
+    if (!value) return 0;
+
+    if (value->seqLocationLength >= value->seqLocationCapacity) {
+        uint16_t new_cap = value->seqLocationCapacity * 2;
+        if (new_cap == 0) new_cap = 4;
+
+        uint32_t *new_seq = realloc(value->seqLocation, new_cap * sizeof(uint32_t));
+        if (!new_seq) return 0;
+
+        value->seqLocation = new_seq;
+        value->seqLocationCapacity = new_cap;
+    }
+
+    value->seqLocation[value->seqLocationLength++] = loc;
+    return 1;
+}
+
+
+void free_binseq_value(BinSeqValue value) {
+    if (value.seqLocation) {
+        free(value.seqLocation);
+    }
+}
+
+
+void binseq_map_print(BinSeqMap *map) {
+    if (!map) {
+        fprintf(stderr, "Debug Print: Map is NULL\n");
+        return;
+    }
+
+    if (!map->entries) {
+        fprintf(stderr, "Debug Print: Map entries are NULL\n");
+        return;
+    }
+
+    printf("\n=== BinSeqMap Debug Print ===\n");
+    printf("Map size: %zu, capacity: %zu\n", map->size, map->capacity);
+
+    for (size_t i = 0; i < map->capacity; ++i) {
+        Entry *entry = &map->entries[i];
+        if (!entry || !entry->used) continue;
+
+        BinSeqKey *key = &entry->key;
+        BinSeqValue *val = &entry->value;
+
+        printf("Entry %zu:\n", i);
+
+        if (!key || !key->binary_sequence) {
+            printf("  Key is NULL or invalid\n");
+        } else {
+            printf("  Key (length=%u): ", key->length);
+            for (uint16_t j = 0; j < key->length; ++j) {
+                printf("%02X", key->binary_sequence[j]);
+            }
+            printf("\n");
+        }
+
+        if (!val) {
+            printf("  Value is NULL\n");
+        } else {
+            printf("  Value:\n");
+            printf("    Frequency: %d\n", val->frequency);
+            printf("    Locations (%u):", val->seqLocationLength);
+            if (val->seqLocation) {
+                for (uint16_t j = 0; j < val->seqLocationLength; ++j) {
+                    printf(" %u", val->seqLocation[j]);
+                }
+            } else {
+                printf(" (null)");
+            }
+            printf("\n");
+        }
+    }
+
+    printf("=== End Debug Print ===\n");
 }
 
