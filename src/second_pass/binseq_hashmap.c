@@ -261,8 +261,10 @@ void copyMap(struct TreeNode* mapSource, struct TreeNode* mapTarget) {
         Entry *entry = &source->entries[i];
         if (entry->used) {
             BinSeqKey key_copy = copy_key(entry->key);
-            if (!key_copy.binary_sequence) continue;
-            
+            if (!key_copy.binary_sequence) {
+            	fprintf(stderr, "\nUnable to copy key copyMap\n");
+            	continue;
+            }
             if (!binseq_map_put(target, key_copy, entry->value)) {
                 free_key(key_copy);
                 fprintf(stderr, "\nFailed to insert entry during copyMap\n");

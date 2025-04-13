@@ -8,7 +8,7 @@
 typedef struct TreeNode {
     uint16_t compress_sequence[COMPRESS_SEQUENCE_LENGTH];
     uint16_t compress_sequence_count;
-    long saving_so_far; //it can be negative. 
+    int32_t saving_so_far; //it can be negative. 
     uint16_t incoming_weight;
     uint8_t isPruned;
     int headerOverhead;

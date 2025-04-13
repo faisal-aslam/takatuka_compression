@@ -19,6 +19,11 @@ TreeNode node_pool_odd[MAX_TREE_NODES] = {0};
 int even_pool_count = 0;
 int odd_pool_count = 0;
 
+
+static inline int32_t totalSavings(TreeNode *node) {
+	if (!node) return 0;
+	return (node->saving_so_far-node->headerOverhead);
+}
 static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
     if (!node) {
         printf("[NULL NODE]\n");
@@ -27,12 +32,13 @@ static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
     
     // Use direct values but add bounds checking
     printf("\n Node :");
-    printf("saving_so_far=%ld, incoming_weight=%d, isPruned=%d, compress_seq_count=%d", 
+    printf("saving_so_far=%d, headerOverhead=%d, incoming_weight=%d, isPruned=%d, compress_seq_count=%d", 
            node->saving_so_far, 
+           node->headerOverhead,
            node->incoming_weight, 
            node->isPruned, 
            (node->compress_sequence_count < COMPRESS_SEQUENCE_LENGTH) ? node->compress_sequence_count : 0);
-             
+    printf(", total Savings =%d", totalSavings(node));
     // Bounds checking
     if (node->compress_sequence_count > COMPRESS_SEQUENCE_LENGTH) {
         printf("\n\t[ERROR: Invalid compress_sequence_count]");
@@ -72,7 +78,7 @@ void cleanup_node_pools() {
  *   - savings in bits if compression is beneficial (positive)
  *   - negative savings if compression is not beneficial or invalid
  */
-static long calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap *map) {
+static int32_t calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap *map) {
     if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !map) {
         fprintf(stderr, "Error: Invalid parameters in calculateSavings\n");
         return 0;
@@ -103,25 +109,6 @@ static long calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap 
     return savings; //sending positive or negative savings.
 }
 
-/**
- * Inserts a new sequence into the node's map. Returns a pointer to the newly created BinSeqValue.
- * Updates seqLocation and sets frequency = 1.
- * On failure, returns 0.
- */
-static int insertMapValue(uint8_t* newBinSeq, uint16_t seq_length, TreeNode *node, int block_index) {
-    if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !node || !node->map) return 0;
-
-    BinSeqKey key = create_binseq_key(newBinSeq, seq_length);
-    uint32_t loc = block_index;
-    
-	BinSeqValue newVal = create_binseq_value(1, &loc, 1);
-
-	if (!binseq_map_put(node->map, key, newVal)) {
-		return 0;
-	}
-    
-    return 1;
-}
 
 /**
  * Updates frequency and location for a known existing sequence in the map.
@@ -146,32 +133,17 @@ static int updateMapValue(BinSeqValue* binSeqVal, int block_index, uint16_t seq_
 } 
 
 
-static inline void copyNodeData(TreeNode *sourceNode, TreeNode *destNode, uint16_t bytes_to_copy, long newSavings) {
+static inline void copySequences(TreeNode *sourceNode, TreeNode *destNode, uint16_t bytes_to_copy) {
     // check input.
     if (!sourceNode || !destNode || bytes_to_copy == 0 || bytes_to_copy > COMPRESS_SEQUENCE_LENGTH || bytes_to_copy < sourceNode->compress_sequence_count ) {
     	fprintf(stderr, "\n Unable to copy node \n");
         return;
     }
     /*
-    * Step 1: Copy sequences and update destNode sequence count.
+    * Copy sequences and update destNode sequence count.
     */
     memcpy(destNode->compress_sequence, sourceNode->compress_sequence, bytes_to_copy); 
     destNode->compress_sequence_count = bytes_to_copy;
-    
-    /*
-    * Step 2: Copy binary sequences map. Increase size of new map by +1
-    */
-    copyMap(sourceNode, destNode);
-    
-    /*
-    * Step 3: set new savings.
-    */
-    destNode->saving_so_far = newSavings;
-     
-    /*
-    * By default prune is false.
-    */
-    destNode->isPruned = 0;
 }
 
 
@@ -214,10 +186,9 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
     int best_index[SEQ_LENGTH_LIMIT+1];
 	int32_t best_saving[SEQ_LENGTH_LIMIT+1]; //savings should not be un-signed as it may be negative. 
     
-    int best_length = sizeof(best_saving)/sizeof(best_saving[0]);
-    
-    for (int i = 0; i < best_length; i++) {
-        best_saving[i] = LONG_MIN; //savings can be negative.
+
+    for (int i = 0; i < SEQ_LENGTH_LIMIT+1; i++) {
+        best_saving[i] = INT_MIN; //savings can be negative.
         best_index[i] = -1;
     }
  
@@ -227,7 +198,7 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
 
     int new_nodes_count = 0;
     for (int j = 0; j < old_node_count; j++) {
-        TreeNode *oldNode = &old_pool[j];  
+        TreeNode *oldNode = &old_pool[j];
         
         // Skip pruned nodes
         if (oldNode->isPruned) {
@@ -252,27 +223,34 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
                 new_weight = SEQ_LENGTH_LIMIT - 1;
             }
             
-            // Calculate overall savings - headerOverhead. It can be negative.
-            long new_saving = (calculateSavings(&block[block_index], 1, oldNode->map) + oldNode->saving_so_far) - oldNode->headerOverhead;
+            // Calculate overall savings. It can be negative.
+            int32_t new_saving = (calculateSavings(&block[block_index], 1, oldNode->map) + oldNode->saving_so_far);
 
             // Only keep if better than existing nodes with same weight
-            if (best_index[new_weight] == -1 || new_saving > best_saving[new_weight]) {
+            if (best_index[new_weight] == -1 || new_saving-oldNode->headerOverhead > best_saving[new_weight]) {
                 // Prune previous best if exists
                 if (best_index[new_weight] != -1) {
                     new_pool[best_index[new_weight]].isPruned = 1;
                 }
 
                 // Update tracking
-                best_saving[new_weight] = new_saving;
+                best_saving[new_weight] = new_saving-oldNode->headerOverhead;
                 best_index[new_weight] = new_nodes_count;
 
                 // Configure new node
                 newNode.incoming_weight = new_weight;
                 newNode.headerOverhead = oldNode->headerOverhead;
+				newNode.saving_so_far = new_saving;				
+				newNode.isPruned = 0;
                
                 // Copy node's data to the new node. 
-                copyNodeData(oldNode, &newNode, oldNode->compress_sequence_count, new_saving);
-
+                copySequences(oldNode, &newNode, oldNode->compress_sequence_count);
+				
+				/*
+				* Copy map to new node.
+				*/
+				copyMap(oldNode, &newNode);
+				
                 // Add new uncompressed byte (length=1)
                 if (newNode.compress_sequence_count < COMPRESS_SEQUENCE_LENGTH) {
                     newNode.compress_sequence[newNode.compress_sequence_count++] = 1;
@@ -301,7 +279,7 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
                 // Store in pool
                 memcpy(&new_pool[new_nodes_count], &newNode, sizeof(TreeNode));
                
-                #ifdef DEBUG_PRINT
+                #ifdef DEBUG
                 printNode(&new_pool[new_nodes_count], block, block_index);
                 #endif
                 
@@ -313,6 +291,7 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
         // 2. Create compressed nodes (if valid sequences exist)
         // =====================================================
         for (int k = 0; k < oldNode->incoming_weight; k++) {
+        	printf(" \n 1 \n");
             uint16_t seq_len = oldNode->incoming_weight + 1 - k;
             
             // Validate sequence length
@@ -331,27 +310,24 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
             uint8_t* seq_start = &block[block_index + 1 - seq_len];
             BinSeqKey key = create_binseq_key(seq_start, seq_len);
             
-            #ifdef DEBUG
-			printf("\nCreating key for seq_len=%d, data=", seq_len);
-			for (int i = 0; i < seq_len; i++) printf("%02x ", seq_start[i]);
-			printf("\n");
-			#endif
-			
-		    // Add key validation check
+	
+		    // Key validation check
 			if (!key.binary_sequence || key.length != seq_len) {
 			    fprintf(stderr, "Invalid key created for sequence\n");
 			    exit(EXIT_FAILURE); 
 			}
             
             // Calculate new savings (in bits)
-            long new_saving = (calculateSavings(seq_start, seq_len, oldNode->map) + oldNode->saving_so_far) - oldNode->headerOverhead; 
-
+            int32_t new_saving = (calculateSavings(seq_start, seq_len, oldNode->map) + oldNode->saving_so_far); 
+			printf(" \n 2 \n");
             // Skip if not better than current best (a.k.a Prunning)
-            if (new_saving <= best_saving[0]) { // In this case our weight will be always zero.
+            if (new_saving-oldNode->headerOverhead <= best_saving[0]) { // In this case our weight will be always zero.
                 free_key(key);
                 continue;
             }
 
+			printf("\n 3 \n");
+			
             TreeNode newNode = {0}; // Fully zero-initialized
 
             // Prune previous best
@@ -366,12 +342,19 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
             // Configure new node
             newNode.incoming_weight = 0; // Reset weight after compression
             newNode.headerOverhead = oldNode->headerOverhead;
+   			newNode.saving_so_far = new_saving;
+			newNode.isPruned = 0;
 
             // Copy relevant compression history
             int to_copy = oldNode->compress_sequence_count - oldNode->incoming_weight + k;
             if (to_copy > 0 && to_copy <= COMPRESS_SEQUENCE_LENGTH) {
-    	        copyNodeData(oldNode, &newNode, to_copy, new_saving);
-            }
+    	        copySequences(oldNode, &newNode, to_copy);
+	        }
+	        
+			/*
+			* Copy map to new node.
+			*/
+			copyMap(oldNode, &newNode);
 
             // Add new compressed sequence
             if (newNode.compress_sequence_count < COMPRESS_SEQUENCE_LENGTH) {
@@ -408,7 +391,7 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
             // Store in pool
             memcpy(&new_pool[new_nodes_count], &newNode, sizeof(TreeNode));
             
-            #ifdef DEBUG_PRINT
+            #ifdef DEBUG
             printNode(&new_pool[new_nodes_count], block, block_index);
             //printf("to copy = %d-%d+%d=%d", oldNode->compress_sequence_count, oldNode->incoming_weight, k, to_copy);
             #endif
@@ -437,7 +420,7 @@ static uint8_t* createBinSeq(uint16_t seq_len, uint8_t* block, uint32_t block_in
     return seq;
 }
 
-static inline void createRoot(uint8_t* block, long savings, int block_index) {
+static inline void createRoot(uint8_t* block, int32_t savings, int block_index) {
 
     if (!block) {
         fprintf(stderr, "Error: block is NULL in createRoot\n");
@@ -483,7 +466,7 @@ static inline void createRoot(uint8_t* block, long savings, int block_index) {
 
 static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint8_t* block, uint32_t block_index) {
     // Find node with maximum savings
-    uint32_t max_saving = 0;
+    int32_t max_saving = 0;
     int best_index = 0;
     
     for (int i = 0; i < source_count; i++) {
@@ -542,7 +525,10 @@ void processBlockSecondPass(uint8_t* block, long blockSize) {
             odd_pool_count = createNodes(node_pool_even, node_pool_odd,
                                        even_pool_count, block, blockIndex+1);
         }
-        if(1) return;
+        if(1) {
+        	printf(" \n\n Ending \n\n ");
+        	return;
+        }
         isEven = !isEven;  // Alternate pools
     }
     printf("\n------------------------------------------------>Ending \n");
