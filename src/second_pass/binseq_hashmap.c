@@ -243,10 +243,10 @@ BinSeqValue *binseq_map_get(BinSeqMap *map, BinSeqKey key) {
 
 void copyMap(struct TreeNode* mapSource, struct TreeNode* mapTarget) {
     if (!mapSource || !mapTarget || !mapSource->map) {
-        fprintf(stderr, "\ncopyMap parameters are not correct !mapSource=%d !mapTarget=%d !mapSource->map=%d\n", !mapSource, !mapTarget, !mapSource->map);
-    	return;
+        fprintf(stderr, "\ncopyMap parameters are not correct !mapSource=%d !mapTarget=%d !mapSource->map=%d\n", 
+               !mapSource, !mapTarget, !mapSource->map);
+        return;
     }
-    
     
     BinSeqMap *source = mapSource->map;
     size_t new_capacity = source->capacity + 1;
@@ -260,17 +260,27 @@ void copyMap(struct TreeNode* mapSource, struct TreeNode* mapTarget) {
     for (size_t i = 0; i < source->capacity; i++) {
         Entry *entry = &source->entries[i];
         if (entry->used) {
+            // Create a deep copy of the key
             BinSeqKey key_copy = copy_key(entry->key);
             if (!key_copy.binary_sequence) {
-            	fprintf(stderr, "\nUnable to copy key copyMap\n");
-            	continue;
+                fprintf(stderr, "\nUnable to copy key in copyMap\n");
+                continue;
             }
-            if (!binseq_map_put(target, key_copy, entry->value)) {
-                free_key(key_copy);
-                fprintf(stderr, "\nFailed to insert entry during copyMap\n");
-            } 
-		    free_key(key_copy);  //the map has made its own copy}         
             
+            // Create a deep copy of the value
+            BinSeqValue value_copy = create_binseq_value(
+                entry->value.frequency,
+                entry->value.seqLocation,
+                entry->value.seqLocationLength
+            );
+            
+            // Put the copies into the new map
+            if (!binseq_map_put(target, key_copy, value_copy)) {
+                free_key(key_copy);
+                free_binseq_value(value_copy);
+                fprintf(stderr, "\nFailed to insert entry during copyMap\n");
+            }
+            // binseq_map_put takes ownership of key_copy and value_copy if successful
         }
     }
     

@@ -5,7 +5,6 @@
 #include "hash_table.h" 
 
 static void assignGroupsByFrequency();
-static int compareByFrequency(const void *a, const void *b);
 
 BinarySequence *maxHeap[SEQ_LENGTH_LIMIT * MAX_NUMBER_OF_SEQUENCES];
 int heapSize = 0;
