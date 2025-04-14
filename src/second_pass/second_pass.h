@@ -12,6 +12,6 @@
 #define SAVING_GAP SEQ_LENGTH_LIMIT*10
 
 void processSecondPass(const char* filename);
-void processBlockSecondPass(uint8_t* block, long blockSize);
+void processBlockSecondPass(uint8_t* block, uint32_t blockSize);
 
 #endif

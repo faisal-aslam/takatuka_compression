@@ -21,10 +21,19 @@ int odd_pool_count = 0;
 
 static int updateNodeMap(TreeNode *node, uint8_t* sequence, uint16_t seq_len, uint32_t location);
 static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_count,
-                         uint8_t* block, uint32_t block_index,
+                         uint8_t* block, uint32_t block_size, uint32_t block_index,
                          int best_index[], int32_t best_saving[],
                          uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
                          int to_copy);
+
+static int validate_block_access(const uint8_t* block, uint32_t block_size, uint32_t offset, uint16_t length) {
+    if (!block || offset >= block_size || (offset + length) > block_size) {
+        fprintf(stderr, "Invalid block access: offset=%u, length=%u, block_size=%u\n",
+               offset, length, block_size);
+        return 0;
+    }
+    return 1;
+}
                          
 static inline int32_t totalSavings(TreeNode *node) {
 	if (!node) return 0;
@@ -191,7 +200,7 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
  * @return                 Number of nodes created in new_pool
  */
 static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_count,
-                     uint8_t* block, uint32_t block_index) {
+                     uint8_t* block, uint32_t block_size, uint32_t block_index) {
     // Validate inputs
     if (!old_pool || !new_pool || !block || old_node_count < 0) {
         return 0;
@@ -228,7 +237,7 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
         printf("\n process uncompressed path block=0x%x, index=%d\n", block[block_index], block_index);
         // Process uncompressed path
         new_nodes_count = processNodePath(oldNode, new_pool, new_nodes_count,
-                                        block, block_index, best_index, best_saving,
+                                        block, block_size, block_index, best_index, best_saving,
                                         &block[block_index], 1, oldNode->incoming_weight + 1,
                                         oldNode->compress_sequence_count);
         
@@ -252,7 +261,7 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
             
             uint8_t* seq_start = &block[block_index + 1 - seq_len];
             new_nodes_count = processNodePath(oldNode, new_pool, new_nodes_count,
-                                            block, block_index, best_index, best_saving,
+                                            block, block_size, block_index, best_index, best_saving,
                                             seq_start, seq_len, 0,
                                             oldNode->compress_sequence_count - oldNode->incoming_weight + k);
         }
@@ -320,10 +329,16 @@ static int updateNodeMap(TreeNode *node, uint8_t* sequence, uint16_t seq_len, ui
  * Processes a node path (either compressed or uncompressed)
  */
 static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_count,
-                         uint8_t* block, uint32_t block_index,
+                         uint8_t* block, uint32_t block_size, uint32_t block_index,
                          int best_index[], int32_t best_saving[],
                          uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
-                         int to_copy) {
+                         int to_copy) { 
+                         
+    if (!validate_block_access(block, block_size, block_index, seq_len)) {
+	    fprintf(stderr, "\n unable to process path \n");
+        return new_nodes_count;
+    }
+    
     BinSeqKey key = create_binseq_key(sequence, seq_len);
     //print_bin_seq(sequence, seq_len);
     if (!key.binary_sequence) {
@@ -430,8 +445,8 @@ static uint8_t* createBinSeq(uint16_t seq_len, uint8_t* block, uint32_t block_in
     return seq;
 }
 
-static inline void createRoot(uint8_t* block, int32_t savings, int block_index) {
-    if (!block) {
+static inline void createRoot(uint8_t* block, uint32_t block_size) {
+    if (!block || !validate_block_access(block, block_size, 0, 1)) {
         fprintf(stderr, "Error: block is NULL in createRoot\n");
         return;
     }
@@ -488,7 +503,7 @@ static inline void createRoot(uint8_t* block, int32_t savings, int block_index) 
 
 
     printf("\n\n*************** new root created ********************");
-    printNode(&node_pool_even[0], block, block_index);    
+    printNode(&node_pool_even[0], block, 0);    
     printf("\n*******************************************************************");
 }
 
@@ -519,19 +534,19 @@ static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint
 }
 
 
-void processBlockSecondPass(uint8_t* block, long blockSize) {
-    if (SEQ_LENGTH_LIMIT <= 1 || blockSize <= 0 || block == NULL) {
+void processBlockSecondPass(uint8_t* block, uint32_t block_size) {
+    if (SEQ_LENGTH_LIMIT <= 1 || block_size <= 0 || block == NULL) {
         fprintf(stderr, "Error: Invalid parameters in processBlockSecondPass\n");
         cleanup_node_pools();  // Add this
         return;
     }
-    createRoot(block, 0, 0);  // Start with fresh root
+    createRoot(block, block_size);  // Start with fresh root
     uint8_t isEven = 0;  // We create root at even, and then switch to odd.
 
 
     uint32_t blockIndex;
     uint8_t restedOnce = 0;
-    for (blockIndex = 1; blockIndex < blockSize; blockIndex++) {
+    for (blockIndex = 1; blockIndex < block_size; blockIndex++) {
         // Check if we need to reset
         if (blockIndex% COMPRESS_SEQUENCE_LENGTH == 0) {
            restedOnce = 1; //todo for testing. Should be remove later.
@@ -551,10 +566,10 @@ void processBlockSecondPass(uint8_t* block, long blockSize) {
         // Create new nodes in the appropriate pool
         if (isEven) {
             even_pool_count = createNodes(node_pool_odd, node_pool_even, 
-                                        odd_pool_count, block, blockIndex);
+                                        odd_pool_count, block, block_size, blockIndex);
         } else {
             odd_pool_count = createNodes(node_pool_even, node_pool_odd,
-                                       even_pool_count, block, blockIndex);
+                                       even_pool_count, block, block_size, blockIndex);
         }
         /*if(1) {
         	printf(" \n\n Ending \n\n ");

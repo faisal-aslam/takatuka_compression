@@ -296,20 +296,20 @@ BinSeqKey create_binseq_key(const uint8_t* sequence, uint16_t length) {
     
     if (!sequence || length == 0 || length > COMPRESS_SEQUENCE_LENGTH) {
         fprintf(stderr, "create_binseq_key: Invalid parameters\n");
-        return key;  // Return zeroed key
+        return key;
     }
 
     key.binary_sequence = malloc(length);
     if (!key.binary_sequence) {
         fprintf(stderr, "create_binseq_key: Memory allocation failed\n");
-        key.length = 0;  // Mark as invalid
         return key;
     }
     
-    memcpy(key.binary_sequence, sequence, length);
+    memcpy(key.binary_sequence, sequence, length);  // Always copy the data
     key.length = length;
     return key;
 }
+
 
 void free_key(BinSeqKey key) {
     if (key.binary_sequence) {
