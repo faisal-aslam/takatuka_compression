@@ -97,7 +97,7 @@ static int32_t calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqM
     BinSeqValue* binSeqVal = binseq_map_get(map, key);
     long savings = 0;
     
-    if (!binSeqVal) {
+    if (!binSeqVal || seq_length == 1) {//todo: later we will support compress of 1 byte. Not at the moment.
 	    //in this case savings will be negative as each uncompress byte will start with an extra 0. (9-bits for a byte).
         savings = -(long)(seq_length); 
     } else {
@@ -141,15 +141,22 @@ static int updateMapValue(BinSeqValue* binSeqVal, int block_index, uint16_t seq_
 
 
 static inline void copySequences(TreeNode *sourceNode, TreeNode *destNode, uint16_t bytes_to_copy) {
-    // check input.
-    if (!sourceNode || !destNode || bytes_to_copy == 0 || bytes_to_copy > COMPRESS_SEQUENCE_LENGTH || bytes_to_copy < sourceNode->compress_sequence_count ) {
-    	fprintf(stderr, "\n Unable to copy node \n");
+    // Validate inputs
+    if (!sourceNode || !destNode || 
+        bytes_to_copy == 0 || 
+        bytes_to_copy > COMPRESS_SEQUENCE_LENGTH || 
+        bytes_to_copy > sourceNode->compress_sequence_count) { 
+        fprintf(stderr, "\nInvalid copy parameters: src_count=%u, to_copy=%u\n",
+               sourceNode ? sourceNode->compress_sequence_count : 0,
+               bytes_to_copy);
         return;
     }
-    /*
-    * Copy sequences and update destNode sequence count.
-    */
-    memcpy(destNode->compress_sequence, sourceNode->compress_sequence, bytes_to_copy); 
+    
+    // Copy exactly the requested number of elements
+    memcpy(destNode->compress_sequence, 
+           sourceNode->compress_sequence, 
+           bytes_to_copy * sizeof(sourceNode->compress_sequence[0])); 
+    
     destNode->compress_sequence_count = bytes_to_copy;
 }
 
@@ -198,7 +205,7 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
         best_index[i] = -1;
     }
  
-    #ifdef DEBUG_PRINT
+    #ifdef DEBUG
     printf("\nold_node_count= %d", old_node_count);
     #endif
 
@@ -211,7 +218,7 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
             continue;
         }
 
-        #ifdef DEBUG_PRINT        
+        #ifdef DEBUG        
         printf("\n******************** Processing OLD node ************");
         printNode(oldNode, block, block_index);
         printf("\n******************************************************");
@@ -252,7 +259,7 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
 
     return new_nodes_count;
 }
-static void print_bin_seq(uint8_t* sequence, uint16_t seq_len) {
+static void print_bin_seq(uint16_t* sequence, uint16_t seq_len) {
 	if (!sequence) return;
 	printf("\n printing sequence of length=%d = {", seq_len);
 	for (int i =0; i < seq_len; i++) {
@@ -276,7 +283,7 @@ static int updateNodeMap(TreeNode *node, uint8_t* sequence, uint16_t seq_len, ui
     }
     //print_bin_seq(sequence, seq_len);
     
-	binseq_map_print(node->map);
+	//binseq_map_print(node->map);
 	
     BinSeqValue* value = binseq_map_get(node->map, key);
     int result = 0;
@@ -355,7 +362,13 @@ static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_
         free_key(key);
         return new_nodes_count;
     }
+    printf("\n before adding the sequence node newNode.compress_sequence are: ");
+    print_bin_seq(newNode.compress_sequence, newNode.compress_sequence_count);
+    printf("\n Going to add a new seq_len=%d, at index=%d ", seq_len, newNode.compress_sequence_count);
     newNode.compress_sequence[newNode.compress_sequence_count++] = seq_len;
+    
+    printf("\n before adding the sequence node newNode.compress_sequence are: ");
+    print_bin_seq(newNode.compress_sequence, newNode.compress_sequence_count);
     
     newNode.headerOverhead = oldNode->headerOverhead;
     // Update node map with the new sequence - this handles key ownership
@@ -503,7 +516,7 @@ void processBlockSecondPass(uint8_t* block, long blockSize) {
             isEven = 0; //root is always at even so switch to odd pool next.  
         }
 
-#ifdef DEBUG_PRINT
+#ifdef DEBUG
         printf("\n------------------------------------------------>Processing byte %u (pool %s)", blockIndex, isEven ? "even" : "odd");
 #endif
 		//printf("\t %u", i);
