@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "../write_in_file/write_in_file.h"
+#include "../weighted_freq.h"
 
 // Add these at the beginning of the file, after includes
 #ifndef MIN
@@ -19,17 +20,23 @@ TreeNode node_pool_odd[MAX_TREE_NODES] = {0};
 int even_pool_count = 0;
 int odd_pool_count = 0;
 
-static int updateNodeMap(TreeNode *node, uint8_t* sequence, uint16_t seq_len, uint32_t location);
+void print_stacktrace(void);  
+static int updateNodeMap(TreeNode *node, const uint8_t* sequence, uint16_t seq_len, uint32_t location);
+
 static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_count,
-                         uint8_t* block, uint32_t block_size, uint32_t block_index,
+                         const uint8_t* block, uint32_t block_size, uint32_t block_index,
                          int best_index[], int32_t best_saving[],
-                         uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
+                         const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
                          int to_copy);
 
+static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_count,
+                     const uint8_t* block, uint32_t block_size, uint32_t block_index);
+
 static int validate_block_access(const uint8_t* block, uint32_t block_size, uint32_t offset, uint16_t length) {
-    if (!block || offset >= block_size || (offset + length) > block_size) {
+    if (!block || offset >= block_size || length == 0 || (offset + length) > block_size || length > block_size) {
         fprintf(stderr, "Invalid block access: offset=%u, length=%u, block_size=%u\n",
                offset, length, block_size);
+        print_stacktrace();
         return 0;
     }
     return 1;
@@ -39,7 +46,7 @@ static inline int32_t totalSavings(TreeNode *node) {
 	if (!node) return 0;
 	return (node->saving_so_far-node->headerOverhead);
 }
-static void printNode(TreeNode *node, uint8_t* block, uint32_t block_index) {
+static void printNode(TreeNode *node, const uint8_t* block, uint32_t block_index) {
     if (!node) {
         printf("[NULL NODE]\n");
         return;
@@ -94,7 +101,7 @@ void cleanup_node_pools() {
  *   - savings in bits if compression is beneficial (positive)
  *   - negative savings if compression is not beneficial or invalid
  */
-static int32_t calculateSavings(uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap *map) {
+static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap *map) {
     if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !map) {
         fprintf(stderr, "Error: Invalid parameters in calculateSavings\n");
         return 0;
@@ -175,7 +182,7 @@ static inline void copySequences(TreeNode *sourceNode, TreeNode *destNode, uint1
 /**
 * A binary sequence is valid if it is in our sequenceMap. 
 */
-static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t* block, uint32_t block_index) {
+static inline BinarySequence* isValidSequence(uint16_t sequence_length, const uint8_t* block, uint32_t block_index) {
     if (sequence_length < SEQ_LENGTH_START || sequence_length > SEQ_LENGTH_LIMIT || block_index < sequence_length) {
         fprintf(stderr, "\n\n\n *************** Error: current length (%u) should be > than sequence length (%u)\n", 
                 block_index, sequence_length);
@@ -200,7 +207,7 @@ static inline BinarySequence* isValidSequence(uint16_t sequence_length, uint8_t*
  * @return                 Number of nodes created in new_pool
  */
 static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_count,
-                     uint8_t* block, uint32_t block_size, uint32_t block_index) {
+                     const uint8_t* block, uint32_t block_size, uint32_t block_index) {
     // Validate inputs
     if (!old_pool || !new_pool || !block || old_node_count < 0) {
         return 0;
@@ -236,6 +243,11 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
         
         printf("\n process uncompressed path block=0x%x, index=%d\n", block[block_index], block_index);
         // Process uncompressed path
+        /*processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_count,
+                         const uint8_t* block, uint32_t block_size, uint32_t block_index,
+                         int best_index[], int32_t best_saving[],
+                         const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
+                         int to_copy)*/
         new_nodes_count = processNodePath(oldNode, new_pool, new_nodes_count,
                                         block, block_size, block_index, best_index, best_saving,
                                         &block[block_index], 1, oldNode->incoming_weight + 1,
@@ -243,33 +255,30 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
         
         
         // Process compressed paths
-        for (int k = 0; k < oldNode->incoming_weight; k++) {
-            printf("\n process uncompressed path \n");
-            uint16_t seq_len = oldNode->incoming_weight + 1 - k;
-            
-            // Validate sequence length
-            if (seq_len < SEQ_LENGTH_START || seq_len > SEQ_LENGTH_LIMIT) {
-                fprintf(stderr, "Invalid seq length seq_len=%d\n", seq_len);
-                continue; 
-            }
-            
-            // Check if we have enough bytes left in block
-            if (block_index + 1 < seq_len) {
-                fprintf(stderr, "Invalid seq_len=%d at block_index=%d\n", seq_len, block_index);
-                exit(EXIT_FAILURE); 
-            }
-            
-            uint8_t* seq_start = &block[block_index + 1 - seq_len];
-            new_nodes_count = processNodePath(oldNode, new_pool, new_nodes_count,
-                                            block, block_size, block_index, best_index, best_saving,
-                                            seq_start, seq_len, 0,
-                                            oldNode->compress_sequence_count - oldNode->incoming_weight + k);
-        }
+		for (int k = 0; k < oldNode->incoming_weight; k++) {
+			uint16_t seq_len = oldNode->incoming_weight + 1 - k;
+			
+			// Validate sequence length and block boundaries
+			if (seq_len < SEQ_LENGTH_START || seq_len > SEQ_LENGTH_LIMIT || 
+				seq_len > (block_index + 1) || (block_index + 1 - seq_len) >= block_size) {
+				fprintf(stderr, "Invalid seq len=%d at block_index=%d, block_size=%d\n", 
+				       seq_len, block_index, block_size);
+				continue;
+			}
+			
+			const uint8_t* seq_start = &block[block_index + 1 - seq_len];
+			new_nodes_count = processNodePath(oldNode, new_pool, new_nodes_count,
+				                            block, block_size, block_index, best_index, best_saving,
+				                            seq_start, seq_len, 0,
+				                            oldNode->compress_sequence_count - oldNode->incoming_weight + k);
+		}
+        
     }
 
     return new_nodes_count;
 }
-static void print_bin_seq(uint8_t* sequence, uint16_t seq_len) {
+
+static void print_bin_seq(const uint8_t* sequence, uint16_t seq_len) {
 	if (!sequence) return;
 	printf("\n printing sequence of length=%d = {", seq_len);
 	for (int i =0; i < seq_len; i++) {
@@ -286,7 +295,13 @@ static void print_bin_seq(uint8_t* sequence, uint16_t seq_len) {
  * @param location    Location in block where sequence starts
  * @return            1 on success, 0 on failure
  */
-static int updateNodeMap(TreeNode *node, uint8_t* sequence, uint16_t seq_len, uint32_t location) {
+static int updateNodeMap(TreeNode *node, const uint8_t* sequence, uint16_t seq_len, uint32_t location) {
+    // Validate sequence access
+    if (location >= BLOCK_SIZE || (location + seq_len) > BLOCK_SIZE) {
+        fprintf(stderr, "Invalid location in updateNodeMap: loc=%u, len=%u\n", location, seq_len);
+        return 0;
+    }
+    print_bin_seq(&sequence[location], seq_len);
     BinSeqKey key = create_binseq_key(&sequence[location], seq_len);
     if (!key.binary_sequence) {
         return 0;
@@ -329,23 +344,36 @@ static int updateNodeMap(TreeNode *node, uint8_t* sequence, uint16_t seq_len, ui
  * Processes a node path (either compressed or uncompressed)
  */
 static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_count,
-                         uint8_t* block, uint32_t block_size, uint32_t block_index,
+                         const uint8_t* block, uint32_t block_size, uint32_t block_index,
                          int best_index[], int32_t best_saving[],
-                         uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
+                         const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
                          int to_copy) { 
                          
-    if (!validate_block_access(block, block_size, block_index, seq_len)) {
-	    fprintf(stderr, "\n unable to process path \n");
+    // Block size validation
+    if (block_index >= block_size) {
+        fprintf(stderr, "Invalid block_index %u >= block_size %u\n", block_index, block_size);
+        return new_nodes_count;
+    }
+    
+    // Sequence length validation
+    if (seq_len == 0 || seq_len > COMPRESS_SEQUENCE_LENGTH) {
+        fprintf(stderr, "Invalid seq_len %u\n", seq_len);
+        return new_nodes_count;
+    }
+    
+    // Validate we're not reading past block boundaries
+    uint32_t seq_start_offset = (new_weight == 0) ? block_index + 1 - seq_len : block_index;
+    if (seq_start_offset >= block_size || (seq_start_offset + seq_len) > block_size) {
+        fprintf(stderr, "Invalid sequence access: offset=%u, len=%u, block_size=%u\n",
+               seq_start_offset, seq_len, block_size);
         return new_nodes_count;
     }
     
     BinSeqKey key = create_binseq_key(sequence, seq_len);
-    //print_bin_seq(sequence, seq_len);
     if (!key.binary_sequence) {
-    	fprintf(stderr, "\n unable to make key \n");
+        fprintf(stderr, "\n unable to make key \n");
         return new_nodes_count;
     }
-
 	
     // Calculate new savings
     int32_t new_saving = calculateSavings(sequence, seq_len, oldNode->map) + oldNode->saving_so_far;
@@ -445,7 +473,7 @@ static uint8_t* createBinSeq(uint16_t seq_len, uint8_t* block, uint32_t block_in
     return seq;
 }
 
-static inline void createRoot(uint8_t* block, uint32_t block_size) {
+static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     if (!block || !validate_block_access(block, block_size, 0, 1)) {
         fprintf(stderr, "Error: block is NULL in createRoot\n");
         return;
@@ -507,7 +535,7 @@ static inline void createRoot(uint8_t* block, uint32_t block_size) {
     printf("\n*******************************************************************");
 }
 
-static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint8_t* block, uint32_t block_index) {
+static inline void resetToBestNode(TreeNode* source_pool, int source_count, const uint8_t* block, uint32_t block_index) {
     // Find node with maximum savings
     int32_t max_saving = INT_MIN;
     int best_index = 0;
@@ -534,7 +562,7 @@ static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint
 }
 
 
-void processBlockSecondPass(uint8_t* block, uint32_t block_size) {
+void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
     if (SEQ_LENGTH_LIMIT <= 1 || block_size <= 0 || block == NULL) {
         fprintf(stderr, "Error: Invalid parameters in processBlockSecondPass\n");
         cleanup_node_pools();  // Add this
@@ -597,7 +625,7 @@ void processSecondPass(const char* filename) {
         return;
     }
 
-    uint8_t* block = (uint8_t*)calloc(1, BLOCK_SIZE);
+    uint8_t* block = (uint8_t*)malloc(BLOCK_SIZE); // Use malloc instead of calloc
     if (!block) {
         perror("Failed to allocate memory for block");
         fclose(file);
@@ -607,11 +635,12 @@ void processSecondPass(const char* filename) {
 
     while (1) {
         long bytesRead = fread(block, 1, BLOCK_SIZE, file);
-        if (bytesRead == 0) break;
-
+        if (bytesRead <= 0) break;  // Check for <= 0
+      
         processBlockSecondPass(block, bytesRead);
+        
     }
-
+    
     free(block);
     fclose(file);
     cleanup_node_pools();  // Ensure final cleanup
