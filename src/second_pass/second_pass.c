@@ -127,8 +127,9 @@ static int updateMapValue(BinSeqValue* binSeqVal, int block_index, uint16_t seq_
     	return 0;
     }
     int group = (seq_length == 1) ? 0 : 3;
-
-    if (binSeqVal->frequency == 1) {
+	printf("\n\n\n\n -------------- THERE freq=%d, seq_length=%d  \n\n\n\n ", binSeqVal->frequency, seq_length);
+    if (binSeqVal->frequency == 1 && seq_length > 1) { //todo later we will compress seq_length=1
+    	printf("\n\n\n\n -------------- HERE \n\n\n\n");
         *headerOverhead += getHeaderOverhead(group, seq_length);
     } 
 
@@ -215,7 +216,7 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
         
         // Skip pruned nodes
         if (oldNode->isPruned) {
-            continue;
+            //todo continue;
         }
 
         #ifdef DEBUG        
@@ -259,11 +260,11 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
 
     return new_nodes_count;
 }
-static void print_bin_seq(uint16_t* sequence, uint16_t seq_len) {
+static void print_bin_seq(uint8_t* sequence, uint16_t seq_len) {
 	if (!sequence) return;
 	printf("\n printing sequence of length=%d = {", seq_len);
 	for (int i =0; i < seq_len; i++) {
-		printf("0x%x, ", sequence[i]);
+		printf("0x%x, \t", sequence[i]);
 	}
 	printf(" }\n");
 }
@@ -277,13 +278,14 @@ static void print_bin_seq(uint16_t* sequence, uint16_t seq_len) {
  * @return            1 on success, 0 on failure
  */
 static int updateNodeMap(TreeNode *node, uint8_t* sequence, uint16_t seq_len, uint32_t location) {
-    BinSeqKey key = create_binseq_key(sequence, seq_len);
+    BinSeqKey key = create_binseq_key(&sequence[location], seq_len);
     if (!key.binary_sequence) {
         return 0;
     }
-    //print_bin_seq(sequence, seq_len);
-    
-	//binseq_map_print(node->map);
+    printf("\n\n ================location=%d, seq_len=%d,sequence[location]=%0x  \n", location, seq_len, sequence[location]);
+    print_bin_seq(&sequence[location], seq_len);    
+	binseq_map_print(node->map);
+    printf("\n ================ \n\n");
 	
     BinSeqValue* value = binseq_map_get(node->map, key);
     int result = 0;
@@ -301,6 +303,8 @@ static int updateNodeMap(TreeNode *node, uint8_t* sequence, uint16_t seq_len, ui
     
        
         if (binseq_map_put(node->map, key, newValue)) {
+        	printf("\n map is updated \n");
+        	binseq_map_print(node->map);
             result = 1;
             // binseq_map_put now owns the key, don't free it here
         } else {
@@ -330,11 +334,14 @@ static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_
 	
     // Calculate new savings
     int32_t new_saving = calculateSavings(sequence, seq_len, oldNode->map) + oldNode->saving_so_far;
-    
-    // Check if already a better path exist with same weight
+    uint8_t isPruned = 0;
+    // Check if already a better path exist with same weight (pruning).
     if (!(best_index[new_weight] == -1 || new_saving - oldNode->headerOverhead <= best_saving[new_weight])) {
-        free_key(key);
-        return new_nodes_count;
+        
+        printf("\n\n Pruned \n");
+        isPruned = 1;
+        //todo free_key(key);
+        //todo return new_nodes_count;
     }
 
     // Initialize new node
@@ -344,7 +351,7 @@ static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_
     newNode.incoming_weight = (new_weight >= SEQ_LENGTH_LIMIT) ? SEQ_LENGTH_LIMIT - 1 : new_weight;
     newNode.headerOverhead = oldNode->headerOverhead;
     newNode.saving_so_far = new_saving;
-    newNode.isPruned = 0;
+    newNode.isPruned = isPruned;
   
  
     // Copy sequences from old node if needed
@@ -377,6 +384,7 @@ static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_
     int weight_index = (new_weight == 0) ? 0 : new_weight;
     if (best_index[weight_index] != -1) {
         new_pool[best_index[weight_index]].isPruned = 1;
+        printf("\n\n Pruned (previous) \n");
     }
     
     // Update tracking

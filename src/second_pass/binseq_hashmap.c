@@ -394,7 +394,7 @@ void binseq_map_print(BinSeqMap *map) {
         } else {
             printf("  Key (length=%u): ", key->length);
             for (uint16_t j = 0; j < key->length; ++j) {
-                printf("%02X", key->binary_sequence[j]);
+                printf("%02X, ", key->binary_sequence[j]);
             }
             printf("\n");
         }
@@ -407,7 +407,7 @@ void binseq_map_print(BinSeqMap *map) {
             printf("    Locations (%u):", val->seqLocationLength);
             if (val->seqLocation) {
                 for (uint16_t j = 0; j < val->seqLocationLength; ++j) {
-                    printf(" %u", val->seqLocation[j]);
+                    printf(" %u, ", val->seqLocation[j]);
                 }
             } else {
                 printf(" (null)");
