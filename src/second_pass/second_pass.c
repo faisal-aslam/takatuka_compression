@@ -362,14 +362,9 @@ static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_
         free_key(key);
         return new_nodes_count;
     }
-    printf("\n before adding the sequence node newNode.compress_sequence are: ");
-    print_bin_seq(newNode.compress_sequence, newNode.compress_sequence_count);
-    printf("\n Going to add a new seq_len=%d, at index=%d ", seq_len, newNode.compress_sequence_count);
     newNode.compress_sequence[newNode.compress_sequence_count++] = seq_len;
-    
-    printf("\n before adding the sequence node newNode.compress_sequence are: ");
-    print_bin_seq(newNode.compress_sequence, newNode.compress_sequence_count);
-    
+  
+   
     newNode.headerOverhead = oldNode->headerOverhead;
     // Update node map with the new sequence - this handles key ownership
     if (!updateNodeMap(&newNode, sequence, seq_len, 
@@ -423,7 +418,6 @@ static uint8_t* createBinSeq(uint16_t seq_len, uint8_t* block, uint32_t block_in
 }
 
 static inline void createRoot(uint8_t* block, int32_t savings, int block_index) {
-
     if (!block) {
         fprintf(stderr, "Error: block is NULL in createRoot\n");
         return;
@@ -434,37 +428,56 @@ static inline void createRoot(uint8_t* block, int32_t savings, int block_index) 
     memset(node_pool_odd, 0, sizeof(node_pool_odd));
     
     // Initialize root node properly
-    TreeNode root = {0};  // Zero-initialize all fields
-    root.headerOverhead = 4; //the 4-bytes about the number of sequences in header.
+    TreeNode root = {0};
+    root.headerOverhead = 4;
     root.compress_sequence[0] = 1;
     root.compress_sequence_count = 1;
-    root.map = binseq_map_create(16); //create map of root.
+    root.map = binseq_map_create(16);
     if (!root.map) {
-	    fprintf(stderr, "FATAL: Failed to create root map\n");
-	    exit(EXIT_FAILURE);
-	}
+        fprintf(stderr, "FATAL: Failed to create root map\n");
+        exit(EXIT_FAILURE);
+    }
     
     root.saving_so_far = calculateSavings(&block[0], 1, root.map);
     root.incoming_weight = 1;
     
-	uint32_t locs[1] = {0};
-	BinSeqKey key = create_binseq_key(&block[0], 1);
-	
-	BinSeqValue value = create_binseq_value(1, locs, 1);
-	if (!binseq_map_put(root.map, key, value)) {
-    	return;
+    uint32_t locs[1] = {0};
+    BinSeqKey key = create_binseq_key(&block[0], 1);
+    if (!key.binary_sequence) {
+        binseq_map_free(root.map);  // Cleanup before returning
+        return;
+    }
+    
+    BinSeqValue value = create_binseq_value(1, locs, 1);
+    if (!binseq_map_put(root.map, key, value)) {
+        free_key(key);
+        free_binseq_value(value);
+        binseq_map_free(root.map);  // Cleanup before returning
+        return;
+    }
+
+	// Copy fields manually to avoid double-free and leaks
+	if (node_pool_even[0].map) {
+		binseq_map_free(node_pool_even[0].map);
+		node_pool_even[0].map = NULL;
 	}
 
-    // Copy to pool
-    memcpy(&node_pool_even[0], &root, sizeof(TreeNode));
-    even_pool_count = 1;
-    odd_pool_count = 0;
+	if (node_pool_even[0].map) {
+		binseq_map_free(node_pool_even[0].map);
+		node_pool_even[0].map = NULL;
+	}
+	node_pool_even[0] = root;
+	root.map = NULL;
+
+	even_pool_count = 1;
+	odd_pool_count = 0;
+
+
 
     printf("\n\n*************** new root created ********************");
     printNode(&node_pool_even[0], block, block_index);    
     printf("\n*******************************************************************");
 }
-
 
 static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint8_t* block, uint32_t block_index) {
     // Find node with maximum savings
@@ -487,7 +500,9 @@ static inline void resetToBestNode(TreeNode* source_pool, int source_count, uint
                           
 	//createRoot(block, max_saving, block_index);  
 	//todo this will be gone later on. Just for testing keep it here time being.
+	cleanup_node_pools();
 	exit(1);
+
 }
 
 
@@ -558,7 +573,7 @@ void processSecondPass(const char* filename) {
     if (!block) {
         perror("Failed to allocate memory for block");
         fclose(file);
-        cleanup_node_pools();  // Add this
+        cleanup_node_pools();
         return;
     }
 
@@ -568,8 +583,8 @@ void processSecondPass(const char* filename) {
 
         processBlockSecondPass(block, bytesRead);
     }
-    //printf("\n\n\n Potential Savings = %u\n", best_saving_overall);
 
     free(block);
     fclose(file);
+    cleanup_node_pools();  // Ensure final cleanup
 }
