@@ -383,7 +383,12 @@ static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_
     best_saving[weight_index] = new_saving - oldNode->headerOverhead;
     best_index[weight_index] = new_nodes_count;
     
-    // Store in pool
+    //cleanup in case.
+    if (new_pool[new_nodes_count].map) {
+	    binseq_map_free(new_pool[new_nodes_count].map);
+	    new_pool[new_nodes_count].map = NULL;
+	}
+	// Store in pool
     new_pool[new_nodes_count] = newNode;  // shallow copy
     new_pool[new_nodes_count].map = newNode.map;  // this is already deep-copied by copyMap
 
