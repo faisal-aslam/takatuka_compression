@@ -81,7 +81,7 @@ static void printNode(TreeNode *node, const uint8_t* block, uint32_t block_index
         }
         printf(" }, ");
     }
-    //binseq_map_print(node->map);
+    binseq_map_print(node->map);
 }
 
 void cleanup_node_pools() {
@@ -301,16 +301,12 @@ static int updateNodeMap(TreeNode *node, const uint8_t* sequence, uint16_t seq_l
         fprintf(stderr, "Invalid location in updateNodeMap: loc=%u, len=%u\n", location, seq_len);
         return 0;
     }
-    print_bin_seq(&sequence[location], seq_len);
-    BinSeqKey key = create_binseq_key(&sequence[location], seq_len);
+   
+    BinSeqKey key = create_binseq_key(sequence, seq_len);
     if (!key.binary_sequence) {
         return 0;
     }
-    printf("\n\n ================location=%d, seq_len=%d,sequence[location]=%0x  \n", location, seq_len, sequence[location]);
-    print_bin_seq(&sequence[location], seq_len);    
-	binseq_map_print(node->map);
-    printf("\n ================ \n\n");
-	
+ 
     BinSeqValue* value = binseq_map_get(node->map, key);
     int result = 0;
     
@@ -398,12 +394,13 @@ static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_
   
  
     // Copy sequences from old node if needed
-    if (to_copy > 0 && to_copy <= COMPRESS_SEQUENCE_LENGTH) {
+    if (to_copy > 0 && to_copy < COMPRESS_SEQUENCE_LENGTH) {
         copySequences(oldNode, &newNode, to_copy);
     }
     
     // Copy map from old node - this now properly handles key ownership
     copyMap(oldNode, &newNode);
+ 
     
     // Add new sequence to the node
     if (newNode.compress_sequence_count >= COMPRESS_SEQUENCE_LENGTH) {
@@ -475,65 +472,64 @@ static uint8_t* createBinSeq(uint16_t seq_len, uint8_t* block, uint32_t block_in
 
 static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     if (!block || !validate_block_access(block, block_size, 0, 1)) {
-        fprintf(stderr, "Error: block is NULL in createRoot\n");
+        fprintf(stderr, "Error: block is NULL or invalid in createRoot\n");
         return;
     }
 
-    // Clear both pools completely
+    // Clear both node pools
+    cleanup_node_pools();
     memset(node_pool_even, 0, sizeof(node_pool_even));
     memset(node_pool_odd, 0, sizeof(node_pool_odd));
-    
-    // Initialize root node properly
+
+    // Initialize root node
     TreeNode root = {0};
     root.headerOverhead = 4;
     root.compress_sequence[0] = 1;
     root.compress_sequence_count = 1;
-    root.map = binseq_map_create(16);
+    root.incoming_weight = 1;
+
+    root.map = binseq_map_create(1);
     if (!root.map) {
         fprintf(stderr, "FATAL: Failed to create root map\n");
         exit(EXIT_FAILURE);
     }
-    
-    root.saving_so_far = calculateSavings(&block[0], 1, root.map);
-    root.incoming_weight = 1;
-    
+
+    // Prepare key and value
     uint32_t locs[1] = {0};
     BinSeqKey key = create_binseq_key(&block[0], 1);
     if (!key.binary_sequence) {
-        binseq_map_free(root.map);  // Cleanup before returning
+        binseq_map_free(root.map);
         return;
     }
-    
+
     BinSeqValue value = create_binseq_value(1, locs, 1);
     if (!binseq_map_put(root.map, key, value)) {
         free_key(key);
         free_binseq_value(value);
-        binseq_map_free(root.map);  // Cleanup before returning
+        binseq_map_free(root.map);
         return;
     }
 
-	// Copy fields manually to avoid double-free and leaks
-	if (node_pool_even[0].map) {
-		binseq_map_free(node_pool_even[0].map);
-		node_pool_even[0].map = NULL;
-	}
+    // Calculate savings AFTER map has been populated
+    root.saving_so_far = calculateSavings(&block[0], 1, root.map);
 
-	if (node_pool_even[0].map) {
-		binseq_map_free(node_pool_even[0].map);
-		node_pool_even[0].map = NULL;
-	}
-	node_pool_even[0] = root;
-	root.map = NULL;
+    // Transfer ownership to node_pool_even[0]
+    if (node_pool_even[0].map) {
+        binseq_map_free(node_pool_even[0].map);
+        node_pool_even[0].map = NULL;
+    }
 
-	even_pool_count = 1;
-	odd_pool_count = 0;
+    node_pool_even[0] = root;
+    root.map = NULL;  // Prevent double-free
 
-
+    even_pool_count = 1;
+    odd_pool_count = 0;
 
     printf("\n\n*************** new root created ********************");
     printNode(&node_pool_even[0], block, 0);    
     printf("\n*******************************************************************");
 }
+
 
 static inline void resetToBestNode(TreeNode* source_pool, int source_count, const uint8_t* block, uint32_t block_index) {
     // Find node with maximum savings
