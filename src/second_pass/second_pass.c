@@ -88,9 +88,12 @@ void cleanup_node_pools() {
     for (int i = 0; i < MAX_TREE_NODES; i++) {
         if (node_pool_even[i].map) {
             binseq_map_free(node_pool_even[i].map);
+            node_pool_even[i].map = NULL;
+
         }
         if (node_pool_odd[i].map) {
             binseq_map_free(node_pool_odd[i].map);
+            node_pool_odd[i].map = NULL;
         }
     }
 }
@@ -137,18 +140,11 @@ static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, B
  * Updates frequency and location for a known existing sequence in the map.
  * Also updates header overhead if this is the first time it is compressed.
  */
-static int updateMapValue(BinSeqValue* binSeqVal, int block_index, uint16_t seq_length, int* headerOverhead) {
-    if (!binSeqVal || !headerOverhead) {
+static int updateMapValue(BinSeqValue* binSeqVal, int block_index, uint16_t seq_length) {
+    if (!binSeqVal) {
     	fprintf(stderr, "\n Incorrect input to function updateMapValue");
     	return 0;
     }
-    int group = (seq_length == 1) ? 0 : 3;
-	printf("\n\n\n\n -------------- THERE freq=%d, seq_length=%d  \n\n\n\n ", binSeqVal->frequency, seq_length);
-    if (binSeqVal->frequency == 1 && seq_length > 1) { //todo later we will compress seq_length=1
-    	printf("\n\n\n\n -------------- HERE \n\n\n\n");
-        *headerOverhead += getHeaderOverhead(group, seq_length);
-    } 
-
     if (!binseq_value_append_location(binSeqVal, block_index)) {
         fprintf(stderr, "Failed to append location to sequence\n");
     }
@@ -241,7 +237,7 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
         printf("\n******************************************************");
         #endif
         
-        printf("\n process uncompressed path block=0x%x, index=%d\n", block[block_index], block_index);
+
         // Process uncompressed path
         /*processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_count,
                          const uint8_t* block, uint32_t block_size, uint32_t block_index,
@@ -312,20 +308,28 @@ static int updateNodeMap(TreeNode *node, const uint8_t* sequence, uint16_t seq_l
     
     if (value) {
         // If value exists (already in map)
+        #ifdef DEBUG
         printf("\n already in the map \n");
-        result = updateMapValue(value, location, seq_len, &node->headerOverhead);
+        #endif
+        result = updateMapValue(value, location, seq_len);
         free_key(key);  // Free the lookup key
     } else {
+        #ifdef DEBUG    
         printf("\n Not in the map \n");
+        #endif
         // New sequence - the map will take ownership of the key
         uint32_t locs[1] = {location};
         BinSeqValue newValue = create_binseq_value(1, locs, 1);
     
        
         if (binseq_map_put(node->map, key, newValue)) {
+   	        #ifdef DEBUG
         	printf("\n map is updated \n");
         	binseq_map_print(node->map);
+        	#endif
             result = 1;
+            if (seq_len > 1) //todo later will compress for seq_len = 1.
+                node->headerOverhead += getHeaderOverhead((seq_len == 1) ? 0 : 3, seq_len);
             // binseq_map_put now owns the key, don't free it here
         } else {
             free_key(key);
@@ -344,8 +348,7 @@ static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_
                          int best_index[], int32_t best_saving[],
                          const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
                          int to_copy) { 
-                         
-    // Block size validation
+  // Block size validation
     if (block_index >= block_size) {
         fprintf(stderr, "Invalid block_index %u >= block_size %u\n", block_index, block_size);
         return new_nodes_count;
@@ -376,79 +379,79 @@ static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_
     uint8_t isPruned = 0;
     // Check if already a better path exist with same weight (pruning).
     if (!(best_index[new_weight] == -1 || new_saving - oldNode->headerOverhead <= best_saving[new_weight])) {
-        
+        #ifdef DEBUG
         printf("\n\n Pruned \n");
+        #endif
         isPruned = 1;
         //todo free_key(key);
         //todo return new_nodes_count;
     }
 
-    // Initialize new node
-    TreeNode newNode = {0};
+    // Initialize new node - ensure complete zero initialization
+    TreeNode newNode = {0};  // This ensures all pointers start as NULL
     
-    // Configure common node properties
+    // Configure node properties
     newNode.incoming_weight = (new_weight >= SEQ_LENGTH_LIMIT) ? SEQ_LENGTH_LIMIT - 1 : new_weight;
     newNode.headerOverhead = oldNode->headerOverhead;
     newNode.saving_so_far = new_saving;
     newNode.isPruned = isPruned;
-  
- 
-    // Copy sequences from old node if needed
+
+    // Copy sequences
     if (to_copy > 0 && to_copy < COMPRESS_SEQUENCE_LENGTH) {
         copySequences(oldNode, &newNode, to_copy);
     }
-    
-    // Copy map from old node - this now properly handles key ownership
+
+    // Deep copy the map - handles ownership transfer internally
     copyMap(oldNode, &newNode);
- 
-    
+
     // Add new sequence to the node
     if (newNode.compress_sequence_count >= COMPRESS_SEQUENCE_LENGTH) {
-        fprintf(stderr, "\n\n\n Error: newNode.compress_sequence_count(%d) >= COMPRESS_SEQUENCE_LENGTH (%d)\n", 
-            newNode.compress_sequence_count, COMPRESS_SEQUENCE_LENGTH);
+        fprintf(stderr, "\nError: compress_sequence_count overflow\n");
         free_key(key);
         return new_nodes_count;
     }
     newNode.compress_sequence[newNode.compress_sequence_count++] = seq_len;
-  
-   
-    newNode.headerOverhead = oldNode->headerOverhead;
-    // Update node map with the new sequence - this handles key ownership
+
+    // Update node map
     if (!updateNodeMap(&newNode, sequence, seq_len, 
                       (new_weight == 0) ? block_index + 1 - seq_len : block_index)) {
         free_key(key);
         return new_nodes_count;
     }
-    
+
     // Prune previous best if exists
     int weight_index = (new_weight == 0) ? 0 : new_weight;
     if (best_index[weight_index] != -1) {
         new_pool[best_index[weight_index]].isPruned = 1;
-        printf("\n\n Pruned (previous) \n");
     }
     
     // Update tracking
     best_saving[weight_index] = new_saving - oldNode->headerOverhead;
     best_index[weight_index] = new_nodes_count;
-    
-    //cleanup in case.
+
+    /* ===== CRITICAL MEMORY MANAGEMENT SECTION ===== */
+    // 1. Free any existing map in the target node first
     if (new_pool[new_nodes_count].map) {
-	    binseq_map_free(new_pool[new_nodes_count].map);
-	    new_pool[new_nodes_count].map = NULL;
-	}
-	// Store in pool
-    new_pool[new_nodes_count] = newNode;  // shallow copy
-    new_pool[new_nodes_count].map = newNode.map;  // this is already deep-copied by copyMap
+        binseq_map_free(new_pool[new_nodes_count].map);
+        new_pool[new_nodes_count].map = NULL;
+    }
 
-
+    // 2. Copy all non-pointer members
+    memcpy(&new_pool[new_nodes_count], &newNode, sizeof(TreeNode));
     
+    // 3. Transfer map ownership carefully
+    new_pool[new_nodes_count].map = newNode.map;
+    newNode.map = NULL;  // Prevents double-free
+    
+    // 4. Free the temporary key
+    free_key(key);
+    /* ===== END CRITICAL SECTION ===== */
+
     #ifdef DEBUG
     printNode(&new_pool[new_nodes_count], block, block_index);
     #endif
 
-    new_nodes_count++;
-    free_key(key);  // Free the key we created at the start
-    return new_nodes_count;
+    return new_nodes_count + 1;
 }
 
 
@@ -524,10 +527,11 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
 
     even_pool_count = 1;
     odd_pool_count = 0;
-
+	#ifdef DEBUG
     printf("\n\n*************** new root created ********************");
     printNode(&node_pool_even[0], block, 0);    
     printf("\n*******************************************************************");
+    #endif
 }
 
 
@@ -543,9 +547,11 @@ static inline void resetToBestNode(TreeNode* source_pool, int source_count, cons
             best_index = i;
         }
     }
+    #ifdef DEBUG
     printf("\n calling writeCompressedOutput");
     printf("\n====================== resting to :");
     printNode(&source_pool[best_index], block, 0);
+    #endif
     
     //writeCompressedOutput("compress.bin", topSeq, MAX_NUMBER_OF_SEQUENCES, 
       //                   &source_pool[best_index], block);

@@ -96,13 +96,17 @@ BinSeqMap *binseq_map_create(size_t capacity) {
 void binseq_map_free(BinSeqMap *map) {
     if (!map) return;
     
-    // Free all keys and values in the map
+    // Check for NULL entries
+    if (!map->entries) {
+        fprintf(stderr, "Warning: Attempted to free map with NULL entries\n");
+        free(map);
+        return;
+    }
+
+    // Free all keys and values
     for (size_t i = 0; i < map->capacity; i++) {
         if (map->entries[i].used) {
-            // Free the key's binary sequence
             free_key(map->entries[i].key);
-            
-            // Free the value's location array
             free_binseq_value(map->entries[i].value);
         }
     }
@@ -110,6 +114,7 @@ void binseq_map_free(BinSeqMap *map) {
     free(map->entries);
     free(map);
 }
+
 
 
 // Internal function to resize the map when it gets too full
@@ -242,50 +247,44 @@ BinSeqValue *binseq_map_get(BinSeqMap *map, BinSeqKey key) {
 }
 
 void copyMap(struct TreeNode* mapSource, struct TreeNode* mapTarget) {
-    if (!mapSource || !mapTarget || !mapSource->map) {
-        fprintf(stderr, "\ncopyMap parameters are not correct !mapSource=%d !mapTarget=%d !mapSource->map=%d\n", 
-               !mapSource, !mapTarget, !mapSource->map);
+    if (!mapSource || !mapTarget) {
+        fprintf(stderr, "copyMap: Invalid parameters\n");
         return;
     }
-    
-    BinSeqMap *source = mapSource->map;
-    size_t new_capacity = source->capacity + 1;
-    
-    BinSeqMap *target = binseq_map_create(new_capacity);
-    if (!target) {
-        fprintf(stderr, "\nFailed to create target map in copyMap\n");
+
+    // Handle self-copy
+    if (mapTarget == mapSource) return;
+
+    // If source has no map, clear target
+    if (!mapSource->map) {
+        if (mapTarget->map) {
+            binseq_map_free(mapTarget->map);
+            mapTarget->map = NULL;
+        }
         return;
     }
-    
-    for (size_t i = 0; i < source->capacity; i++) {
-        Entry *entry = &source->entries[i];
-        if (entry->used) {
-            // Create a deep copy of the key
-            BinSeqKey key_copy = copy_key(entry->key);
-            if (!key_copy.binary_sequence) {
-                fprintf(stderr, "\nUnable to copy key in copyMap\n");
-                continue;
+
+    // Create new map
+    BinSeqMap *target = binseq_map_create(mapSource->map->capacity + 1);
+    if (!target) return;
+
+    // Deep copy entries
+    for (size_t i = 0; i < mapSource->map->capacity; i++) {
+        Entry *src = &mapSource->map->entries[i];
+        if (src->used) {
+            BinSeqKey key = copy_key(src->key);
+            BinSeqValue val = create_binseq_value(src->value.frequency, 
+                                                src->value.seqLocation,
+                                                src->value.seqLocationLength);
+            if (!binseq_map_put(target, key, val)) {
+                free_key(key);
+                free_binseq_value(val);
             }
-            
-            // Create a deep copy of the value
-            BinSeqValue value_copy = create_binseq_value(
-                entry->value.frequency,
-                entry->value.seqLocation,
-                entry->value.seqLocationLength
-            );
-            
-            // Put the copies into the new map
-            if (!binseq_map_put(target, key_copy, value_copy)) {
-                free_key(key_copy);
-                free_binseq_value(value_copy);
-                fprintf(stderr, "\nFailed to insert entry during copyMap\n");
-            }
-            // binseq_map_put takes ownership of key_copy and value_copy if successful
         }
     }
-    
-    // Free old map if exists
-    if (mapTarget->map) {
+
+    // Free old map if different
+    if (mapTarget->map && mapTarget->map != mapSource->map) {
         binseq_map_free(mapTarget->map);
     }
     mapTarget->map = target;
@@ -344,7 +343,7 @@ int binseq_value_append_location(BinSeqValue *value, uint32_t loc) {
     if (!value) return 0;
 
     if (value->seqLocationLength >= value->seqLocationCapacity) {
-        uint16_t new_cap = value->seqLocationCapacity * 2;
+        uint16_t new_cap = value->seqLocationCapacity * 2; //exponential growth for better time complexity
         if (new_cap == 0) new_cap = 4;
 
         uint32_t *new_seq = realloc(value->seqLocation, new_cap * sizeof(uint32_t));
