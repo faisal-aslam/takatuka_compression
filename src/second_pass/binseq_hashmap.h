@@ -2,7 +2,6 @@
 #ifndef BINSEQ_HASHMAP_H
 #define BINSEQ_HASHMAP_H
 
-#define COMPRESS_SEQUENCE_LENGTH 10000
 #include <stdint.h>
 #include <stddef.h>
 
@@ -36,6 +35,7 @@ void binseq_map_print(const BinSeqMap* map);
 
 // Special copy function for TreeNode (implementation can see TreeNode definition)
 struct TreeNode;
-void binseq_map_copy_to_node(const BinSeqMap* source, struct TreeNode* target);
+
+int binseq_map_copy_to_node(const BinSeqMap* source, struct TreeNode* target);
 
 #endif

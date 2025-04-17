@@ -7,13 +7,14 @@
 #include "tree_node.h"
 
 // Internal structures
+// In binseq_hashmap.h
 typedef struct {
-    uint8_t* binary_sequence;
-    uint16_t length;
-    uint32_t* locations;
+    uint8_t* binary_sequence;  // Key part
+    uint16_t length;           // Key part
+    uint32_t* locations;       // Value part
     uint16_t location_count;
     uint16_t location_capacity;
-    int frequency;
+    int frequency;             // Value part
     int used;
 } Entry;
 
@@ -259,36 +260,46 @@ void binseq_map_print(const BinSeqMap* map) {
     }
 }
 
-void binseq_map_copy_to_node(const BinSeqMap* source, struct TreeNode* target) {
-    if (!target) return;
+int binseq_map_copy_to_node(const BinSeqMap* source, struct TreeNode* target) {
+    if (!source || !target) return 0;
     
-    // If source is NULL, clear target's map
-    if (!source) {
-        if (target->map) {
-            binseq_map_free(target->map);
-            target->map = NULL;
-        }
-        return;
+    // Free existing map if it exists
+    if (target->map) {
+        binseq_map_free(target->map);
+        target->map = NULL;
     }
-    
-    // Create new map for target
-    BinSeqMap* new_map = binseq_map_create(source->capacity);
-    if (!new_map) return;
-    
+
+    // Create new map
+    target->map = binseq_map_create(source->capacity);
+    if (!target->map) return 0;
+
     // Copy all entries
     for (size_t i = 0; i < source->capacity; i++) {
         const Entry* src = &source->entries[i];
         if (!src->used) continue;
-        
-        if (!binseq_map_put(new_map, 
-                          src->binary_sequence, src->length,
-                          src->frequency, src->locations, src->location_count)) {
-            binseq_map_free(new_map);
-            return;
+
+        // Copy locations array
+        uint32_t* locs_copy = malloc(src->location_count * sizeof(uint32_t));
+        if (!locs_copy) {
+            binseq_map_free(target->map);
+            target->map = NULL;
+            return 0;
         }
+        memcpy(locs_copy, src->locations, src->location_count * sizeof(uint32_t));
+
+        if (!binseq_map_put(target->map, 
+                          src->binary_sequence, 
+                          src->length,
+                          src->frequency, 
+                          locs_copy, 
+                          src->location_count)) {
+            free(locs_copy);
+            binseq_map_free(target->map);
+            target->map = NULL;
+            return 0;
+        }
+        free(locs_copy);
     }
-    
-    // Replace target's map
-    if (target->map) binseq_map_free(target->map);
-    target->map = new_map;
+
+    return 1;
 }

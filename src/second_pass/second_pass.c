@@ -1,5 +1,7 @@
 // src/second_pass/second_pass.c
+// src/second_pass/second_pass.c
 #include "second_pass.h"
+#include "tree_node_pool.h"
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
@@ -14,20 +16,18 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
-TreeNode node_pool_even[MAX_TREE_NODES] = {0};
-TreeNode node_pool_odd[MAX_TREE_NODES] = {0};
-int even_pool_count = 0;
-int odd_pool_count = 0;
+// Global pool manager instance
+TreeNodePoolManager pool_manager = {0};
 
 void print_stacktrace(void);
 
 static int updateNodeMap(TreeNode *node, const uint8_t* sequence, uint16_t seq_len, uint32_t location);
-static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_count,
+static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_nodes_count,
                          const uint8_t* block, uint32_t block_size, uint32_t block_index,
                          int best_index[], int32_t best_saving[],
                          const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
                          int to_copy);
-static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_count,
+static int createNodes(TreeNodePoolManager* old_mgr, TreeNodePoolManager* new_mgr, int old_node_count,
                      const uint8_t* block, uint32_t block_size, uint32_t block_index);
 static int validate_block_access(const uint8_t* block, uint32_t block_size, uint32_t offset, uint16_t length);
 
@@ -80,17 +80,25 @@ static void printNode(TreeNode *node, const uint8_t* block, uint32_t block_index
 }
 
 void cleanup_node_pools() {
-    for (int i = 0; i < MAX_TREE_NODES; i++) {
-        if (node_pool_even[i].map) {
-            binseq_map_free(node_pool_even[i].map);
-            node_pool_even[i].map = NULL;
+    for (int i = 0; i < 2; i++) {
+        TreeNodePool* pool = &pool_manager.pool[i];
+        for (size_t j = 0; j < pool->size; j++) {
+            if (pool->data[j].map) {
+                binseq_map_free(pool->data[j].map);
+                pool->data[j].map = NULL;
+            }
         }
-        if (node_pool_odd[i].map) {
-            binseq_map_free(node_pool_odd[i].map);
-            node_pool_odd[i].map = NULL;
+        // Free the pool data if needed
+        if (pool->data) {
+            free(pool->data);
+            pool->data = NULL;
+            pool->size = 0;
+            pool->capacity = 0;
         }
     }
+    init_tree_node_pool_manager(&pool_manager);
 }
+
 
 static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap *map) {
     if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !map) {
@@ -119,12 +127,10 @@ static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, B
 static int updateMapValue(BinSeqMap* map, const uint8_t* sequence, uint16_t seq_len, uint32_t location) {
     if (!map || !sequence || seq_len == 0) return 0;
     
-    // Try to append to existing entry
     if (binseq_map_append_location(map, sequence, seq_len, location)) {
         return 1;
     }
     
-    // If append failed, create new entry
     uint32_t locs[1] = {location};
     if (binseq_map_put(map, sequence, seq_len, 1, locs, 1)) {
         return 1;
@@ -158,12 +164,23 @@ static BinarySequence* isValidSequence(uint16_t sequence_length, const uint8_t* 
     return lookupSequence(lastSequence, sequence_length);
 }
 
-static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_count,
-                     const uint8_t* block, uint32_t block_size, uint32_t block_index) {
-    if (!old_pool || !new_pool || !block || old_node_count < 0) {
+static int createNodes(TreeNodePoolManager* old_mgr, TreeNodePoolManager* new_mgr, int old_node_count,
+    const uint8_t* block, uint32_t block_size, uint32_t block_index) {
+
+    if (!old_mgr || !new_mgr || !block || old_node_count < 0) {
         return 0;
     }
 
+    TreeNodePool* old_pool = &old_mgr->pool[old_mgr->active_index ^ 1]; // Get inactive pool
+    TreeNodePool* new_pool = &new_mgr->pool[new_mgr->active_index];
+
+    if (old_node_count > old_pool->size) {
+        fprintf(stderr, "Error: old_node_count (%d) exceeds pool size (%zu)\n", 
+        old_node_count, old_pool->size);
+        return 0;
+    }
+
+       
     int best_index[SEQ_LENGTH_LIMIT+1];
     int32_t best_saving[SEQ_LENGTH_LIMIT+1];
     
@@ -173,12 +190,13 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
     }
 
     int new_nodes_count = 0;
+    
     for (int j = 0; j < old_node_count; j++) {
-        TreeNode *oldNode = &old_pool[j];
+        TreeNode *oldNode = &old_pool->data[j];
         if (oldNode->isPruned) continue;
 
         // Process uncompressed path
-        new_nodes_count = processNodePath(oldNode, new_pool, new_nodes_count,
+        new_nodes_count = processNodePath(oldNode, new_mgr, new_nodes_count,
                                         block, block_size, block_index, best_index, best_saving,
                                         &block[block_index], 1, oldNode->incoming_weight + 1,
                                         oldNode->compress_sequence_count);
@@ -193,7 +211,7 @@ static int createNodes(TreeNode *old_pool, TreeNode *new_pool, int old_node_coun
             }
             
             const uint8_t* seq_start = &block[block_index + 1 - seq_len];
-            new_nodes_count = processNodePath(oldNode, new_pool, new_nodes_count,
+            new_nodes_count = processNodePath(oldNode, new_mgr, new_nodes_count,
                                             block, block_size, block_index, best_index, best_saving,
                                             seq_start, seq_len, 0,
                                             oldNode->compress_sequence_count - oldNode->incoming_weight + k);
@@ -220,74 +238,97 @@ static int updateNodeMap(TreeNode *node, const uint8_t* sequence, uint16_t seq_l
     return 1;
 }
 
-static int processNodePath(TreeNode *oldNode, TreeNode *new_pool, int new_nodes_count,
-                         const uint8_t* block, uint32_t block_size, uint32_t block_index,
-                         int best_index[], int32_t best_saving[],
-                         const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
-                         int to_copy) {
-    if (block_index >= block_size || seq_len == 0 || seq_len > COMPRESS_SEQUENCE_LENGTH) {
+static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_nodes_count,
+    const uint8_t* block, uint32_t block_size, uint32_t block_index,
+    int best_index[], int32_t best_saving[],
+    const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
+    int to_copy) {
+
+    // Validations
+    if (!oldNode || !mgr || !block || block_index >= block_size) {
         return new_nodes_count;
     }
     
+    if (block_index >= block_size || seq_len == 0 || seq_len > COMPRESS_SEQUENCE_LENGTH) {
+            return new_nodes_count;
+    }
+        
     uint32_t seq_start_offset = (new_weight == 0) ? block_index + 1 - seq_len : block_index;
     if (seq_start_offset >= block_size || (seq_start_offset + seq_len) > block_size) {
         return new_nodes_count;
     }
-    
+        
     int32_t new_saving = calculateSavings(sequence, seq_len, oldNode->map) + oldNode->saving_so_far;
     uint8_t isPruned = 0;
-    
+        
     if (!(best_index[new_weight] == -1 || new_saving - oldNode->headerOverhead <= best_saving[new_weight])) {
         isPruned = 1;
     }
+    
 
-    TreeNode newNode = {0};
-    newNode.incoming_weight = (new_weight >= SEQ_LENGTH_LIMIT) ? SEQ_LENGTH_LIMIT - 1 : new_weight;
-    newNode.headerOverhead = oldNode->headerOverhead;
-    newNode.saving_so_far = new_saving;
-    newNode.isPruned = isPruned;
-
+        
+    TreeNode* newNode = alloc_tree_node(mgr);
+    if (!newNode) {
+        return new_nodes_count;
+    }
+    
+    // Initialize new node
+    memset(newNode, 0, sizeof(TreeNode));
+    newNode->incoming_weight = (new_weight >= SEQ_LENGTH_LIMIT) ? SEQ_LENGTH_LIMIT - 1 : new_weight;
+    newNode->headerOverhead = oldNode->headerOverhead;
+    newNode->saving_so_far = new_saving;
+    newNode->isPruned = isPruned;
+    
+    // Copy sequences if needed
     if (to_copy > 0 && to_copy < COMPRESS_SEQUENCE_LENGTH) {
-        copySequences(oldNode, &newNode, to_copy);
+        copySequences(oldNode, newNode, to_copy);
     }
-
-    // Create new map for the node
-    newNode.map = binseq_map_create(binseq_map_capacity(oldNode->map) + 1);
-    if (!newNode.map) {
+    
+    // Create and copy the map
+    newNode->map = binseq_map_create(binseq_map_capacity(oldNode->map) + 1);
+    if (!newNode->map) {
         return new_nodes_count;
     }
-    binseq_map_copy_to_node(oldNode->map, &newNode);
-
-    if (newNode.compress_sequence_count >= COMPRESS_SEQUENCE_LENGTH) {
-        binseq_map_free(newNode.map);
+    
+    if (!binseq_map_copy_to_node(oldNode->map, newNode)) {
+        binseq_map_free(newNode->map);
         return new_nodes_count;
     }
-    newNode.compress_sequence[newNode.compress_sequence_count++] = seq_len;
-
-    if (!updateNodeMap(&newNode, sequence, seq_len, 
-                      (new_weight == 0) ? block_index + 1 - seq_len : block_index)) {
-        binseq_map_free(newNode.map);
+    
+    // Add the new sequence
+    if (newNode->compress_sequence_count >= COMPRESS_SEQUENCE_LENGTH) {
+        binseq_map_free(newNode->map);
         return new_nodes_count;
     }
+
+    newNode->compress_sequence[newNode->compress_sequence_count++] = seq_len;
+
+    // Update the map with new location
+    if (!updateNodeMap(newNode, sequence, seq_len, (new_weight == 0) ? block_index + 1 - seq_len : block_index)) {
+        binseq_map_free(newNode->map);
+        return new_nodes_count;
+    }
+
 
     int weight_index = (new_weight == 0) ? 0 : new_weight;
     if (best_index[weight_index] != -1) {
-        new_pool[best_index[weight_index]].isPruned = 1;
+        TreeNodePool* pool = &mgr->pool[mgr->active_index];
+        TreeNode* prev_node = &pool->data[best_index[weight_index]];
+        if (prev_node->map) {
+            binseq_map_free(prev_node->map);
+            prev_node->map = NULL;
+        }
+        prev_node->isPruned = 1;
     }
-    
+
+
     best_saving[weight_index] = new_saving - oldNode->headerOverhead;
     best_index[weight_index] = new_nodes_count;
 
-    if (new_pool[new_nodes_count].map) {
-        binseq_map_free(new_pool[new_nodes_count].map);
-    }
-
-    memcpy(&new_pool[new_nodes_count], &newNode, sizeof(TreeNode));
-    new_pool[new_nodes_count].map = newNode.map;
-    newNode.map = NULL;
-
     return new_nodes_count + 1;
 }
+
+
 
 static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     if (!block || block_size == 0) {
@@ -295,52 +336,56 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     }
 
     cleanup_node_pools();
-    memset(node_pool_even, 0, sizeof(node_pool_even));
-    memset(node_pool_odd, 0, sizeof(node_pool_odd));
 
-    TreeNode root = {0};
-    root.headerOverhead = 4;
-    root.compress_sequence[0] = 1;
-    root.compress_sequence_count = 1;
-    root.incoming_weight = 1;
+    TreeNode* root = alloc_tree_node(&pool_manager);
+    if (!root) {
+        fprintf(stderr, "FATAL: Failed to allocate root node\n");
+        exit(EXIT_FAILURE);
+    }
 
-    root.map = binseq_map_create(16);
-    if (!root.map) {
+
+    // Initialize the node
+    memset(root, 0, sizeof(TreeNode));
+    root->headerOverhead = 4;
+    root->compress_sequence[0] = 1;
+    root->compress_sequence_count = 1;
+    root->incoming_weight = 1;
+
+    // Create and populate the map
+    root->map = binseq_map_create(16);
+    if (!root->map) {
         fprintf(stderr, "FATAL: Failed to create root map\n");
         exit(EXIT_FAILURE);
     }
 
     uint32_t locs[1] = {0};
-    if (!binseq_map_put(root.map, &block[0], 1, 1, locs, 1)) {
-        binseq_map_free(root.map);
-        return;
+    if (!binseq_map_put(root->map, &block[0], 1, 1, locs, 1)) {
+        binseq_map_free(root->map);
+        root->map = NULL;
+        fprintf(stderr, "Warning: Failed to add root sequence to map\n");
+        //return;
     }
 
-    root.saving_so_far = calculateSavings(&block[0], 1, root.map);
-
-    if (node_pool_even[0].map) {
-        binseq_map_free(node_pool_even[0].map);
-    }
-    node_pool_even[0] = root;
-    root.map = NULL;
-
-    even_pool_count = 1;
-    odd_pool_count = 0;
+    root->saving_so_far = calculateSavings(&block[0], 1, root->map);
 }
 
-static inline void resetToBestNode(TreeNode* source_pool, int source_count, const uint8_t* block, uint32_t block_index) {
+static inline void resetToBestNode(TreeNodePoolManager* mgr, int node_count, const uint8_t* block, uint32_t block_index) {
     int32_t max_saving = INT_MIN;
     int best_index = 0;
+    TreeNodePool* pool = &mgr->pool[mgr->active_index];
     
-    for (int i = 0; i < source_count; i++) {
-        if (totalSavings(&source_pool[i]) > max_saving) {
-            max_saving = totalSavings(&source_pool[i]);
+    for (int i = 0; i < node_count; i++) {
+        if (totalSavings(&pool->data[i]) > max_saving) {
+            max_saving = totalSavings(&pool->data[i]);
             best_index = i;
         }
     }
     
+    // Write compressed output here if needed
+    // writeCompressedOutput("output.bin", ...);
+    
     cleanup_node_pools();
-    exit(1);
+    exit(0);  // Use exit(0) instead of exit(1) for normal termination
 }
 
 void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
@@ -358,31 +403,33 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
     for (blockIndex = 1; blockIndex < block_size; blockIndex++) {
         if (blockIndex % COMPRESS_SEQUENCE_LENGTH == 0) {
             restedOnce = 1;
-            if (isEven) {
-                resetToBestNode(node_pool_odd, odd_pool_count, block, blockIndex);
-            } else {
-                resetToBestNode(node_pool_even, even_pool_count, block, blockIndex);
-            }
+            resetToBestNode(&pool_manager, 
+                          pool_manager.pool[pool_manager.active_index].size,
+                          block, blockIndex);
             isEven = 0;
         }
 
+        // Switch pools and get the correct size
+        switch_tree_node_pool(&pool_manager);
+        int old_pool_size = pool_manager.pool[pool_manager.active_index ^ 1].size;
+        
         if (isEven) {
-            even_pool_count = createNodes(node_pool_odd, node_pool_even, 
-                                        odd_pool_count, block, block_size, blockIndex);
+            createNodes(&pool_manager, &pool_manager, 
+                      old_pool_size,
+                      block, block_size, blockIndex);
         } else {
-            odd_pool_count = createNodes(node_pool_even, node_pool_odd,
-                                       even_pool_count, block, block_size, blockIndex);
+            createNodes(&pool_manager, &pool_manager,
+                      old_pool_size,
+                      block, block_size, blockIndex);
         }
         
         isEven = !isEven;
     }
     
     if (!restedOnce) {
-        if (isEven) {
-            resetToBestNode(node_pool_odd, odd_pool_count, block, blockIndex);
-        } else {
-            resetToBestNode(node_pool_even, even_pool_count, block, blockIndex);
-        }
+        resetToBestNode(&pool_manager, 
+                      pool_manager.pool[pool_manager.active_index].size,
+                      block, blockIndex);
     }
     
     cleanup_node_pools();
@@ -392,9 +439,11 @@ void processSecondPass(const char* filename) {
     FILE* file = fopen(filename, "rb");
     if (!file) {
         perror("Failed to open file");
-        cleanup_node_pools(); 
         return;
     }
+
+    // Initialize pool manager first
+    init_tree_node_pool_manager(&pool_manager);
 
     uint8_t* block = malloc(BLOCK_SIZE);
     if (!block) {
