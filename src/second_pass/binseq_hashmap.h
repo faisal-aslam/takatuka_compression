@@ -4,60 +4,37 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <stdio.h>
-#include "xxhash.h"
-#define COMPRESS_SEQUENCE_LENGTH 10000 //We have to prune tree whenever we reach this length.
 
-// Forward declaration instead of including tree_node.h
-struct TreeNode;
-
-typedef struct {
-    uint8_t* binary_sequence;
-    uint16_t length;
-} BinSeqKey;
-
-typedef struct {
-    int frequency;
-    uint32_t *seqLocation;
-    uint16_t seqLocationLength;
-    uint16_t seqLocationCapacity;
-} BinSeqValue;
-
+// Opaque pointer to hide implementation details
 typedef struct BinSeqMap BinSeqMap;
 
-/**
-* Create a new map with specified capacity.
-*/
-BinSeqMap *binseq_map_create(size_t capacity);
+// Create/destroy functions
+BinSeqMap* binseq_map_create(size_t initial_capacity);
+void binseq_map_free(BinSeqMap* map);
 
-/**
-* Puts a key-value pair into the map. The map takes ownership of both
-* the key and value, and will free them when destroyed.
-*/
-int binseq_map_put(BinSeqMap *map, BinSeqKey key, BinSeqValue value);
+// Map operations
+int binseq_map_put(BinSeqMap* map, 
+                  const uint8_t* key_sequence, uint16_t key_length,
+                  int value_frequency, const uint32_t* value_locations, uint16_t value_location_count);
 
-BinSeqValue *binseq_map_get(BinSeqMap *map, BinSeqKey key);
+const int* binseq_map_get_frequency(const BinSeqMap* map, 
+                                   const uint8_t* key_sequence, uint16_t key_length);
 
-/**
-* Copy map from one node to another. It always increment the map capacity by 1.
-*/
-void copyMap(struct TreeNode* mapSource, struct TreeNode* mapTarget);
+const uint32_t* binseq_map_get_locations(const BinSeqMap* map, 
+                                        const uint8_t* key_sequence, uint16_t key_length,
+                                        uint16_t* out_location_count);
 
-BinSeqKey create_binseq_key(const uint8_t* sequence, uint16_t length);
-BinSeqValue create_binseq_value(int frequency, const uint32_t* locations, uint16_t location_count);
-int binseq_value_append_location(BinSeqValue *value, uint32_t loc);
+int binseq_map_append_location(BinSeqMap* map, 
+                             const uint8_t* key_sequence, uint16_t key_length,
+                             uint32_t new_location);
 
-void binseq_map_print(BinSeqMap *map);
+// Utility functions
+size_t binseq_map_size(const BinSeqMap* map);
+size_t binseq_map_capacity(const BinSeqMap* map);
+void binseq_map_print(const BinSeqMap* map);
 
-size_t get_map_size(BinSeqMap* map);
-size_t get_map_capacity(BinSeqMap* map);
-
-/**
-* Functions to free map, value, and keys.
-*/
-void free_key(BinSeqKey key);
-void binseq_map_free(BinSeqMap *map);
-void free_binseq_value(BinSeqValue value);
+// Special copy function for TreeNode (implementation can see TreeNode definition)
+struct TreeNode;
+void binseq_map_copy_to_node(const BinSeqMap* source, struct TreeNode* target);
 
 #endif
-
