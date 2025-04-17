@@ -8,6 +8,7 @@
 #include "../weighted_freq.h"
 #include "tree_node.h"
 
+
 #define MAX_TREE_NODES COMPRESS_SEQUENCE_LENGTH
 #define SAVING_GAP SEQ_LENGTH_LIMIT*10
 
