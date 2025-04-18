@@ -390,7 +390,7 @@ static inline void resetToBestNode(TreeNodePoolManager* mgr, int node_count, con
     int32_t max_saving = INT_MIN;
     int best_index = 0;
     TreeNodePool* pool = &mgr->pool[mgr->active_index];
-    #ifdef DEBIG
+    #ifdef DEBUG
     printf("\n\n --------------- Best path ------------------node_count=%d \n", node_count);
     #endif
 
@@ -401,8 +401,8 @@ static inline void resetToBestNode(TreeNodePoolManager* mgr, int node_count, con
             best_index = i;
         }
     }
-    #ifdef DEBIG
-    printNode(pool->data[best_index], block, block_index);
+    #ifdef DEBUG
+    printNode(&pool->data[best_index], block, block_index);
     #endif
     
     // Write compressed output here if needed
@@ -421,12 +421,11 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
     
     createRoot(block, block_size);
     uint8_t isEven = 0;
-    uint32_t blockIndex;
-    uint8_t restedOnce = 0;
+    uint32_t blockIndex;    
     
     for (blockIndex = 1; blockIndex < block_size; blockIndex++) {
         if (blockIndex % COMPRESS_SEQUENCE_LENGTH == 0) {
-            restedOnce = 1;
+            
             resetToBestNode(&pool_manager, 
                           pool_manager.pool[pool_manager.active_index].size,
                           block, blockIndex);
@@ -446,11 +445,7 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
         isEven = !isEven;
     }
     
-    if (!restedOnce) {
-        resetToBestNode(&pool_manager, 
-                      pool_manager.pool[pool_manager.active_index].size,
-                      block, blockIndex);
-    }
+    resetToBestNode(&pool_manager, pool_manager.pool[pool_manager.active_index].size, block, blockIndex);
     
     cleanup_node_pools();
 }
