@@ -21,13 +21,12 @@ TreeNodePoolManager pool_manager = {0};
 
 void print_stacktrace(void);
 
-static int updateNodeMap(TreeNode *node, const uint8_t* sequence, uint16_t seq_len, uint32_t location);
 static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_nodes_count,
                          const uint8_t* block, uint32_t block_size, uint32_t block_index,
                          int best_index[], int32_t best_saving[],
                          const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
                          int to_copy);
-static int createNodes(TreeNodePoolManager* old_mgr, TreeNodePoolManager* new_mgr, int old_node_count,
+static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
                      const uint8_t* block, uint32_t block_size, uint32_t block_index);
 static int validate_block_access(const uint8_t* block, uint32_t block_size, uint32_t offset, uint16_t length);
 
@@ -124,8 +123,12 @@ static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, B
     return savings;
 }
 
-static int updateMapValue(BinSeqMap* map, const uint8_t* sequence, uint16_t seq_len, uint32_t location) {
-    if (!map || !sequence || seq_len == 0) return 0;
+static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_len, uint32_t location) {
+	BinSeqMap* map = node->map;
+    if (!map || !sequence || seq_len == 0) {
+    	fprintf(stderr, "\n unable to update map value ");
+    	return 0;
+    }
     
     if (binseq_map_append_location(map, sequence, seq_len, location)) {
         return 1;
@@ -133,6 +136,9 @@ static int updateMapValue(BinSeqMap* map, const uint8_t* sequence, uint16_t seq_
     
     uint32_t locs[1] = {location};
     if (binseq_map_put(map, sequence, seq_len, 1, locs, 1)) {
+        if (seq_len > 1) {
+	        node->headerOverhead += getHeaderOverhead((seq_len == 1) ? 0 : 3, seq_len);
+	    }
         return 1;
     }
     
@@ -164,15 +170,15 @@ static BinarySequence* isValidSequence(uint16_t sequence_length, const uint8_t* 
     return lookupSequence(lastSequence, sequence_length);
 }
 
-static int createNodes(TreeNodePoolManager* old_mgr, TreeNodePoolManager* new_mgr, int old_node_count,
+static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
     const uint8_t* block, uint32_t block_size, uint32_t block_index) {
 
-    if (!old_mgr || !new_mgr || !block || old_node_count < 0) {
+    if (!mgr || !block || old_node_count < 0) {
         return 0;
     }
 
-    TreeNodePool* old_pool = &old_mgr->pool[old_mgr->active_index ^ 1]; // Get inactive pool
-    TreeNodePool* new_pool = &new_mgr->pool[new_mgr->active_index];
+    TreeNodePool* old_pool = &mgr->pool[mgr->active_index ^ 1]; // Get inactive pool
+    TreeNodePool* new_pool = &mgr->pool[mgr->active_index];
 
     if (old_node_count > old_pool->size) {
         fprintf(stderr, "Error: old_node_count (%d) exceeds pool size (%zu)\n", 
@@ -204,7 +210,7 @@ static int createNodes(TreeNodePoolManager* old_mgr, TreeNodePoolManager* new_mg
 		printf("\n uncompressed path \n");
 		#endif
         // Process uncompressed path
-        new_nodes_count = processNodePath(oldNode, new_mgr, new_nodes_count,
+        new_nodes_count = processNodePath(oldNode, mgr, new_nodes_count,
                                         block, block_size, block_index, best_index, best_saving,
                                         &block[block_index], 1, oldNode->incoming_weight + 1,
                                         oldNode->compress_sequence_count);
@@ -224,7 +230,7 @@ static int createNodes(TreeNodePoolManager* old_mgr, TreeNodePoolManager* new_mg
             }
             
             const uint8_t* seq_start = &block[block_index + 1 - seq_len];
-            new_nodes_count = processNodePath(oldNode, new_mgr, new_nodes_count,
+            new_nodes_count = processNodePath(oldNode, mgr, new_nodes_count,
                                             block, block_size, block_index, best_index, best_saving,
                                             seq_start, seq_len, 0,
                                             oldNode->compress_sequence_count - oldNode->incoming_weight + k);
@@ -232,23 +238,6 @@ static int createNodes(TreeNodePoolManager* old_mgr, TreeNodePoolManager* new_mg
     }
 
     return new_nodes_count;
-}
-
-static int updateNodeMap(TreeNode *node, const uint8_t* sequence, uint16_t seq_len, uint32_t location) {
-    if (!node || !node->map || !sequence || seq_len == 0 || location >= BLOCK_SIZE || 
-        (location + seq_len) > BLOCK_SIZE) {
-        return 0;
-    }
-    
-    if (!updateMapValue(node->map, sequence, seq_len, location)) {
-        return 0;
-    }
-    
-    if (seq_len > 1) {
-        node->headerOverhead += getHeaderOverhead((seq_len == 1) ? 0 : 3, seq_len);
-    }
-    
-    return 1;
 }
 
 static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_nodes_count,
@@ -304,7 +293,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     if (!newNode->map) {
    		fprintf(stderr,"\n map creation failed \n");
         return new_nodes_count;
-    }
+    } 
     
     if (!binseq_map_copy_to_node(oldNode->map, newNode)) {
         binseq_map_free(newNode->map);
@@ -322,7 +311,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     newNode->compress_sequence[newNode->compress_sequence_count++] = seq_len;
 
     // Update the map with new location
-    if (!updateNodeMap(newNode, sequence, seq_len, (new_weight == 0) ? block_index + 1 - seq_len : block_index)) {
+    if (!updateMapValue(newNode, sequence, seq_len, (new_weight == 0) ? block_index + 1 - seq_len : block_index)) {
         binseq_map_free(newNode->map);
        	fprintf(stderr,"\n Update node map failed \n");
         return new_nodes_count;
@@ -401,6 +390,10 @@ static inline void resetToBestNode(TreeNodePoolManager* mgr, int node_count, con
     int32_t max_saving = INT_MIN;
     int best_index = 0;
     TreeNodePool* pool = &mgr->pool[mgr->active_index];
+    #ifdef DEBIG
+    printf("\n\n --------------- Best path ------------------node_count=%d \n", node_count);
+    #endif
+
     
     for (int i = 0; i < node_count; i++) {
         if (totalSavings(&pool->data[i]) > max_saving) {
@@ -409,7 +402,6 @@ static inline void resetToBestNode(TreeNodePoolManager* mgr, int node_count, con
         }
     }
     #ifdef DEBIG
-    printf("\n\n --------------- Best path ------------------ \n);
     printNode(pool->data[best_index], block, block_index);
     #endif
     
@@ -446,13 +438,9 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
         int old_pool_size = pool_manager.pool[pool_manager.active_index ^ 1].size;
         
         if (isEven) {
-            createNodes(&pool_manager, &pool_manager, 
-                      old_pool_size,
-                      block, block_size, blockIndex);
+            createNodes(&pool_manager, old_pool_size, block, block_size, blockIndex);
         } else {
-            createNodes(&pool_manager, &pool_manager,
-                      old_pool_size,
-                      block, block_size, blockIndex);
+            createNodes(&pool_manager, old_pool_size, block, block_size, blockIndex);
         }
         
         isEven = !isEven;
