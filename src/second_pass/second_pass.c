@@ -31,8 +31,16 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
 static int validate_block_access(const uint8_t* block, uint32_t block_size, uint32_t offset, uint16_t length);
 
 static inline int32_t totalSavings(TreeNode *node) {
-    if (!node) return 0;
-    return (node->saving_so_far - node->headerOverhead);
+    if (!node) return INT_MIN;  // Return minimum value for invalid node
+    
+    // Calculate net savings (could be positive or negative)
+    int32_t net_savings = node->saving_so_far - node->headerOverhead;
+    
+    // Clamp to valid range
+    if (net_savings > INT_MAX) return INT_MAX;
+    if (net_savings < INT_MIN) return INT_MIN;
+    
+    return net_savings;
 }
 
 static void printNode(TreeNode *node, const uint8_t* block, uint32_t block_index) {
@@ -102,21 +110,26 @@ void cleanup_node_pools() {
 static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap *map) {
     if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !map) {
         fprintf(stderr, "Error: Invalid parameters in calculateSavings\n");
-        return 0;
+        return INT_MIN;  // Return minimum value to indicate invalid case
     }
     
-    const int* freq = binseq_map_get_frequency(map, newBinSeq, seq_length);
-    if (!freq) {
-        return -(long)(seq_length);
-    }
+    //at the moment I do not support seq_length 1 compression this might change in future.
+    if (seq_length == 1) {
+        return -(int32_t)(seq_length);
+    }    
     
     int group = (seq_length == 1) ? 0 : 3;
-    long originalSizeBits = (long)(seq_length * 8);
-    long compressedSizeBits = (long)(groupCodeSize(group) + groupOverHead(group));
-    long savings = originalSizeBits - compressedSizeBits;
+    int32_t originalSizeBits = (long)(seq_length * 8);
+    int32_t compressedSizeBits = (long)(groupCodeSize(group) + groupOverHead(group));
+    int32_t savings = originalSizeBits - compressedSizeBits;
+    
+    // Ensure we don't overflow when converting to int32_t
+    if (savings > INT_MAX) return INT_MAX;
+    if (savings < INT_MIN) return INT_MIN;
     
     return savings;
 }
+
 
 static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_len, uint32_t location) {
 	BinSeqMap* map = node->map;
@@ -198,6 +211,7 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
 		#ifdef DEBUG
 		printf("\n******************** old node to process ***************** \n");
 		printNode(oldNode, block, block_index);
+        printf("\n********************************************************** \n");
 		#endif
 
 	
@@ -256,13 +270,21 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     }
     
     
-    int32_t new_saving = calculateSavings(sequence, seq_len, oldNode->map) + oldNode->saving_so_far;
-    uint8_t isPruned = 0;
-        
-    if (!(best_index[new_weight] == -1 || new_saving - oldNode->headerOverhead <= best_saving[new_weight])) {
-        isPruned = 1;
+    int32_t new_saving = calculateSavings(sequence, seq_len, oldNode->map);
+    if (new_saving == INT_MIN) {
+        // Invalid case, skip this path
+        return new_nodes_count;
     }
     
+    new_saving += oldNode->saving_so_far;
+    uint8_t isPruned = 0;
+        
+    // Only prune if we have a better alternative (even if savings are negative)
+    if (best_index[new_weight] != -1 && 
+        new_saving - oldNode->headerOverhead <= best_saving[new_weight]) {
+        isPruned = 1;
+    }
+
 
     TreeNode* newNode = alloc_tree_node(mgr);
     if (!newNode) {
@@ -328,6 +350,12 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
 
     best_saving[weight_index] = new_saving - oldNode->headerOverhead;
     best_index[weight_index] = new_nodes_count;
+
+    #ifdef DEBUG
+    printf("\n new node created \n");
+    printNode(newNode, block, block_index);
+    #endif
+
 
     return new_nodes_count + 1;
 }
