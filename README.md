@@ -1,2 +1,2 @@
 # Takatuka Compression Algorithm
-A fast optimal compression algorithm for all kind of data.
+A fast optimal compression algorithm for generic binary data.
