@@ -91,7 +91,7 @@ static int resize_map(BinSeqMap* map, size_t new_capacity) {
 BinSeqMap* binseq_map_create(size_t initial_capacity) {
     if (initial_capacity == 0) initial_capacity = 16;
     
-    BinSeqMap* map = malloc(sizeof(BinSeqMap));
+    BinSeqMap* map = calloc(1, sizeof(BinSeqMap));
     if (!map) return NULL;
     
     map->entries = calloc(initial_capacity, sizeof(Entry));
@@ -108,15 +108,20 @@ BinSeqMap* binseq_map_create(size_t initial_capacity) {
 void binseq_map_free(BinSeqMap* map) {
     if (!map) return;
     
-    for (size_t i = 0; i < map->capacity; i++) {
-        Entry* entry = &map->entries[i];
-        if (entry->used) {
-            free(entry->binary_sequence);
-            free(entry->locations);
+    if (map->entries) {
+        for (size_t i = 0; i < map->capacity; i++) {
+            Entry* entry = &map->entries[i];
+            if (entry->used) {
+                free(entry->binary_sequence);
+                free(entry->locations);
+                // Clear the entry
+                memset(entry, 0, sizeof(Entry));
+            }
         }
+        free(map->entries);
+        map->entries = NULL;
     }
     
-    free(map->entries);
     free(map);
 }
 
@@ -238,15 +243,15 @@ size_t binseq_map_capacity(const BinSeqMap* map) {
 }
 
 void binseq_map_print(const BinSeqMap* map) {
-    if (!map) {
-        printf("Map is NULL\n");
+    if (!map || !map->entries) {  // Add check for entries
+        fprintf(stderr, "Map is NULL or corrupted\n");
         return;
     }
     
     printf("Map (size=%zu, capacity=%zu):\n", map->size, map->capacity);
     for (size_t i = 0; i < map->capacity; i++) {
         const Entry* entry = &map->entries[i];
-        if (!entry->used) continue;
+        if (!entry || !entry->used) continue;  // Skip NULL or unused entries
         
         printf("  [%zu] Key (len=%u): ", i, entry->length);
         for (uint16_t j = 0; j < entry->length; j++) {
@@ -261,45 +266,50 @@ void binseq_map_print(const BinSeqMap* map) {
 }
 
 int binseq_map_copy_to_node(const BinSeqMap* source, struct TreeNode* target) {
-    if (!source || !target) return 0;
-    
-    // Free existing map if it exists
-    if (target->map) {
-        binseq_map_free(target->map);
-        target->map = NULL;
+    // More thorough validation
+    if (!source || !target || !source->entries || source->capacity == 0 || source->size == 0) {
+        fprintf(stderr, "Invalid source map or target node\n");
+        return 0;
     }
 
-    // Create new map
-    target->map = binseq_map_create(source->capacity);
-    if (!target->map) return 0;
+    BinSeqMap* new_map = binseq_map_create(source->capacity);
+    if (!new_map) {
+        fprintf(stderr, "Failed to create new map\n");
+        return 0;
+    }
 
-    // Copy all entries
     for (size_t i = 0; i < source->capacity; i++) {
         const Entry* src = &source->entries[i];
         if (!src->used) continue;
 
-        // Copy locations array
+        // Skip invalid entries
+        if (!src->binary_sequence || src->length == 0) {
+            fprintf(stderr, "Skipping invalid map entry\n");
+            continue;
+        }
+
         uint32_t* locs_copy = malloc(src->location_count * sizeof(uint32_t));
         if (!locs_copy) {
-            binseq_map_free(target->map);
-            target->map = NULL;
+            fprintf(stderr, "Failed to allocate locations copy\n");
+            binseq_map_free(new_map);
             return 0;
         }
         memcpy(locs_copy, src->locations, src->location_count * sizeof(uint32_t));
 
-        if (!binseq_map_put(target->map, 
-                          src->binary_sequence, 
-                          src->length,
-                          src->frequency, 
-                          locs_copy, 
-                          src->location_count)) {
+        if (!binseq_map_put(new_map, src->binary_sequence, src->length,
+                          src->frequency, locs_copy, src->location_count)) {
+            fprintf(stderr, "Failed to put entry in new map\n");
             free(locs_copy);
-            binseq_map_free(target->map);
-            target->map = NULL;
+            binseq_map_free(new_map);
             return 0;
         }
         free(locs_copy);
     }
 
+    // Only free old map after successful copy
+    if (target->map) {
+        binseq_map_free(target->map);
+    }
+    target->map = new_map;
     return 1;
 }
