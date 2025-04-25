@@ -12,7 +12,7 @@
 */
 uint8_t getHeaderOverhead(uint8_t group, uint16_t seq_length) {
 	if (group < TOTAL_GROUPS) {
-		return 3+seq_length+2+groupCodeSize(group);
+		return 3+(seq_length*8)+2+groupCodeSize(group);
 	} else {		
         fprintf(stderr, "Invalid group %d Exiting!\n", group);
         print_stacktrace();
