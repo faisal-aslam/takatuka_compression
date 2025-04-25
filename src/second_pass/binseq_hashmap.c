@@ -177,8 +177,7 @@ int binseq_map_increment_frequency(BinSeqMap* map,
                                  const uint8_t* key_sequence, uint16_t key_length) {
     Entry* entry = find_entry(map, key_sequence, key_length);
     if (!entry) {
-        // If entry doesn't exist, create it with frequency 1
-        return binseq_map_put(map, key_sequence, key_length, 1);
+        return 0; //entry does not exist
     }
     
     entry->frequency++;

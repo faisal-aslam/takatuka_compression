@@ -32,6 +32,21 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
                      const uint8_t* block, uint32_t block_size, uint32_t block_index);
 static int validate_block_access(const uint8_t* block, uint32_t block_size, uint32_t offset, uint16_t length);
 
+static inline uint8_t getCurrentGroup() {
+    if (total_codes < getGroupThreshold(0)) {
+        return 0;
+    } else if (total_codes < getGroupThreshold(1)) {
+        return 1;
+    } else if (total_codes < getGroupThreshold(2)) {
+        return 2;
+    } else if (total_codes < getGroupThreshold(3)) {
+        return 3;
+    } else {
+        fprintf(stderr, "\n Out of codes \n");
+        exit(EXIT_FAILURE);
+    } 
+}
+
 static inline int32_t totalSavings(TreeNode *node) {
     if (!node) return INT_MIN;  // Return minimum value for invalid node
     
@@ -120,19 +135,8 @@ static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, B
         return -(int32_t)(seq_length);
     }    
     
-    int group;
-    if (total_codes < getGroupThreshold(0)) {
-        group = 0;
-    } else if (total_codes < getGroupThreshold(1)) {
-        group = 1;
-    } else if (total_codes < getGroupThreshold(2)) {
-        group = 2;
-    } else if (total_codes < getGroupThreshold(3)) {
-        group = 3;
-    } else {
-        fprintf(stderr, "\n Out of codes \n");
-        exit(EXIT_FAILURE);
-    }    
+    uint8_t group = getCurrentGroup();
+    //todo total_codes++;
     int32_t originalSizeBits = (int32_t)(seq_length * 8);
     int32_t compressedSizeBits = (int32_t)(groupCodeSize(group) + groupOverHead(group))-(seq_length-1);
     int32_t savings = originalSizeBits - compressedSizeBits;
@@ -144,7 +148,6 @@ static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, B
     return savings;
 }
 
-
 static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_len, uint32_t location) {
     BinSeqMap* map = node->map;
     if (!map || !sequence || seq_len == 0) {
@@ -152,23 +155,21 @@ static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_
         return 0;
     }
     
+    uint8_t group = getCurrentGroup();
     // Increment frequency for this sequence
-    if (binseq_map_increment_frequency(map, sequence, seq_len)) {
-        // Only update header overhead for sequences longer than 1 byte
-        if (seq_len > 1) {
-            node->headerOverhead += getHeaderOverhead((seq_len == 1) ? 0 : 3, seq_len);
+    if (!binseq_map_increment_frequency(map, sequence, seq_len)) {
+        /*
+        *  If entry doesn't exist, 
+        *  ** update header overhead of compressed sequences.
+        *  ** create it with frequency 1
+        */
+        if (seq_len > 1) { //only update header for the first inclusion in the map.
+            node->headerOverhead += getHeaderOverhead(group, seq_len);
         }
-        return 1;
+        
+        return binseq_map_put(map, sequence, seq_len, 1);
     }
-    
-    // If sequence doesn't exist, add it with frequency 1
-    if (binseq_map_put(map, sequence, seq_len, 1)) {
-        if (seq_len > 1) {
-            node->headerOverhead += getHeaderOverhead((seq_len == 1) ? 0 : 3, seq_len);
-        }
-        return 1;
-    }
-    
+       
     return 0;
 }
 
