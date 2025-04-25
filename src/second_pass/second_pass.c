@@ -8,6 +8,7 @@
 #include "../write_in_file/write_in_file.h"
 #include "../weighted_freq.h"
 
+#define NOT_PRUNE
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
@@ -124,8 +125,8 @@ void cleanup_node_pools() {
 }
 
 
-static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap *map) {
-    if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !map) {
+static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length) {
+    if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH) {
         fprintf(stderr, "Error: Invalid parameters in calculateSavings\n");
         return INT_MIN;  // Return minimum value to indicate invalid case
     }
@@ -170,7 +171,7 @@ static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_
         return binseq_map_put(map, sequence, seq_len, 1);
     }
        
-    return 0;
+    return 1;
 }
 
 static inline void copySequences(TreeNode *sourceNode, TreeNode *destNode, uint16_t bytes_to_copy) {
@@ -227,7 +228,10 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
     
     for (int j = 0; j < old_node_count; j++) {
         TreeNode *oldNode = &old_pool->data[j];
-        //todo if (oldNode->isPruned) continue;
+        #ifdef PRUNE
+        if (oldNode->isPruned) continue;
+        #endif
+
 		#ifdef DEBUG
 		printf("\n******************** old node to process ***************** \n");
 		printNode(oldNode, block, block_index);
@@ -275,9 +279,6 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
     int to_copy) {
     
-    if (seq_len == 3) {
-        printf("\n Stop here");
-    }
     // Validations
     if (!oldNode || !mgr || !block || block_index >= block_size ||
 	    block_index >= block_size || seq_len == 0 || seq_len > COMPRESS_SEQUENCE_LENGTH) {
@@ -293,7 +294,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     }
     
     
-    int32_t new_saving = calculateSavings(sequence, seq_len, oldNode->map);
+    int32_t new_saving = calculateSavings(sequence, seq_len);
     if (new_saving == INT_MIN) {
         // Invalid case, skip this path
         return new_nodes_count;
@@ -326,7 +327,17 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     if (to_copy > 0 && to_copy < COMPRESS_SEQUENCE_LENGTH) {
         copySequences(oldNode, newNode, to_copy);
     }
-    
+ 
+    // Add the new sequence
+    if (newNode->compress_sequence_count >= COMPRESS_SEQUENCE_LENGTH) {
+        fprintf(stderr,"\n seq count is larger than limit \n");
+        binseq_map_free(newNode->map);
+        newNode->map = NULL;
+        return new_nodes_count;
+    }
+
+    newNode->compress_sequence[newNode->compress_sequence_count++] = seq_len;
+
     // Create and copy the map - don't free old map yet!
     newNode->map = binseq_map_create(binseq_map_capacity(oldNode->map) + 1);
     if (!newNode->map) {
@@ -341,26 +352,18 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
         return new_nodes_count;
     }
     
-    // Add the new sequence
-    if (newNode->compress_sequence_count >= COMPRESS_SEQUENCE_LENGTH) {
-        fprintf(stderr,"\n seq count is larger than limit \n");
-        binseq_map_free(newNode->map);
-        newNode->map = NULL;
-        return new_nodes_count;
-    }
-
-    newNode->compress_sequence[newNode->compress_sequence_count++] = seq_len;
-
     // Update the map with new location
     if (!updateMapValue(newNode, sequence, seq_len, 
-                       (new_weight == 0) ? block_index + 1 - seq_len : block_index)) {
+                    (new_weight == 0) ? block_index + 1 - seq_len : block_index)) {
         fprintf(stderr,"\n Update node map failed \n");
         newNode->map = NULL;
         return new_nodes_count;
     }
 
+
     // Only free previous node's map if we're replacing it
     int weight_index = (new_weight == 0) ? 0 : new_weight;
+    #ifdef PRUNE
     if (best_index[weight_index] != -1) {
         TreeNodePool* pool = &mgr->pool[mgr->active_index];
         TreeNode* prev_node = &pool->data[best_index[weight_index]];
@@ -370,6 +373,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
         }
         prev_node->isPruned = 1;
     }
+    #endif
 
     best_saving[weight_index] = new_saving - oldNode->headerOverhead;
     best_index[weight_index] = new_nodes_count;
@@ -406,7 +410,7 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     root->incoming_weight = 1;
 
     // Create and populate the map
-    root->map = binseq_map_create(16);
+    root->map = binseq_map_create(3);
     if (!root->map) {
         fprintf(stderr, "\n Unable to create map");
         free(root);  
@@ -417,13 +421,16 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     if (!binseq_map_put(root->map, &block[0], 1, 1)) {
         binseq_map_free(root->map);
         root->map = NULL;
+        free(root);
         fprintf(stderr, "Warning: Failed to add root sequence to map\n");
+        exit(EXIT_FAILURE);
     }
 
-    root->saving_so_far = calculateSavings(&block[0], 1, root->map);
+    root->saving_so_far = calculateSavings(&block[0], 1);
     
     #ifdef DEBUG
     printf("\nroot is created\n");
+    printNode(root, block, 0);
     #endif
 }
 

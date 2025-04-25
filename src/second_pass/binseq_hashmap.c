@@ -198,16 +198,16 @@ void binseq_map_print(const BinSeqMap* map) {
         return;
     }
     
-    printf("Map (size=%zu, capacity=%zu):\n", map->size, map->capacity);
+    printf("\nMap (size=%zu, capacity=%zu):\n", map->size, map->capacity);
     for (size_t i = 0; i < map->capacity; i++) {
         const Entry* entry = &map->entries[i];
         if (!entry->used) continue;
         
         printf("  [%zu] Key (len=%u): ", i, entry->length);
         for (uint16_t j = 0; j < entry->length; j++) {
-            printf("%02X ", entry->binary_sequence[j]);
+            printf("0x%02X ", entry->binary_sequence[j]);
         }
-        printf("\n    Freq: %d\n", entry->frequency);
+        printf("\t Freq: %d\n", entry->frequency);
     }
 }
 
