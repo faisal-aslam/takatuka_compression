@@ -186,17 +186,19 @@ static void assignGroupsByFrequency() {
     for (int i = 0; i < heapSize; i++) {
         uint8_t assigned_group = 0;
         
-        if (elementsInGroup < GROUP1_THRESHOLD) {
+        if (elementsInGroup < getGroupThreshold(0)) {
             assigned_group = assignGroupHelper(&elementsInGroup, 0, i);
         } 
-        else if (elementsInGroup < GROUP2_THRESHOLD) {
+        else if (elementsInGroup < getGroupThreshold(1)) {
             assigned_group = assignGroupHelper(&elementsInGroup, 1, i);
         } 
-        else if (elementsInGroup < GROUP3_THRESHOLD) {
+        else if (elementsInGroup < getGroupThreshold(2)) {
             assigned_group = assignGroupHelper(&elementsInGroup, 2, i);
         } 
-        else if (elementsInGroup < GROUP4_THRESHOLD) {
+        else if (elementsInGroup < getGroupThreshold(3)) {
             assigned_group = assignGroupHelper(&elementsInGroup, 3, i);
+        } else {
+            fprintf(stderr, "\nUnable to assign group");
         }
         
         if (assigned_group) {

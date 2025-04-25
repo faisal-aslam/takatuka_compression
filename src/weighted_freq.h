@@ -43,5 +43,5 @@ void printTopSequences(BinarySequence **topSequences);
 uint8_t groupCodeSize(uint8_t group); 
 uint8_t groupOverHead(uint8_t group);
 uint8_t getHeaderOverhead(uint8_t group, uint16_t seq_length);
-
+uint16_t getGroupThreshold(uint8_t group);
 #endif

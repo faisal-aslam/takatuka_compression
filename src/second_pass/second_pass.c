@@ -1,5 +1,5 @@
 // src/second_pass/second_pass.c
-// src/second_pass/second_pass.c
+
 #include "second_pass.h"
 #include "tree_node_pool.h"
 #include <string.h>
@@ -18,6 +18,8 @@
 
 // Global pool manager instance
 TreeNodePoolManager pool_manager = {0};
+
+uint16_t total_codes = 0;
 
 void print_stacktrace(void);
 
@@ -118,9 +120,21 @@ static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, B
         return -(int32_t)(seq_length);
     }    
     
-    int group = (seq_length == 1) ? 0 : 3;
-    int32_t originalSizeBits = (long)(seq_length * 8);
-    int32_t compressedSizeBits = (long)(groupCodeSize(group) + groupOverHead(group));
+    int group;
+    if (total_codes < getGroupThreshold(0)) {
+        group = 0;
+    } else if (total_codes < getGroupThreshold(1)) {
+        group = 1;
+    } else if (total_codes < getGroupThreshold(2)) {
+        group = 2;
+    } else if (total_codes < getGroupThreshold(3)) {
+        group = 3;
+    } else {
+        fprintf(stderr, "\n Out of codes \n");
+        exit(EXIT_FAILURE);
+    }    
+    int32_t originalSizeBits = (int32_t)(seq_length * 8);
+    int32_t compressedSizeBits = (int32_t)(groupCodeSize(group) + groupOverHead(group))-(seq_length-1);
     int32_t savings = originalSizeBits - compressedSizeBits;
     
     // Ensure we don't overflow when converting to int32_t
@@ -145,7 +159,7 @@ static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_
     uint32_t locs[1] = {location};
     if (binseq_map_put(map, sequence, seq_len, 1, locs, 1)) {
         if (seq_len > 1) {
-	        //todo node->headerOverhead += getHeaderOverhead((seq_len == 1) ? 0 : 3, seq_len);
+	        node->headerOverhead += getHeaderOverhead((seq_len == 1) ? 0 : 3, seq_len);
 	    }
         return 1;
     }

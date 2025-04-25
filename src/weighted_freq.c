@@ -36,6 +36,22 @@ uint8_t groupCodeSize(uint8_t group) {
     }
 }
 
+uint16_t getGroupThreshold(uint8_t group) {
+    switch (group) {
+        case 0:
+            return 16;
+        case 1:
+            return 32;
+        case 2: 
+            return 48;
+        case 3:
+            return 4144;
+        default:
+            fprintf(stderr, "\n Illegal group of compression used \n");
+            exit(EXIT_FAILURE);
+    }
+}
+
 
 //Returns overhead of a group.
 uint8_t groupOverHead(uint8_t group) {
