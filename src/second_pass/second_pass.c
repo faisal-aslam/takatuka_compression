@@ -268,8 +268,11 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     int best_index[], int32_t best_saving[],
     const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
     int to_copy) {
-        
-     // Validations
+    
+    if (seq_len == 3) {
+        printf("\n Stop here");
+    }
+    // Validations
     if (!oldNode || !mgr || !block || block_index >= block_size ||
 	    block_index >= block_size || seq_len == 0 || seq_len > COMPRESS_SEQUENCE_LENGTH) {
     	fprintf(stderr,"\n processNodePath validation failed \n");

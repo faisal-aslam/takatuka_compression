@@ -92,7 +92,10 @@ BinSeqMap* binseq_map_create(size_t initial_capacity) {
     if (initial_capacity == 0) initial_capacity = 16;
     
     BinSeqMap* map = calloc(1, sizeof(BinSeqMap));
-    if (!map) return NULL;
+    if (!map) {
+        fprintf(stderr, "\n Unable to create map \n");
+        return NULL;
+    }
     
     map->entries = calloc(initial_capacity, sizeof(Entry));
     if (!map->entries) {
