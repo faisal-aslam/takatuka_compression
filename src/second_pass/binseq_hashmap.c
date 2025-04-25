@@ -7,13 +7,9 @@
 #include "tree_node.h"
 
 // Internal structures
-// In binseq_hashmap.h
 typedef struct {
     uint8_t* binary_sequence;  // Key part
     uint16_t length;           // Key part
-    uint32_t* locations;       // Value part
-    uint16_t location_count;
-    uint16_t location_capacity;
     int frequency;             // Value part
     int used;
 } Entry;
@@ -116,7 +112,6 @@ void binseq_map_free(BinSeqMap* map) {
             Entry* entry = &map->entries[i];
             if (entry->used) {
                 free(entry->binary_sequence);
-                free(entry->locations);
                 // Clear the entry
                 memset(entry, 0, sizeof(Entry));
             }
@@ -130,7 +125,7 @@ void binseq_map_free(BinSeqMap* map) {
 
 int binseq_map_put(BinSeqMap* map, 
                   const uint8_t* key_sequence, uint16_t key_length,
-                  int value_frequency, const uint32_t* value_locations, uint16_t value_location_count) {
+                  int value_frequency) {
     if (!map || !key_sequence || key_length == 0) return 0;
     
     // Check if resize needed (70% load factor)
@@ -143,21 +138,6 @@ int binseq_map_put(BinSeqMap* map,
     if (existing) {
         // Update existing entry
         existing->frequency = value_frequency;
-        
-        // Free old locations if they exist
-        free(existing->locations);
-        
-        // Copy new locations
-        if (value_location_count > 0) {
-            existing->locations = malloc(value_location_count * sizeof(uint32_t));
-            if (!existing->locations) return 0;
-            memcpy(existing->locations, value_locations, value_location_count * sizeof(uint32_t));
-        } else {
-            existing->locations = NULL;
-        }
-        
-        existing->location_count = value_location_count;
-        existing->location_capacity = value_location_count;
         return 1;
     }
     
@@ -176,21 +156,8 @@ int binseq_map_put(BinSeqMap* map,
             memcpy(entry->binary_sequence, key_sequence, key_length);
             entry->length = key_length;
             
-            // Copy value
+            // Set value
             entry->frequency = value_frequency;
-            if (value_location_count > 0) {
-                entry->locations = malloc(value_location_count * sizeof(uint32_t));
-                if (!entry->locations) {
-                    free(entry->binary_sequence);
-                    return 0;
-                }
-                memcpy(entry->locations, value_locations, value_location_count * sizeof(uint32_t));
-            } else {
-                entry->locations = NULL;
-            }
-            
-            entry->location_count = value_location_count;
-            entry->location_capacity = value_location_count;
             entry->used = 1;
             map->size++;
             return 1;
@@ -206,34 +173,15 @@ const int* binseq_map_get_frequency(const BinSeqMap* map,
     return entry ? &entry->frequency : NULL;
 }
 
-const uint32_t* binseq_map_get_locations(const BinSeqMap* map, 
-                                       const uint8_t* key_sequence, uint16_t key_length,
-                                       uint16_t* out_location_count) {
+int binseq_map_increment_frequency(BinSeqMap* map, 
+                                 const uint8_t* key_sequence, uint16_t key_length) {
     Entry* entry = find_entry(map, key_sequence, key_length);
-    if (!entry) return NULL;
-    
-    if (out_location_count) *out_location_count = entry->location_count;
-    return entry->locations;
-}
-
-int binseq_map_append_location(BinSeqMap* map, 
-                             const uint8_t* key_sequence, uint16_t key_length,
-                             uint32_t new_location) {
-    Entry* entry = find_entry(map, key_sequence, key_length);
-    if (!entry) return 0;
-    
-    // Resize if needed
-    if (entry->location_count >= entry->location_capacity) {
-        uint16_t new_cap = entry->location_capacity ? entry->location_capacity * 2 : 4;
-        uint32_t* new_locations = realloc(entry->locations, new_cap * sizeof(uint32_t));
-        if (!new_locations) return 0;
-        
-        entry->locations = new_locations;
-        entry->location_capacity = new_cap;
+    if (!entry) {
+        // If entry doesn't exist, create it with frequency 1
+        return binseq_map_put(map, key_sequence, key_length, 1);
     }
     
-    entry->locations[entry->location_count++] = new_location;
-    entry->frequency++; // Assuming each location represents an occurrence
+    entry->frequency++;
     return 1;
 }
 
@@ -246,7 +194,7 @@ size_t binseq_map_capacity(const BinSeqMap* map) {
 }
 
 void binseq_map_print(const BinSeqMap* map) {
-    if (!map || !map->entries) {  // Add check for entries
+    if (!map || !map->entries) {
         fprintf(stderr, "Map is NULL or corrupted\n");
         return;
     }
@@ -254,22 +202,17 @@ void binseq_map_print(const BinSeqMap* map) {
     printf("Map (size=%zu, capacity=%zu):\n", map->size, map->capacity);
     for (size_t i = 0; i < map->capacity; i++) {
         const Entry* entry = &map->entries[i];
-        if (!entry || !entry->used) continue;  // Skip NULL or unused entries
+        if (!entry->used) continue;
         
         printf("  [%zu] Key (len=%u): ", i, entry->length);
         for (uint16_t j = 0; j < entry->length; j++) {
             printf("%02X ", entry->binary_sequence[j]);
         }
-        printf("\n    Freq: %d, Locations (%u): ", entry->frequency, entry->location_count);
-        for (uint16_t j = 0; j < entry->location_count; j++) {
-            printf("%u ", entry->locations[j]);
-        }
-        printf("\n");
+        printf("\n    Freq: %d\n", entry->frequency);
     }
 }
 
 int binseq_map_copy_to_node(const BinSeqMap* source, struct TreeNode* target) {
-    // More thorough validation
     if (!source || !target || !source->entries || source->capacity == 0 || source->size == 0) {
         fprintf(stderr, "Invalid source map or target node\n");
         return 0;
@@ -285,31 +228,18 @@ int binseq_map_copy_to_node(const BinSeqMap* source, struct TreeNode* target) {
         const Entry* src = &source->entries[i];
         if (!src->used) continue;
 
-        // Skip invalid entries
         if (!src->binary_sequence || src->length == 0) {
             fprintf(stderr, "Skipping invalid map entry\n");
             continue;
         }
 
-        uint32_t* locs_copy = malloc(src->location_count * sizeof(uint32_t));
-        if (!locs_copy) {
-            fprintf(stderr, "Failed to allocate locations copy\n");
-            binseq_map_free(new_map);
-            return 0;
-        }
-        memcpy(locs_copy, src->locations, src->location_count * sizeof(uint32_t));
-
-        if (!binseq_map_put(new_map, src->binary_sequence, src->length,
-                          src->frequency, locs_copy, src->location_count)) {
+        if (!binseq_map_put(new_map, src->binary_sequence, src->length, src->frequency)) {
             fprintf(stderr, "Failed to put entry in new map\n");
-            free(locs_copy);
             binseq_map_free(new_map);
             return 0;
         }
-        free(locs_copy);
     }
 
-    // Only free old map after successful copy
     if (target->map) {
         binseq_map_free(target->map);
     }

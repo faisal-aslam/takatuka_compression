@@ -146,21 +146,26 @@ static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, B
 
 
 static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_len, uint32_t location) {
-	BinSeqMap* map = node->map;
+    BinSeqMap* map = node->map;
     if (!map || !sequence || seq_len == 0) {
-    	fprintf(stderr, "\n unable to update map value ");
-    	return 0;
+        fprintf(stderr, "\n unable to update map value ");
+        return 0;
     }
     
-    if (binseq_map_append_location(map, sequence, seq_len, location)) {
+    // Increment frequency for this sequence
+    if (binseq_map_increment_frequency(map, sequence, seq_len)) {
+        // Only update header overhead for sequences longer than 1 byte
+        if (seq_len > 1) {
+            node->headerOverhead += getHeaderOverhead((seq_len == 1) ? 0 : 3, seq_len);
+        }
         return 1;
     }
     
-    uint32_t locs[1] = {location};
-    if (binseq_map_put(map, sequence, seq_len, 1, locs, 1)) {
+    // If sequence doesn't exist, add it with frequency 1
+    if (binseq_map_put(map, sequence, seq_len, 1)) {
         if (seq_len > 1) {
-	        node->headerOverhead += getHeaderOverhead((seq_len == 1) ? 0 : 3, seq_len);
-	    }
+            node->headerOverhead += getHeaderOverhead((seq_len == 1) ? 0 : 3, seq_len);
+        }
         return 1;
     }
     
@@ -392,7 +397,6 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
         exit(EXIT_FAILURE);
     }
 
-
     // Initialize the node
     memset(root, 0, sizeof(TreeNode));
     root->headerOverhead = 4;
@@ -408,12 +412,11 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
         exit(EXIT_FAILURE);
     }
 
-    uint32_t locs[1] = {0};
-    if (!binseq_map_put(root->map, &block[0], 1, 1, locs, 1)) {
+    // Add root sequence with frequency 1
+    if (!binseq_map_put(root->map, &block[0], 1, 1)) {
         binseq_map_free(root->map);
         root->map = NULL;
         fprintf(stderr, "Warning: Failed to add root sequence to map\n");
-        //return;
     }
 
     root->saving_so_far = calculateSavings(&block[0], 1, root->map);
