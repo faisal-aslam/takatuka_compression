@@ -2,8 +2,9 @@
 #define TREE_NODE_H
 
 #include <stdint.h>
+#include "constants.h"
 #include "binseq_hashmap.h"
-#define COMPRESS_SEQUENCE_LENGTH 10000
+
 
 typedef struct TreeNode {
     uint16_t compress_sequence[COMPRESS_SEQUENCE_LENGTH];

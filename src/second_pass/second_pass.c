@@ -259,7 +259,8 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
     }
     #ifdef DEBUG
         printf("\n\n +++++++++++++++++++++++++++++++++ Current Node count =%d", new_nodes_count);
-        for (int i = 0; i < new_nodes_count; i++) {            
+        for (int i = 0; i < new_nodes_count; i++) {
+            printf("\n Index=%d", i);            
             printNode(&new_pool->data[i], block, block_index);
         }
         printf("\n\n +++++++++++++++++++++++++++++++++ Current Node count =%d", new_nodes_count);
@@ -409,36 +410,61 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     root->saving_so_far = calculateSavings(&block[0], 1, root->map);
 }
 
-static inline void resetToBestNode(TreeNodePoolManager* mgr, int node_count, const uint8_t* block, uint32_t block_index) {
+static inline TreeNode* resetToBestNode(TreeNodePoolManager* mgr, int node_count, 
+    const uint8_t* block, uint32_t block_index) {
     int32_t max_saving = INT_MIN;
     int best_index = 0;
     TreeNodePool* pool = &mgr->pool[mgr->active_index];
-    
+
     // Find the best node
     for (int i = 0; i < node_count; i++) {
-        if (pool->data[i].saving_so_far > max_saving) {
-            max_saving = pool->data[i].saving_so_far;
+        TreeNode* current = &pool->data[i];
+        if (current->saving_so_far > max_saving) {
+            // Found node with strictly better savings
+            max_saving = current->saving_so_far;
             best_index = i;
+        } 
+        else if (current->saving_so_far == max_saving) {
+            // Tie breaker: choose node with smaller compress_sequence_count
+            if (current->compress_sequence_count < pool->data[best_index].compress_sequence_count) {
+                best_index = i;
+            }
         }
     }
-    
-    // Free all other nodes' maps
-    for (int i = 0; i < node_count; i++) {
-        if (i != best_index && pool->data[i].map) {
-            binseq_map_free(pool->data[i].map);
-            pool->data[i].map = NULL;
-        }
-    }
-    
-    //#ifdef DEBUG
-    printf("\n\n ---------------- best node -------------count=%d>",node_count);
-    printNode(&pool->data[best_index], block, block_index);
-    //#endif
-    // Clean up the pools
-    cleanup_node_pools();
-    exit(0);
-}
 
+    // Create a copy of the best node to become the new root
+    TreeNode* best_node = &pool->data[best_index];
+    TreeNode* new_root = malloc(sizeof(TreeNode));
+    if (!new_root) {
+        fprintf(stderr, "Failed to allocate new root\n");
+        cleanup_node_pools();
+        return NULL;
+    }
+
+    // Copy the best node's data
+    memcpy(new_root, best_node, sizeof(TreeNode));
+
+    // Create a new map for the root by copying the best node's map
+    new_root->map = NULL;
+    if (!binseq_map_copy_to_node(best_node->map, new_root)) {
+        fprintf(stderr, "Failed to copy map to new root\n");
+        free(new_root);
+        cleanup_node_pools();
+        return NULL;
+    }
+
+    // Clean up all nodes including the best one (we've copied what we need)
+    cleanup_node_pools();
+
+    #ifdef DEBUG
+    printf("\n\n ---------------- New root node -------------\n");
+    printf("Selected node with savings=%d and sequence_count=%d\n",
+           new_root->saving_so_far, new_root->compress_sequence_count);
+    printNode(new_root, block, block_index);
+    #endif
+
+    return new_root;
+}
 
 void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
     if (SEQ_LENGTH_LIMIT <= 1 || block_size <= 0 || block == NULL) {
@@ -448,33 +474,58 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
     }
     
     createRoot(block, block_size);
+    TreeNode* current_root = &pool_manager.pool[0].data[0];
     uint8_t isEven = 0;
-    uint32_t blockIndex;    
+    uint32_t blockIndex;
     
     for (blockIndex = 1; blockIndex < block_size; blockIndex++) {
-        if (blockIndex % COMPRESS_SEQUENCE_LENGTH == 0) {
-            
-            resetToBestNode(&pool_manager, 
-                          pool_manager.pool[pool_manager.active_index].size,
-                          block, blockIndex);
-            isEven = 0;
-        }
-
-        // Switch pools and get the correct size
+        // Process the byte FIRST
         switch_tree_node_pool(&pool_manager);
         int old_pool_size = pool_manager.pool[pool_manager.active_index ^ 1].size;
-        
-        if (isEven) {
-            createNodes(&pool_manager, old_pool_size, block, block_size, blockIndex);
-        } else {
-            createNodes(&pool_manager, old_pool_size, block, block_size, blockIndex);
-        }
-        
+        createNodes(&pool_manager, old_pool_size, block, block_size, blockIndex);
         isEven = !isEven;
+
+        // THEN check if we need to reset after processing this byte
+        if ((blockIndex + 1) % COMPRESS_SEQUENCE_LENGTH == 0 || (blockIndex + 1) == block_size) {
+            TreeNode* new_root = resetToBestNode(&pool_manager, 
+                                              pool_manager.pool[pool_manager.active_index].size,
+                                              block, blockIndex);
+            if (!new_root) {
+                fprintf(stderr, "Failed to create new root\n");
+                cleanup_node_pools();
+                return;
+            }
+            
+            // Reinitialize with the preserved node
+            cleanup_node_pools();
+            TreeNode* root_node = alloc_tree_node(&pool_manager);
+            if (!root_node) {
+                fprintf(stderr, "Failed to allocate new root node\n");
+                free(new_root);
+                cleanup_node_pools();
+                return;
+            }
+            
+            memcpy(root_node, new_root, sizeof(TreeNode));
+            root_node->map = NULL;
+            if (!binseq_map_copy_to_node(new_root->map, root_node)) {
+                fprintf(stderr, "Failed to copy map to new root\n");
+                free(new_root);
+                cleanup_node_pools();
+                return;
+            }
+            free(new_root);
+            current_root = root_node;
+            isEven = 0;
+            
+            #ifdef DEBUG
+            printf("\nAfter reset at position %u:", blockIndex);
+            printNode(current_root, block, blockIndex);
+            #endif
+        }
     }
     
-    resetToBestNode(&pool_manager, pool_manager.pool[pool_manager.active_index].size, block, blockIndex);
-    
+    // Final cleanup
     cleanup_node_pools();
 }
 
@@ -485,9 +536,7 @@ void processSecondPass(const char* filename) {
         return;
     }
 
-    // Initialize pool manager first
     init_tree_node_pool_manager(&pool_manager);
-
     uint8_t* block = malloc(BLOCK_SIZE);
     if (!block) {
         perror("Failed to allocate memory for block");
