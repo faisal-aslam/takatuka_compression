@@ -251,6 +251,12 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
         }
     }
 
+
+    for (int i = 0; i < new_nodes_count; i++) {            
+        TreeNode node = new_pool->data[i];
+        if (node.saving_so_far < best_saving[node.incoming_weight]) node.isPruned = 1;
+        
+    }
     #ifdef DEBUG
         printf("\n\n +++++++++++++++++++++++++++++++++ Current Node count =%d", new_nodes_count);
         for (int i = 0; i < new_nodes_count; i++) {            
@@ -424,10 +430,10 @@ static inline void resetToBestNode(TreeNodePoolManager* mgr, int node_count, con
         }
     }
     
-    #ifdef DEBUG
+    //#ifdef DEBUG
     printf("\n\n ---------------- best node -------------count=%d>",node_count);
     printNode(&pool->data[best_index], block, block_index);
-    #endif
+    //#endif
     // Clean up the pools
     cleanup_node_pools();
     exit(0);
