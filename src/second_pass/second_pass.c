@@ -8,7 +8,7 @@
 #include "../write_in_file/write_in_file.h"
 #include "../weighted_freq.h"
 
-#define NOT_PRUNE
+//#define PRUNE
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
@@ -124,7 +124,11 @@ static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, B
 
     int frequency = binseq_map_get_frequency(map, newBinSeq, seq_length);
 
-    return MIN(frequency*(seq_length-1), (seq_length-1)*8 );    
+    int savings = MIN(frequency*(seq_length-1), (seq_length-1)*8 );
+    if (savings !=0) {
+        printf("\n stop here \n");
+    } 
+    return savings;
     
 }
 
@@ -282,8 +286,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     uint8_t isPruned = 0;
         
     // Only prune if we have a better alternative (even if savings are negative)
-    if (best_index[new_weight] != -1 && 
-        new_saving <= best_saving[new_weight]) {
+    if (best_index[new_weight] != -1 && new_saving < best_saving[new_weight]) {
         isPruned = 1;
     }
 
@@ -334,7 +337,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
 
     // Only free previous node's map if we're replacing it
     int weight_index = (new_weight == 0) ? 0 : new_weight;
-    #ifdef PRUNE
+    #ifdef PRUNEE
     if (best_index[weight_index] != -1) {
         TreeNodePool* pool = &mgr->pool[mgr->active_index];
         TreeNode* prev_node = &pool->data[best_index[weight_index]];
