@@ -125,7 +125,7 @@ void cleanup_node_pools() {
 }
 
 
-static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length) {
+static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap* map) {
     if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH) {
         fprintf(stderr, "Error: Invalid parameters in calculateSavings\n");
         return INT_MIN;  // Return minimum value to indicate invalid case
@@ -156,6 +156,10 @@ static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_
         return 0;
     }
     
+    if (seq_len == 1) {
+        return 1;// do not update map value of seq_len of 1.
+    }  
+
     uint8_t group = getCurrentGroup();
     // Increment frequency for this sequence
     if (!binseq_map_increment_frequency(map, sequence, seq_len)) {
@@ -164,9 +168,9 @@ static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_
         *  ** update header overhead of compressed sequences.
         *  ** create it with frequency 1
         */
-        if (seq_len > 1) { //only update header for the first inclusion in the map.
-            node->headerOverhead += getHeaderOverhead(group, seq_len);
-        }
+        //only update header for the first inclusion in the map.
+        node->headerOverhead += getHeaderOverhead(group, seq_len);
+        
         
         return binseq_map_put(map, sequence, seq_len, 1);
     }
@@ -294,7 +298,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     }
     
     
-    int32_t new_saving = calculateSavings(sequence, seq_len);
+    int32_t new_saving = calculateSavings(sequence, seq_len, oldNode);
     if (new_saving == INT_MIN) {
         // Invalid case, skip this path
         return new_nodes_count;
@@ -338,13 +342,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
 
     newNode->compress_sequence[newNode->compress_sequence_count++] = seq_len;
 
-    // Create and copy the map - don't free old map yet!
-    newNode->map = binseq_map_create(binseq_map_capacity(oldNode->map) + 1);
-    if (!newNode->map) {
-        fprintf(stderr,"\n map creation failed \n");
-        return new_nodes_count;
-    } 
-    
+    // copy function also creates map of the new node.
     if (!binseq_map_copy_to_node(oldNode->map, newNode)) {
         binseq_map_free(newNode->map);
         newNode->map = NULL;
@@ -352,8 +350,8 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
         return new_nodes_count;
     }
     
-    // Update the map with new location
-    if (!updateMapValue(newNode, sequence, seq_len, 
+    // Update the map with new location (only if seq_len is ge 1)
+    if (seq_len > 1 && !updateMapValue(newNode, sequence, seq_len, 
                     (new_weight == 0) ? block_index + 1 - seq_len : block_index)) {
         fprintf(stderr,"\n Update node map failed \n");
         newNode->map = NULL;
@@ -409,7 +407,7 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     root->compress_sequence_count = 1;
     root->incoming_weight = 1;
 
-    // Create and populate the map
+    // Create empty map (won't add the single byte sequence)
     root->map = binseq_map_create(3);
     if (!root->map) {
         fprintf(stderr, "\n Unable to create map");
@@ -417,16 +415,7 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
         exit(EXIT_FAILURE);
     }
 
-    // Add root sequence with frequency 1
-    if (!binseq_map_put(root->map, &block[0], 1, 1)) {
-        binseq_map_free(root->map);
-        root->map = NULL;
-        free(root);
-        fprintf(stderr, "Warning: Failed to add root sequence to map\n");
-        exit(EXIT_FAILURE);
-    }
-
-    root->saving_so_far = calculateSavings(&block[0], 1);
+    root->saving_so_far = calculateSavings(&block[0], 1, root->map);
     
     #ifdef DEBUG
     printf("\nroot is created\n");

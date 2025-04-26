@@ -212,15 +212,22 @@ void binseq_map_print(const BinSeqMap* map) {
 }
 
 int binseq_map_copy_to_node(const BinSeqMap* source, struct TreeNode* target) {
-    if (!source || !target || !source->entries || source->capacity == 0 || source->size == 0) {
-        fprintf(stderr, "Invalid source map or target node\n");
+    // Allow copying NULL/empty maps - just set target's map to NULL
+    if (!target || !source) {
+        fprintf(stderr, "Invalid target node\n");
         return 0;
     }
 
-    BinSeqMap* new_map = binseq_map_create(source->capacity);
+    BinSeqMap* new_map = binseq_map_create(source->capacity+1);
     if (!new_map) {
         fprintf(stderr, "Failed to create new map\n");
         return 0;
+    }
+
+    // If source is NULL or empty, just set the empty map to the target. 
+    if (!source->entries || source->capacity == 0 || source->size == 0) {
+        target->map = new_map;    
+        return 1; // Successfully set the empty map.
     }
 
     for (size_t i = 0; i < source->capacity; i++) {
