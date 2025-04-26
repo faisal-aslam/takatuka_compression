@@ -106,30 +106,24 @@ void cleanup_node_pools() {
         pool->size = 0;
         pool->capacity = 0;
     }
-    // Don't memset the whole manager as it may contain other needed state
     pool_manager.active_index = 0;
 }
 
 
 static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap* map) {
-    if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH) {
+    if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !map) {
         fprintf(stderr, "Error: Invalid parameters in calculateSavings\n");
-        return INT_MIN;  // Return minimum value to indicate invalid case
+        return INT_MIN;
     }
 
-    //At the moment I do not support seq_length 1 compression
     if (seq_length == 1) {
         return 0;
     }
 
-    int frequency = binseq_map_get_frequency(map, newBinSeq, seq_length);
+    const int* freq_ptr = binseq_map_get_frequency(map, newBinSeq, seq_length);
+    int frequency = freq_ptr ? *freq_ptr : 0;
 
-    int savings = MIN(frequency*(seq_length-1), (seq_length-1)*8 );
-    if (savings !=0) {
-        printf("\n stop here \n");
-    } 
-    return savings;
-    
+    return MIN(frequency*(seq_length-1), (seq_length-1)*8);
 }
 
 static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_len, uint32_t location) {
@@ -297,11 +291,12 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
         return new_nodes_count;
     }
 
-    // Initialize new node (don't zero it since we may overwrite needed fields)
+    // Initialize new node
+    memset(newNode, 0, sizeof(TreeNode));
     newNode->incoming_weight = (new_weight >= SEQ_LENGTH_LIMIT) ? SEQ_LENGTH_LIMIT - 1 : new_weight;
     newNode->saving_so_far = new_saving;
     newNode->isPruned = isPruned;
-    newNode->compress_sequence_count = 0;  // Explicitly initialize
+    newNode->compress_sequence_count = 0;
     
     // Copy sequences if needed
     if (to_copy > 0 && to_copy < COMPRESS_SEQUENCE_LENGTH) {
@@ -382,51 +377,43 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     root->compress_sequence_count = 1;
     root->incoming_weight = 1;
 
-    // Create empty map (won't add the single byte sequence)
+    // Create empty map
     root->map = binseq_map_create(3);
     if (!root->map) {
         fprintf(stderr, "\n Unable to create map");
-        free(root);  
+        free_tree_node_pool_manager(&pool_manager);
         exit(EXIT_FAILURE);
     }
 
     root->saving_so_far = calculateSavings(&block[0], 1, root->map);
-    
-    #ifdef DEBUG
-    printf("\nroot is created\n");
-    printNode(root, block, 0);
-    #endif
 }
 
 static inline void resetToBestNode(TreeNodePoolManager* mgr, int node_count, const uint8_t* block, uint32_t block_index) {
     int32_t max_saving = INT_MIN;
     int best_index = 0;
     TreeNodePool* pool = &mgr->pool[mgr->active_index];
-    #ifdef DEBUG
-    printf("\n\n --------------- Best path ------------------node_count=%d \n", node_count);
-    #endif
-
     
+    // Find the best node
     for (int i = 0; i < node_count; i++) {
-        #ifdef DEBUG
-        printNode(&pool->data[i], block, block_index);
-        #endif
-
         if (pool->data[i].saving_so_far > max_saving) {
             max_saving = pool->data[i].saving_so_far;
             best_index = i;
         }
     }
-    #ifdef DEBUG
-    printNode(&pool->data[best_index], block, block_index);
-    #endif
     
-    // Write compressed output here if needed
-    // writeCompressedOutput("output.bin", ...);
+    // Free all other nodes' maps
+    for (int i = 0; i < node_count; i++) {
+        if (i != best_index && pool->data[i].map) {
+            binseq_map_free(pool->data[i].map);
+            pool->data[i].map = NULL;
+        }
+    }
     
+    // Clean up the pools
     cleanup_node_pools();
-    exit(0);  // Use exit(0) instead of exit(1) for normal termination
+    exit(0);
 }
+
 
 void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
     if (SEQ_LENGTH_LIMIT <= 1 || block_size <= 0 || block == NULL) {

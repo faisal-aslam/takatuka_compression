@@ -168,12 +168,17 @@ int binseq_map_put(BinSeqMap* map,
 }
 
 const int* binseq_map_get_frequency(const BinSeqMap* map, 
-                                   const uint8_t* key_sequence, uint16_t key_length) {
-    Entry* entry = find_entry(map, key_sequence, key_length);
-    if (!map || !entry) {
-        return 0;       
+    const uint8_t* key_sequence, uint16_t key_length) {
+    if (!map || !key_sequence || key_length == 0) {
+        return NULL;       
     }
-    return entry->frequency;
+
+    Entry* entry = find_entry(map, key_sequence, key_length);
+    if (!entry) {
+        return NULL;
+    }
+
+    return &entry->frequency;
 }
 
 int binseq_map_increment_frequency(BinSeqMap* map, 

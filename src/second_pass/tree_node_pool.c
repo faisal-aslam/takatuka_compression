@@ -30,6 +30,9 @@ TreeNode* alloc_tree_node(TreeNodePoolManager* mgr) {
             exit(1);
         }
 
+        // Initialize all new nodes to zero
+        memset(new_data, 0, new_capacity * sizeof(TreeNode));
+
         if (pool->data) {
             memcpy(new_data, pool->data, pool->size * sizeof(TreeNode));
             free(pool->data);
@@ -39,8 +42,12 @@ TreeNode* alloc_tree_node(TreeNodePoolManager* mgr) {
         pool->capacity = new_capacity;
     }
 
-    return &pool->data[pool->size++];
+    TreeNode* node = &pool->data[pool->size++];
+    // Ensure new node is properly initialized
+    memset(node, 0, sizeof(TreeNode));
+    return node;
 }
+
 
 void switch_tree_node_pool(TreeNodePoolManager* mgr) {
     // Switch active pool index
