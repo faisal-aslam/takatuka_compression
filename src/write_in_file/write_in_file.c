@@ -430,7 +430,7 @@ static int calcUsedAndAssignGroupID(TreeNode *node, uint8_t* block, uint32_t blo
     int used_count = 0;
 
     // Process each sequence in the node
-    for (int i = 0; i < node->compress_sequence_count && i < COMPRESS_SEQUENCE_LENGTH; i++) {
+    for (int i = 0; i < node->compress_sequence_count; i++) {
         uint16_t seq_len = node->compress_sequence[i];
         
         // Validate sequence length

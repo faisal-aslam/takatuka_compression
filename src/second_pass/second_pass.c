@@ -48,6 +48,25 @@ static inline uint8_t getCurrentGroup() {
     } 
 }
 
+static inline void initTreeNode(TreeNode* node, uint16_t initial_capacity) {
+    memset(node, 0, sizeof(TreeNode));
+    node->compress_sequence = malloc(initial_capacity * sizeof(uint16_t));
+    node->compress_sequence_capacity = initial_capacity;
+    node->compress_sequence_count = 0;
+}
+
+static inline void freeTreeNode(TreeNode* node) {
+    if (node->compress_sequence) {
+        free(node->compress_sequence);
+        node->compress_sequence = NULL;
+    }
+    if (node->map) {
+        binseq_map_free(node->map);
+        node->map = NULL;
+    }
+}
+
+
 static void printNode(TreeNode *node, const uint8_t* block, uint32_t block_index) {
     if (!node) {
         printf("[NULL NODE]\n");
@@ -59,14 +78,10 @@ static void printNode(TreeNode *node, const uint8_t* block, uint32_t block_index
            node->saving_so_far,            
            node->incoming_weight, 
            node->isPruned, 
-           (node->compress_sequence_count < COMPRESS_SEQUENCE_LENGTH) ? node->compress_sequence_count : 0);
+           node->compress_sequence_count);
     printf(", total Savings =%d", node->saving_so_far);
-    
-    if (node->compress_sequence_count > COMPRESS_SEQUENCE_LENGTH) {
-        printf("\n\t[ERROR: Invalid compress_sequence_count]");
-        return;
-    }
-    
+   
+  
     int nodeCount = 0;
     for (int i=0; i < node->compress_sequence_count; i++) {
         printf("\n\tNode compressed = %d", node->compress_sequence[i]);
@@ -82,7 +97,9 @@ static void printNode(TreeNode *node, const uint8_t* block, uint32_t block_index
         }
         printf(" }, ");
     }
-    
+    if (nodeCount < block_index-1) {
+        fprintf(stderr, "\n\n A potentially corrupt node \n\n");
+    }
     if (node->map) {
         binseq_map_print(node->map);
     } else {
@@ -95,10 +112,7 @@ void cleanup_node_pools() {
         TreeNodePool* pool = &pool_manager.pool[i];
         if (pool->data) {
             for (size_t j = 0; j < pool->size; j++) {
-                if (pool->data[j].map) {
-                    binseq_map_free(pool->data[j].map);
-                    pool->data[j].map = NULL;
-                }
+                freeTreeNode(&pool->data[j]);
             }
             free(pool->data);
             pool->data = NULL;
@@ -111,7 +125,7 @@ void cleanup_node_pools() {
 
 
 static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap* map) {
-    if (!newBinSeq || seq_length <= 0 || seq_length > COMPRESS_SEQUENCE_LENGTH || !map) {
+    if (!newBinSeq || seq_length <= 0 || !map) {
         fprintf(stderr, "Error: Invalid parameters in calculateSavings\n");
         return INT_MIN;
     }
@@ -150,19 +164,44 @@ static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_
     return 1;
 }
 
+static inline int ensureSequenceCapacity(TreeNode* node, uint16_t needed_capacity) {
+    if (node->compress_sequence_capacity >= needed_capacity) {
+        return 1;
+    }
+    
+    // Exponential growth strategy
+    uint16_t new_capacity = node->compress_sequence_capacity * 2;
+    while (new_capacity < needed_capacity) {
+        new_capacity *= 2;
+    }
+    
+    uint16_t* new_sequence = realloc(node->compress_sequence, new_capacity * sizeof(uint16_t));
+    if (!new_sequence) {
+        fprintf(stderr, "Failed to expand sequence capacity\n");
+        return 0;
+    }
+    
+    node->compress_sequence = new_sequence;
+    node->compress_sequence_capacity = new_capacity;
+    return 1;
+}
+
 static inline void copySequences(TreeNode *sourceNode, TreeNode *destNode, uint16_t bytes_to_copy) {
-    if (!sourceNode || !destNode || bytes_to_copy == 0 || 
-        bytes_to_copy > COMPRESS_SEQUENCE_LENGTH || 
-        bytes_to_copy > sourceNode->compress_sequence_count) {
+    if (!sourceNode || !destNode || bytes_to_copy == 0) {
         fprintf(stderr, "\nInvalid copy parameters\n");
+        return;
+    }
+    
+    if (!ensureSequenceCapacity(destNode, bytes_to_copy)) {
         return;
     }
     
     memcpy(destNode->compress_sequence, 
            sourceNode->compress_sequence, 
-           bytes_to_copy * sizeof(sourceNode->compress_sequence[0])); 
+           bytes_to_copy * sizeof(uint16_t));
     destNode->compress_sequence_count = bytes_to_copy;
 }
+
 
 static BinarySequence* isValidSequence(uint16_t sequence_length, const uint8_t* block, uint32_t block_index) {
     if (sequence_length < SEQ_LENGTH_START || sequence_length > SEQ_LENGTH_LIMIT || 
@@ -209,7 +248,7 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
         if (oldNode->saving_so_far < best_saving[oldNode->incoming_weight]) {
             //printNode(oldNode, block, block_index);
             //printNode(best_index[oldNode->incoming_weight], block, block_index);
-            continue;
+            //continue;
         }
         #endif
 
@@ -279,7 +318,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     
     // Validations
     if (!oldNode || !mgr || !block || block_index >= block_size ||
-	    block_index >= block_size || seq_len == 0 || seq_len > COMPRESS_SEQUENCE_LENGTH) {
+	    block_index >= block_size || seq_len == 0) {
     	fprintf(stderr,"\n processNodePath validation failed \n");
         return new_nodes_count;
     }
@@ -313,6 +352,9 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
         return new_nodes_count;
     }
 
+    // Initialize with default capacity (e.g., 16)
+    initTreeNode(newNode, 16);
+
     // Initialize new node
     memset(newNode, 0, sizeof(TreeNode));
     newNode->incoming_weight = (new_weight >= SEQ_LENGTH_LIMIT) ? SEQ_LENGTH_LIMIT - 1 : new_weight;
@@ -321,18 +363,16 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     newNode->compress_sequence_count = 0;
     
     // Copy sequences if needed
-    if (to_copy > 0 && to_copy < COMPRESS_SEQUENCE_LENGTH) {
+    if (to_copy > 0) {
         copySequences(oldNode, newNode, to_copy);
     }
  
     // Add the new sequence
-    if (newNode->compress_sequence_count >= COMPRESS_SEQUENCE_LENGTH) {
-        fprintf(stderr,"\n seq count is larger than limit \n");
-        binseq_map_free(newNode->map);
-        newNode->map = NULL;
+    if (!ensureSequenceCapacity(newNode, newNode->compress_sequence_count + 1)) {
+        fprintf(stderr,"\n Failed to expand sequence capacity\n");
+        freeTreeNode(newNode);
         return new_nodes_count;
     }
-
     newNode->compress_sequence[newNode->compress_sequence_count++] = seq_len;
 
     // copy function also creates map of the new node.
@@ -416,24 +456,25 @@ static inline TreeNode* resetToBestNode(TreeNodePoolManager* mgr, int node_count
     int best_index = 0;
     TreeNodePool* pool = &mgr->pool[mgr->active_index];
 
-    // Find the best node
+    // Find the best node - prioritize higher savings, then smaller sequence count
     for (int i = 0; i < node_count; i++) {
         TreeNode* current = &pool->data[i];
         if (current->saving_so_far > max_saving) {
-            // Found node with strictly better savings
             max_saving = current->saving_so_far;
             best_index = i;
         } 
         else if (current->saving_so_far == max_saving) {
             // Tie breaker: choose node with smaller compress_sequence_count
             if (current->compress_sequence_count < pool->data[best_index].compress_sequence_count) {
-                best_index = i;
+            best_index = i;
             }
         }
     }
 
-    // Create a copy of the best node to become the new root
+    // Get the best node
     TreeNode* best_node = &pool->data[best_index];
+
+    // Allocate new root node
     TreeNode* new_root = malloc(sizeof(TreeNode));
     if (!new_root) {
         fprintf(stderr, "Failed to allocate new root\n");
@@ -441,25 +482,43 @@ static inline TreeNode* resetToBestNode(TreeNodePoolManager* mgr, int node_count
         return NULL;
     }
 
-    // Copy the best node's data
-    memcpy(new_root, best_node, sizeof(TreeNode));
-
-    // Create a new map for the root by copying the best node's map
-    new_root->map = NULL;
-    if (!binseq_map_copy_to_node(best_node->map, new_root)) {
-        fprintf(stderr, "Failed to copy map to new root\n");
+    // Initialize new root with same capacity as best node
+    new_root->compress_sequence = malloc(best_node->compress_sequence_count * sizeof(uint16_t));
+    if (!new_root->compress_sequence) {
+        fprintf(stderr, "Failed to allocate sequence array\n");
         free(new_root);
         cleanup_node_pools();
         return NULL;
     }
 
-    // Clean up all nodes including the best one (we've copied what we need)
+    // Copy basic fields
+    new_root->compress_sequence_count = best_node->compress_sequence_count;
+    new_root->compress_sequence_capacity = best_node->compress_sequence_count;
+    new_root->saving_so_far = best_node->saving_so_far;
+    new_root->incoming_weight = best_node->incoming_weight;
+    new_root->isPruned = best_node->isPruned;
+    new_root->map = NULL;  // Will be initialized separately
+
+    // Copy sequence data
+    memcpy(new_root->compress_sequence, best_node->compress_sequence,
+    best_node->compress_sequence_count * sizeof(uint16_t));
+
+    // Copy the map (deep copy)
+    if (!binseq_map_copy_to_node(best_node->map, new_root)) {
+        fprintf(stderr, "Failed to copy map to new root\n");
+        free(new_root->compress_sequence);
+        free(new_root);
+        cleanup_node_pools();
+        return NULL;
+    }
+
+    // Clean up all existing nodes
     cleanup_node_pools();
 
     #ifdef DEBUG
     printf("\n\n ---------------- New root node -------------\n");
     printf("Selected node with savings=%d and sequence_count=%d\n",
-           new_root->saving_so_far, new_root->compress_sequence_count);
+    new_root->saving_so_far, new_root->compress_sequence_count);
     printNode(new_root, block, block_index);
     #endif
 
@@ -486,7 +545,7 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
         isEven = !isEven;
 
         // THEN check if we need to reset after processing this byte
-        if ((blockIndex + 1) % COMPRESS_SEQUENCE_LENGTH == 0 || (blockIndex + 1) == block_size) {
+        if ((blockIndex + 1) % RESET_ROOT_LENGTH == 0 || (blockIndex + 1) == block_size) {
             TreeNode* new_root = resetToBestNode(&pool_manager, 
                                               pool_manager.pool[pool_manager.active_index].size,
                                               block, blockIndex);
