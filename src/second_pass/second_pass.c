@@ -8,7 +8,7 @@
 #include "../write_in_file/write_in_file.h"
 #include "../weighted_freq.h"
 
-//#define PRUNE
+#define PRUNE
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
@@ -196,7 +196,7 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
     int32_t best_saving[SEQ_LENGTH_LIMIT+1];
     
     for (int i = 0; i < SEQ_LENGTH_LIMIT+1; i++) {
-        best_saving[i] = INT_MIN;
+        best_saving[i] = 0;
         best_index[i] = -1;
     }
 
@@ -206,6 +206,11 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
         TreeNode *oldNode = &old_pool->data[j];
         #ifdef PRUNE
         if (oldNode->isPruned) continue;
+        if (oldNode->saving_so_far < best_saving[oldNode->incoming_weight]) {
+            //printNode(oldNode, block, block_index);
+            //printNode(best_index[oldNode->incoming_weight], block, block_index);
+            continue;
+        }
         #endif
 
 		#ifdef DEBUG
@@ -246,6 +251,16 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
         }
     }
 
+    #ifdef DEBUG
+        printf("\n\n +++++++++++++++++++++++++++++++++ Current Node count =%d", new_nodes_count);
+        for (int i = 0; i < new_nodes_count; i++) {            
+            printNode(&new_pool->data[i], block, block_index);
+        }
+        printf("\n\n +++++++++++++++++++++++++++++++++ Current Node count =%d", new_nodes_count);
+        printf("\n stop here");
+        fflush(stdout);
+    
+    #endif
     return new_nodes_count;
 }
 
@@ -409,6 +424,10 @@ static inline void resetToBestNode(TreeNodePoolManager* mgr, int node_count, con
         }
     }
     
+    #ifdef DEBUG
+    printf("\n\n ---------------- best node -------------count=%d>",node_count);
+    printNode(&pool->data[best_index], block, block_index);
+    #endif
     // Clean up the pools
     cleanup_node_pools();
     exit(0);
