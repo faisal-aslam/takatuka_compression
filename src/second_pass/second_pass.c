@@ -182,12 +182,7 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
     }
 
     // PRUNE step: mark nodes that are not the best as pruned
-    for (int i = 0; i < new_nodes_count; i++) {
-        TreeNode* node = &new_pool->data[i];
-        if (node->saving_so_far+1 < best_saving[node->incoming_weight]) {
-            node->isPruned = 1;
-        }
-    }
+    apply_hybrid_pruning(new_pool, new_nodes_count, block, block_index, best_index, best_saving);
 
     return new_nodes_count;
 }
@@ -223,11 +218,6 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     new_saving += oldNode->saving_so_far;
     uint8_t isPruned = 0;
         
-    // Only prune if we have a better alternative (even if savings are negative)
-    if (best_index[new_weight] != -1 && new_saving < best_saving[new_weight]) {
-        isPruned = 1;
-    }
-
 
     TreeNode* newNode = alloc_tree_node(mgr);
     if (!newNode) {
