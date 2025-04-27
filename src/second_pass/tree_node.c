@@ -15,16 +15,18 @@ TreeNode* create_tree_node(uint16_t initial_capacity) {
 
 void free_tree_node(TreeNode* node) {
     if (!node) return;
-    
+
     if (node->compress_sequence) {
         free(node->compress_sequence);
         node->compress_sequence = NULL;
     }
+
     if (node->map) {
         binseq_map_free(node->map);
         node->map = NULL;
     }
 }
+
 
 void init_tree_node(TreeNode* node, uint16_t initial_capacity) {
     if (!node) return;
@@ -78,36 +80,34 @@ void copy_tree_node_sequences(TreeNode *source, TreeNode *dest, uint16_t count) 
 }
 
 void print_tree_node(const TreeNode *node, const uint8_t* block, uint32_t block_index) {
-    
     if (!node) {
         printf("NULL node\n");
         return;
     }
-    
     printf("TreeNode @ %p:\n", (void*)node);
     printf("  incoming_weight: %u\n", node->incoming_weight);
     printf("  saving_so_far: %d\n", node->saving_so_far);
     printf("  isPruned: %u\n", node->isPruned);
-   
     int nodeCount = 0;
     if (node->compress_sequence) {
-        for (int i=0; i < node->compress_sequence_count; i++) {
+        for (int i = 0; i < node->compress_sequence_count; i++) {
             printf("\n\tNode compressed = %d", node->compress_sequence[i]);
             printf("\t { ");
-            for (int j=0; j < node->compress_sequence[i]; j++) {
-                if (block && (nodeCount) < BLOCK_SIZE) {
+            for (int j = 0; j < node->compress_sequence[i]; j++) {
+                if (block && nodeCount < BLOCK_SIZE) {
                     printf("0x%x", block[nodeCount]);
                     nodeCount++;
                 } else {
                     printf("[INVALID]");
                 }
-                if (j+1 < node->compress_sequence[i]) printf(", ");
+                if (j + 1 < node->compress_sequence[i]) printf(", ");
             }
             printf(" }, ");
         }
     } else {
         printf("  compress_sequence: NULL\n");
     }
+
     if (node->map) {
         binseq_map_print(node->map);
     } else {
