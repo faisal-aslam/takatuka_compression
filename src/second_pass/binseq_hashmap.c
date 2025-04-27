@@ -220,10 +220,18 @@ void binseq_map_print(const BinSeqMap* map) {
 }
 
 int binseq_map_copy_to_node(const BinSeqMap* source, struct TreeNode* target) {
-    // Allow copying NULL/empty maps - just set target's map to NULL
-    if (!target || !source) {
+    if (!target) {
         fprintf(stderr, "Invalid target node\n");
         return 0;
+    }
+
+    // If source is NULL, just set target's map to NULL
+    if (!source) {
+        if (target->map) {
+            binseq_map_free(target->map);
+        }
+        target->map = NULL;
+        return 1;
     }
 
     BinSeqMap* new_map = binseq_map_create(source->capacity+1);
@@ -232,28 +240,19 @@ int binseq_map_copy_to_node(const BinSeqMap* source, struct TreeNode* target) {
         return 0;
     }
 
-    // If source is NULL or empty, just set the empty map to the target. 
-    if (!source->entries || source->capacity == 0 || source->size == 0) {
-        target->map = new_map;    
-        return 1; // Successfully set the empty map.
-    }
-
+    // Copy all entries
     for (size_t i = 0; i < source->capacity; i++) {
         const Entry* src = &source->entries[i];
         if (!src->used) continue;
 
-        if (!src->binary_sequence || src->length == 0) {
-            fprintf(stderr, "Skipping invalid map entry\n");
-            continue;
-        }
-
         if (!binseq_map_put(new_map, src->binary_sequence, src->length, src->frequency)) {
             fprintf(stderr, "Failed to put entry in new map\n");
             binseq_map_free(new_map);
-            return 0;
+            return 0;  // Return failure but new_map is already freed
         }
     }
 
+    // Free old map if it exists
     if (target->map) {
         binseq_map_free(target->map);
     }

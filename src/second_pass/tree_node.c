@@ -78,35 +78,36 @@ void copy_tree_node_sequences(TreeNode *source, TreeNode *dest, uint16_t count) 
 }
 
 void print_tree_node(const TreeNode *node, const uint8_t* block, uint32_t block_index) {
+    
     if (!node) {
-        printf("[NULL NODE]\n");
+        printf("NULL node\n");
         return;
     }
     
-    printf("\n Node :");
-    printf("saving_so_far=%d, incoming_weight=%d, isPruned=%d, compress_seq_count=%d", 
-           node->saving_so_far,            
-           node->incoming_weight, 
-           node->isPruned, 
-           node->compress_sequence_count);
-    printf(", total Savings =%d", node->saving_so_far);
+    printf("TreeNode @ %p:\n", (void*)node);
+    printf("  incoming_weight: %u\n", node->incoming_weight);
+    printf("  saving_so_far: %d\n", node->saving_so_far);
+    printf("  isPruned: %u\n", node->isPruned);
    
     int nodeCount = 0;
-    for (int i=0; i < node->compress_sequence_count; i++) {
-        printf("\n\tNode compressed = %d", node->compress_sequence[i]);
-        printf("\t { ");
-        for (int j=0; j < node->compress_sequence[i]; j++) {
-            if (block && (nodeCount) < BLOCK_SIZE) {
-                printf("0x%x", block[nodeCount]);
-                nodeCount++;
-            } else {
-                printf("[INVALID]");
+    if (node->compress_sequence) {
+        for (int i=0; i < node->compress_sequence_count; i++) {
+            printf("\n\tNode compressed = %d", node->compress_sequence[i]);
+            printf("\t { ");
+            for (int j=0; j < node->compress_sequence[i]; j++) {
+                if (block && (nodeCount) < BLOCK_SIZE) {
+                    printf("0x%x", block[nodeCount]);
+                    nodeCount++;
+                } else {
+                    printf("[INVALID]");
+                }
+                if (j+1 < node->compress_sequence[i]) printf(", ");
             }
-            if (j+1 < node->compress_sequence[i]) printf(", ");
+            printf(" }, ");
         }
-        printf(" }, ");
+    } else {
+        printf("  compress_sequence: NULL\n");
     }
-    
     if (node->map) {
         binseq_map_print(node->map);
     } else {

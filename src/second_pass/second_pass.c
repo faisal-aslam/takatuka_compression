@@ -55,7 +55,15 @@ void cleanup_node_pools() {
         TreeNodePool* pool = &pool_manager.pool[i];
         if (pool->data) {
             for (size_t j = 0; j < pool->size; j++) {
-                free_tree_node(&pool->data[j]);
+                // Properly free each tree node's resources
+                if (pool->data[j].compress_sequence) {
+                    free(pool->data[j].compress_sequence);
+                    pool->data[j].compress_sequence = NULL;
+                }
+                if (pool->data[j].map) {
+                    binseq_map_free(pool->data[j].map);
+                    pool->data[j].map = NULL;
+                }
             }
             free(pool->data);
             pool->data = NULL;
@@ -474,7 +482,6 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
         return;
     }
     
-    TreeNode* current_root = &pool_manager.pool[0].data[0];
     uint8_t isEven = 0;
     uint32_t blockIndex;
     
@@ -488,39 +495,63 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
         // THEN check if we need to reset after processing this byte
         if ((blockIndex + 1) % RESET_ROOT_LENGTH == 0 || (blockIndex + 1) == block_size) {
             TreeNode* new_root = resetToBestNode(&pool_manager, 
-                                              pool_manager.pool[pool_manager.active_index].size,
-                                              block, blockIndex);
+                pool_manager.pool[pool_manager.active_index].size,
+                block, blockIndex);
             if (!new_root) {
                 fprintf(stderr, "Failed to create new root\n");
                 cleanup_node_pools();
                 return;
             }
-            
-            // Reinitialize with the preserved node
-            cleanup_node_pools();
+
+            // Copy the node first
             TreeNode* root_node = alloc_tree_node(&pool_manager);
             if (!root_node) {
                 fprintf(stderr, "Failed to allocate new root node\n");
-                free(new_root);
+                free_tree_node(new_root);
                 cleanup_node_pools();
                 return;
             }
-            
+
+            // Copy node data (but not pointers)
             memcpy(root_node, new_root, sizeof(TreeNode));
+            root_node->compress_sequence = NULL;
             root_node->map = NULL;
-            if (!binseq_map_copy_to_node(new_root->map, root_node)) {
-                fprintf(stderr, "Failed to copy map to new root\n");
-                free(new_root);
-                cleanup_node_pools();
-                return;
+
+            // Copy sequence data if it exists
+            if (new_root->compress_sequence && new_root->compress_sequence_count > 0) {
+                root_node->compress_sequence = malloc(new_root->compress_sequence_count * sizeof(uint16_t));
+                if (!root_node->compress_sequence) {
+                    fprintf(stderr, "Failed to allocate sequence data\n");
+                    free_tree_node(new_root);
+                    cleanup_node_pools();
+                    return;
+                }
+                memcpy(root_node->compress_sequence, new_root->compress_sequence,
+                    new_root->compress_sequence_count * sizeof(uint16_t));
             }
+
+            // Copy map
+            if (new_root->map) {
+                if (!binseq_map_copy_to_node(new_root->map, root_node)) {
+                    fprintf(stderr, "Failed to copy map to new root\n");
+                    if (root_node->compress_sequence) free(root_node->compress_sequence);
+                    free_tree_node(new_root);
+                    cleanup_node_pools();
+                    return;
+                }
+            }
+
+            // Now properly free the temporary new_root
+            if (new_root->compress_sequence) free(new_root->compress_sequence);
+            if (new_root->map) binseq_map_free(new_root->map);
             free(new_root);
-            current_root = root_node;
+
+            //for root we use even pool thus next pool will be odd.
             isEven = 0;
             
             #ifdef DEBUG
             printf("\n\n *****After reset at position %u:", blockIndex);
-            print_tree_node(current_root, block, blockIndex);
+            print_tree_node(new_root, block, blockIndex);
             #endif
         }
     }
