@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <math.h>
 #include "../write_in_file/write_in_file.h"
 #include "../weighted_freq.h"
 
@@ -80,7 +81,11 @@ static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, B
     const int* freq_ptr = binseq_map_get_frequency(map, newBinSeq, seq_length);
     int frequency = freq_ptr ? *freq_ptr : 0;
 
-    return MIN(frequency*(seq_length-1), (seq_length-1)*8);
+    // Non-linear weighting
+    double savings = pow(frequency, 1.2) * pow(seq_length - 1, 1.8);
+    int max_possible_savings = (seq_length - 1) * 8;
+
+    return (int32_t)MIN(savings, max_possible_savings);
 }
 
 static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_len, uint32_t location) {
@@ -179,7 +184,7 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
     // PRUNE step: mark nodes that are not the best as pruned
     for (int i = 0; i < new_nodes_count; i++) {
         TreeNode* node = &new_pool->data[i];
-        if (node->saving_so_far < best_saving[node->incoming_weight]) {
+        if (node->saving_so_far+1 < best_saving[node->incoming_weight]) {
             node->isPruned = 1;
         }
     }
