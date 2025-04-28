@@ -8,9 +8,8 @@
 #include "tree_node_pool.h"
 
 // Configuration constants for pruning algorithm
-#define BEAM_WIDTH 5             // Maximum number of nodes to keep per weight level
-#define MIN_SEQUENCE_LENGTH 5     // Minimum length to consider a sequence as significant
-#define POTENTIAL_THRESHOLD 0.6f // Percentage of best saving to consider a node as potential
+#define BEAM_WIDTH 7             // Maximum number of nodes to keep per weight level
+#define POTENTIAL_THRESHOLD 0.75f // Percentage of best saving to consider a node as potential
 
 /**
  * Calculates the potential savings from compressing a binary sequence
@@ -20,15 +19,6 @@
  * @return Calculated savings value (higher means more beneficial to compress)
  */
 int32_t calculate_savings(const uint8_t* seq, uint16_t len, BinSeqMap* map);
-
-/**
- * Determines if a node represents a potentially compressible sequence
- * @param node The tree node to evaluate
- * @param block The data block being processed
- * @param block_index Current position in the block
- * @return 1 if sequence is considered potential, 0 otherwise
- */
-int is_potential_sequence(TreeNode* node, const uint8_t* block, uint32_t block_index);
 
 /*
  * Applies hybrid pruning strategy combining multiple criteria:
