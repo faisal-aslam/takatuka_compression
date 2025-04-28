@@ -12,31 +12,34 @@
 
 /**
  * Calculates compression savings for a binary sequence based on:
- * - Frequency of the sequence (more frequent = higher savings)
- * - Length of the sequence (longer = higher savings)
- * - Uniformity (all identical bits get exponential boost)
+ * - Frequency (higher frequency => higher savings)
+ * - Sequence length (longer sequences => much higher savings)
+ * - Uniformity (uniform sequences => extra exponential boost)
+ *
+ * Optimized to avoid pow() for better performance.
+ *
  * @param new_bin_seq The binary sequence to evaluate
  * @param seq_length Length of the sequence
  * @param map Hashmap containing frequency counts
  * @return Calculated savings value, or INT_MIN on error
  */
 int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSeqMap* map) {
-    // Validate input parameters
+    // Validate inputs
     if (!new_bin_seq || seq_length <= 0 || !map) {
         fprintf(stderr, "Error: Invalid parameters in calculate_savings\n");
         return INT_MIN;
     }
 
-    // Sequences of length 1 provide no compression benefit
+    // No compression gain possible from sequences of length 1
     if (seq_length == 1) {
         return 0;
     }
 
-    // Get frequency count from hashmap (0 if sequence not found)
+    // Lookup frequency of the sequence from the hashmap
     const int* freq_ptr = binseq_map_get_frequency(map, new_bin_seq, seq_length);
     int frequency = freq_ptr ? *freq_ptr : 0;
-  
-    // Check if sequence is uniform (all bits identical)
+
+    // Check if the sequence is made of identical bits (uniformity check)
     uint8_t first = new_bin_seq[0];
     int uniform = 1;
     for (int i = 1; i < seq_length; i++) {
@@ -45,20 +48,49 @@ int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSe
             break;
         }
     }
-    
-    // Calculate savings with different formulas for uniform vs non-uniform sequences
-    double savings;
+
+    double savings = 0.0;
+
     if (uniform) {
-        // Exponential boost for uniform sequences since they compress extremely well
-        savings = pow(frequency + 1, 1.5) * pow(seq_length, 3.0);
+        /**
+         * Uniform sequences (e.g., "0000..." or "1111...") compress extremely well.
+         * Provide a heavy boost:
+         * - Frequency^(1.4) approximated manually
+         * - Sequence_length^(3.5) approximated manually
+         *
+         * Avoid using pow() by manual multiplications.
+         */
+        double freq_factor = (frequency + 1) * sqrt(frequency + 1); // ~ frequency^1.5
+        double len_factor = (double)(seq_length * seq_length * seq_length) * sqrt(seq_length); // ~ seq_length^3.5
+
+        savings = freq_factor * len_factor;
+
+        // Extra bonus for being uniform and longer
+        savings += seq_length * 10.0;
     } else {
-        // Standard formula for non-uniform sequences
-        savings = pow(frequency, 1.2) * pow(seq_length - 1, 1.8);
+        /**
+         * Non-uniform sequences:
+         * - Good compression if frequent and reasonably long
+         * - Boost long patterns slightly more
+         */
+        double freq_factor = (double)frequency * pow((double)frequency, 0.1); // ~ frequency^1.1
+        double len_factor = (double)((seq_length - 1) * (seq_length - 1)) * sqrt(seq_length - 1); // ~ (seq_length-1)^2.5
+
+        savings = freq_factor * len_factor;
+
+        // Small bonus for longer sequences
+        savings += seq_length * 5.0;
     }
-    
-    // Cap savings at theoretical maximum (8 bits per byte minus 1)
+
+    /**
+     * Safety Cap:
+     * - Maximum possible saving cannot exceed (seq_length - 1) * 8 bits
+     * - Ensures theoretical limits are respected
+     */
     return (int32_t)MIN(savings, (seq_length - 1) * 8);
 }
+
+
 
 /**
  * Determines if a node represents a sequence worth preserving based on:

@@ -9,7 +9,7 @@
 
 // Configuration constants for pruning algorithm
 #define BEAM_WIDTH 5             // Maximum number of nodes to keep per weight level
-#define MIN_SEQUENCE_LENGTH 3     // Minimum length to consider a sequence as significant
+#define MIN_SEQUENCE_LENGTH 5     // Minimum length to consider a sequence as significant
 #define POTENTIAL_THRESHOLD 0.6f // Percentage of best saving to consider a node as potential
 
 /**
@@ -19,7 +19,7 @@
  * @param map Hashmap containing frequency data of sequences
  * @return Calculated savings value (higher means more beneficial to compress)
  */
-int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSeqMap* map);
+int32_t calculate_savings(const uint8_t* seq, uint16_t len, BinSeqMap* map);
 
 /**
  * Determines if a node represents a potentially compressible sequence
@@ -30,16 +30,7 @@ int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSe
  */
 int is_potential_sequence(TreeNode* node, const uint8_t* block, uint32_t block_index);
 
-/**
- * Prunes nodes to keep only the top 'keep' nodes by their saving value
- * @param pool Pool of tree nodes to process
- * @param node_count Total number of nodes in the pool
- * @param weight The weight level to filter nodes by
- * @param keep Maximum number of nodes to retain
- */
-void keep_top_nodes_by_weight(TreeNodePool* pool, int node_count, int weight, int keep);
-
-/**
+/*
  * Applies hybrid pruning strategy combining multiple criteria:
  * - Keeps absolute best node per weight level
  * - Retains nodes forming potential sequences

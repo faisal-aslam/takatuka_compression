@@ -11,13 +11,6 @@
 #include "../weighted_freq.h"
 
 #define PRUNE
-#ifndef MIN
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#endif
-
-#ifndef MAX
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-#endif
 
 // Global pool manager instance
 TreeNodePoolManager pool_manager = {0};
@@ -67,26 +60,6 @@ void cleanup_node_pools() {
     pool_manager.active_index = 0;
 }
 
-
-static int32_t calculateSavings(const uint8_t* newBinSeq, uint16_t seq_length, BinSeqMap* map) {
-    if (!newBinSeq || seq_length <= 0 || !map) {
-        fprintf(stderr, "Error: Invalid parameters in calculateSavings\n");
-        return INT_MIN;
-    }
-
-    if (seq_length == 1) {
-        return 0;
-    }
-
-    const int* freq_ptr = binseq_map_get_frequency(map, newBinSeq, seq_length);
-    int frequency = freq_ptr ? *freq_ptr : 0;
-
-    // Non-linear weighting
-    double savings = pow(frequency, 1.2) * pow(seq_length - 1, 1.8);
-    int max_possible_savings = (seq_length - 1) * 8;
-
-    return (int32_t)MIN(savings, max_possible_savings);
-}
 
 static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_len, uint32_t location) {
     BinSeqMap* map = node->map;
@@ -209,7 +182,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     }
     
     
-    int32_t new_saving = calculateSavings(sequence, seq_len, oldNode->map);
+    int32_t new_saving = calculate_savings(sequence, seq_len, oldNode->map);
     if (new_saving == INT_MIN) {
         // Invalid case, skip this path
         return new_nodes_count;
@@ -331,7 +304,7 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
         exit(EXIT_FAILURE);
     }
 
-    root->saving_so_far = calculateSavings(&block[0], 1, root->map);
+    root->saving_so_far = calculate_savings(&block[0], 1, root->map);
 
     #ifdef DEBUG
     printf("\nCreated new root node in pool[0][0]:\n");
