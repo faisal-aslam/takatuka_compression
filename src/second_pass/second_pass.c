@@ -509,6 +509,11 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
             
 
             isEven = 0;
+
+            if ((blockIndex + 1) == block_size) {
+                printf("\n\n ***** After reset at position %u:\n", blockIndex);
+                print_tree_node(root_node, block, blockIndex);
+            }
 #ifdef DEBUG
             printf("\n\n ***** After reset at position %u:\n", blockIndex);
             print_tree_node(root_node, block, blockIndex);

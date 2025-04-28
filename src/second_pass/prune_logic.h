@@ -7,15 +7,51 @@
 #include "binseq_hashmap.h"
 #include "tree_node_pool.h"
 
-// Configuration constants
-#define BEAM_WIDTH 5             
-#define MIN_SEQUENCE_LENGTH 5    
-#define POTENTIAL_THRESHOLD 0.6f 
+// Configuration constants for pruning algorithm
+#define BEAM_WIDTH 5             // Maximum number of nodes to keep per weight level
+#define MIN_SEQUENCE_LENGTH 3     // Minimum length to consider a sequence as significant
+#define POTENTIAL_THRESHOLD 0.6f // Percentage of best saving to consider a node as potential
 
-
+/**
+ * Calculates the potential savings from compressing a binary sequence
+ * @param new_bin_seq The binary sequence to evaluate
+ * @param seq_length Length of the sequence
+ * @param map Hashmap containing frequency data of sequences
+ * @return Calculated savings value (higher means more beneficial to compress)
+ */
 int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSeqMap* map);
+
+/**
+ * Determines if a node represents a potentially compressible sequence
+ * @param node The tree node to evaluate
+ * @param block The data block being processed
+ * @param block_index Current position in the block
+ * @return 1 if sequence is considered potential, 0 otherwise
+ */
 int is_potential_sequence(TreeNode* node, const uint8_t* block, uint32_t block_index);
+
+/**
+ * Prunes nodes to keep only the top 'keep' nodes by their saving value
+ * @param pool Pool of tree nodes to process
+ * @param node_count Total number of nodes in the pool
+ * @param weight The weight level to filter nodes by
+ * @param keep Maximum number of nodes to retain
+ */
 void keep_top_nodes_by_weight(TreeNodePool* pool, int node_count, int weight, int keep);
+
+/**
+ * Applies hybrid pruning strategy combining multiple criteria:
+ * - Keeps absolute best node per weight level
+ * - Retains nodes forming potential sequences
+ * - Preserves nodes with savings above threshold
+ * - Enforces beam width limit per weight level
+ * @param pool Pool of tree nodes to process
+ * @param node_count Total number of nodes
+ * @param block The data block being processed
+ * @param block_index Current position in the block
+ * @param best_index Array tracking best node indices per weight level
+ * @param best_saving Array tracking best saving values per weight level
+ */
 void apply_hybrid_pruning(TreeNodePool* pool, int node_count, 
                          const uint8_t* block, uint32_t block_index,
                          int* best_index, int32_t* best_saving);
