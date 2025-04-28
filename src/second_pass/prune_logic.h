@@ -10,6 +10,7 @@
 // Configuration constants for pruning algorithm
 #define BEAM_WIDTH 7             // Maximum number of nodes to keep per weight level
 #define POTENTIAL_THRESHOLD 0.75f // Percentage of best saving to consider a node as potential
+#define MAXIMUN_SAVING_CAP 500
 
 /**
  * Calculates the potential savings from compressing a binary sequence

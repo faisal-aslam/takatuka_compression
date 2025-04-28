@@ -39,55 +39,13 @@ int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSe
     const int* freq_ptr = binseq_map_get_frequency(map, new_bin_seq, seq_length);
     int frequency = freq_ptr ? *freq_ptr : 0;
 
-    // Check if the sequence is made of identical bits (uniformity check)
-    uint8_t first = new_bin_seq[0];
-    int uniform = 1;
-    for (int i = 1; i < seq_length; i++) {
-        if (new_bin_seq[i] != first) {
-            uniform = 0;
-            break;
-        }
-    }
-
-    double savings = 0.0;
-
-    if (uniform) {
-        /**
-         * Uniform sequences (e.g., "0000..." or "1111...") compress extremely well.
-         * Provide a heavy boost:
-         * - Frequency^(1.4) approximated manually
-         * - Sequence_length^(3.5) approximated manually
-         *
-         * Avoid using pow() by manual multiplications.
-         */
-        double freq_factor = (frequency + 1) * sqrt(frequency + 1); // ~ frequency^1.5
-        double len_factor = (double)(seq_length * seq_length * seq_length) * sqrt(seq_length); // ~ seq_length^3.5
-
-        savings = freq_factor * len_factor;
-
-        // Extra bonus for being uniform and longer
-        savings += seq_length * 10.0;
-    } else {
-        /**
-         * Non-uniform sequences:
-         * - Good compression if frequent and reasonably long
-         * - Boost long patterns slightly more
-         */
-        double freq_factor = (double)frequency * pow((double)frequency, 0.1); // ~ frequency^1.1
-        double len_factor = (double)((seq_length - 1) * (seq_length - 1)) * sqrt(seq_length - 1); // ~ (seq_length-1)^2.5
-
-        savings = freq_factor * len_factor;
-
-        // Small bonus for longer sequences
-        savings += seq_length * 5.0;
-    }
-
+    double savings = (double)(pow(frequency+1, 1.3))*(pow(seq_length, 1.5));
     /**
      * Safety Cap:
      * - Maximum possible saving cannot exceed (seq_length - 1) * 8 bits
      * - Ensures theoretical limits are respected
      */
-    return (int32_t)MIN(savings, 500);
+    return (int32_t)MIN(savings, MAXIMUN_SAVING_CAP);
 }
 
 
