@@ -5,6 +5,11 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h> // For memcpy
+#include <stdlib.h>
+
+#define SELECTION_SORT_THRESHOLD 32
+
 
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -48,40 +53,89 @@ int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSe
     return (int32_t)MIN(savings, MAXIMUN_SAVING_CAP);
 }
 
-
-/**
- * Compare function for sorting by savings (descending)
- */
+// Comparison functions for qsort
 static int compare_by_savings(const void* a, const void* b) {
     const TreeNode* node_a = *(const TreeNode**)a;
     const TreeNode* node_b = *(const TreeNode**)b;
     return (node_b->saving_so_far - node_a->saving_so_far); // Descending
 }
 
-/**
- * Compare function for sorting by sequence count (ascending)
- */
 static int compare_by_seq_count(const void* a, const void* b) {
     const TreeNode* node_a = *(const TreeNode**)a;
     const TreeNode* node_b = *(const TreeNode**)b;
     return (node_a->compress_sequence_count - node_b->compress_sequence_count); // Ascending
 }
 
+static inline void keep_top_k_by_savings(TreeNode** nodes, int count, int k) {
+    if (count <= SELECTION_SORT_THRESHOLD) {
+        // In-place partial selection sort for savings (descending)
+        for (int i = 0; i < k && i < count; i++) {
+            int max_idx = i;
+            for (int j = i + 1; j < count; j++) {
+                if (nodes[j]->saving_so_far > nodes[max_idx]->saving_so_far) {
+                    max_idx = j;
+                }
+            }
+            if (i != max_idx) {
+                TreeNode* temp = nodes[i];
+                nodes[i] = nodes[max_idx];
+                nodes[max_idx] = temp;
+            }
+            nodes[i]->isPruned = 0;
+            
+            // Early exit if remaining elements can't affect top k
+            if (count - i - 1 < k - (i+1)) break;
+        }
+    } else {
+        // Use qsort for larger arrays
+        qsort(nodes, count, sizeof(TreeNode*), compare_by_savings);
+        for (int i = 0; i < k && i < count; i++) {
+            nodes[i]->isPruned = 0;
+        }
+    }
+}
+
+static inline void keep_top_k_by_seq_count(TreeNode** nodes, int count, int k) {
+    if (count <= SELECTION_SORT_THRESHOLD) {
+        // In-place partial selection sort for sequence count (ascending)
+        for (int i = 0; i < k && i < count; i++) {
+            int min_idx = i;
+            for (int j = i + 1; j < count; j++) {
+                if (nodes[j]->compress_sequence_count < nodes[min_idx]->compress_sequence_count) {
+                    min_idx = j;
+                }
+            }
+            if (i != min_idx) {
+                TreeNode* temp = nodes[i];
+                nodes[i] = nodes[min_idx];
+                nodes[min_idx] = temp;
+            }
+            nodes[i]->isPruned = 0;
+            
+            // Early exit if remaining elements can't affect top k
+            if (count - i - 1 < k - (i+1)) break;
+        }
+    } else {
+        // Use qsort for larger arrays
+        qsort(nodes, count, sizeof(TreeNode*), compare_by_seq_count);
+        for (int i = 0; i < k && i < count; i++) {
+            nodes[i]->isPruned = 0;
+        }
+    }
+}
+
 void apply_dual_beam_pruning(TreeNodePool *pool, int node_count,
                            const uint8_t *block, uint32_t block_index,
                            int *best_index, int32_t *best_saving) {
-    if (!pool || !pool->data || node_count <= 0)
-        return;
+    if (!pool || !pool->data || node_count <= 0) return;
 
-    // Process each weight level separately
     for (int weight = 0; weight <= SEQ_LENGTH_LIMIT; weight++) {
-        if (best_index[weight] == -1)
-            continue;
+        if (best_index[weight] == -1) continue;
 
-        // Collect all nodes for this weight level
-        TreeNode* nodes[256]; // Adjust size if needed
+        // Collect nodes for this weight level
+        TreeNode* nodes[256]; // Adjust size based on your needs
         int valid_count = 0;
-        
+
         for (int i = 0; i < node_count; i++) {
             TreeNode *node = &pool->data[i];
             if (node->incoming_weight == weight) {
@@ -90,24 +144,14 @@ void apply_dual_beam_pruning(TreeNodePool *pool, int node_count,
             }
         }
 
-        if (valid_count == 0)
-            continue;
+        if (valid_count == 0) continue;
 
-        // First beam: Keep top BEAM_WIDTH_SAVINGS by savings_so_far
-        qsort(nodes, valid_count, sizeof(TreeNode*), compare_by_savings);
-        for (int i = 0; i < MIN(BEAM_WIDTH_SAVINGS, valid_count); i++) {
-            nodes[i]->isPruned = 0;
-        }
+        // Apply both pruning criteria
+        keep_top_k_by_savings(nodes, valid_count, BEAM_WIDTH_SAVINGS);
+        keep_top_k_by_seq_count(nodes, valid_count, BEAM_WIDTH_SEQ_COUNT);
 
-        // Second beam: Keep top BEAM_WIDTH_SEQ_COUNT by compress_sequence_count
-        qsort(nodes, valid_count, sizeof(TreeNode*), compare_by_seq_count);
-        for (int i = 0; i < MIN(BEAM_WIDTH_SEQ_COUNT, valid_count); i++) {
-            nodes[i]->isPruned = 0;
-        }
-
-        // Always keep the absolute best node
+        // Always keep the absolute best node for this weight
         TreeNode *best_node = &pool->data[best_index[weight]];
         best_node->isPruned = 0;
     }
 }
-
