@@ -29,11 +29,8 @@ int32_t calculate_savings(const uint8_t* seq, uint16_t len, BinSeqMap* map);
  * @param node_count Total number of nodes
  * @param block The data block being processed
  * @param block_index Current position in the block
- * @param best_index Array tracking best node indices per weight level
- * @param best_saving Array tracking best saving values per weight level
  */
 void apply_dual_beam_pruning(TreeNodePool* pool, int node_count, 
-                           const uint8_t* block, uint32_t block_index,
-                           int* best_index, int32_t* best_saving);
+                           const uint8_t* block, uint32_t block_indexg);
 
 #endif // PRUNE_LOGIC_H
