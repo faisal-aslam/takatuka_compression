@@ -20,8 +20,7 @@ uint16_t total_codes = 0;
 void print_stacktrace(void);
 
 static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_nodes_count,
-                         const uint8_t* block, uint32_t block_size, uint32_t block_index,
-                         int best_index[], int32_t best_saving[],
+                         const uint8_t* block, uint32_t block_size, uint32_t block_index,                         
                          const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
                          int to_copy);
 static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
@@ -130,8 +129,7 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
 
         // Uncompressed path
         new_nodes_count = processNodePath(oldNode, mgr, new_nodes_count,
-                                          block, block_size, block_index,
-                                          best_index, best_saving,
+                                          block, block_size, block_index,                                        
                                           &block[block_index], 1,
                                           oldNode->incoming_weight + 1,
                                           oldNode->compress_sequence_count);
@@ -147,15 +145,14 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
 
             const uint8_t* seq_start = &block[block_index + 1 - seq_len];
             new_nodes_count = processNodePath(oldNode, mgr, new_nodes_count,
-                                              block, block_size, block_index,
-                                              best_index, best_saving,
+                                              block, block_size, block_index,                                              
                                               seq_start, seq_len, 0,
                                               oldNode->compress_sequence_count - oldNode->incoming_weight + k);
         }
     }
 
     // PRUNE step: mark nodes that are not the best as pruned
-    apply_hybrid_pruning(new_pool, new_nodes_count, block, block_index, best_index, best_saving);
+    apply_dual_beam_pruning(new_pool, new_nodes_count, block, block_index);
 
     return new_nodes_count;
 }
@@ -163,7 +160,7 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
 
 static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_nodes_count,
     const uint8_t* block, uint32_t block_size, uint32_t block_index,
-    int best_index[], int32_t best_saving[],
+    
     const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
     int to_copy) {
     
@@ -240,21 +237,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
 
     // Only free previous node's map if we're replacing it
     int weight_index = (new_weight == 0) ? 0 : new_weight;
-    #ifdef PRUNEE
-    if (best_index[weight_index] != -1) {
-        TreeNodePool* pool = &mgr->pool[mgr->active_index];
-        TreeNode* prev_node = &pool->data[best_index[weight_index]];
-        if (prev_node->map) {
-            binseq_map_free(prev_node->map);
-            prev_node->map = NULL;
-        }
-        prev_node->isPruned = 1;
-    }
-    #endif
-
-    best_saving[weight_index] = new_saving;
-    best_index[weight_index] = new_nodes_count;
-
+    
     #ifdef DEBUG
     printf("\n new node created \n");
     print_tree_node(newNode, block, block_index);

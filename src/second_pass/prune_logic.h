@@ -8,8 +8,8 @@
 #include "tree_node_pool.h"
 
 // Configuration constants for pruning algorithm
-#define BEAM_WIDTH_SAVINGS 5      // Keep top 5 paths by savings_so_far
-#define BEAM_WIDTH_SEQ_COUNT 4    // Keep top 4 paths by compress_sequence_count
+#define BEAM_WIDTH_SAVINGS 2      // Keep top 5 paths by savings_so_far
+#define BEAM_WIDTH_SEQ_COUNT 2    // Keep top 4 paths by compress_sequence_count
 #define MAXIMUM_SAVING_CAP 500
 
 /**

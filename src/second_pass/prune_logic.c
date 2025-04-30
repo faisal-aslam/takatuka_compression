@@ -11,10 +11,6 @@
 #define SELECTION_SORT_THRESHOLD 32
 #define MAX_NODE_PER_WEIGHT 256
 
-#ifndef MIN
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#endif
-
 /**
  * Calculates compression savings for a binary sequence based on:
  * - Frequency (higher frequency => higher savings)
@@ -43,6 +39,7 @@ int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSe
     // Lookup frequency of the sequence from the hashmap
     const int* freq_ptr = binseq_map_get_frequency(map, new_bin_seq, seq_length);
     int frequency = freq_ptr ? *freq_ptr : 0;
+    //if (frequency == 0) return 0;
 
     double savings = (double)(pow(frequency+1, 1.3))*(pow(seq_length, 1.5));
     /**
@@ -50,7 +47,7 @@ int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSe
      * - Maximum possible saving cannot exceed (seq_length - 1) * 8 bits
      * - Ensures theoretical limits are respected
      */
-    return (int32_t)MIN(savings, MAXIMUN_SAVING_CAP);
+    return (int32_t)MIN(savings, MAXIMUM_SAVING_CAP);
 }
 
 // Comparison functions for qsort
