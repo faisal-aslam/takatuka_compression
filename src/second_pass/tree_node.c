@@ -87,12 +87,12 @@ void print_tree_node(const TreeNode *node, const uint8_t* block, uint32_t block_
     printf("TreeNode @ %p:\n", (void*)node);
     printf("  incoming_weight: %u\n", node->incoming_weight);
     printf("  saving_so_far: %d\n", node->saving_so_far);
-    printf("  isPruned: %u\n", node->isPruned);
+    printf("  isPruned: %u\n ", node->isPruned);
     int nodeCount = 0;
     if (node->compress_sequence) {
         for (int i = 0; i < node->compress_sequence_count; i++) {
-            printf("\n\tNode compressed = %d", node->compress_sequence[i]);
-            printf("\t { ");
+            printf("  Node compressed = %d", node->compress_sequence[i]);
+            printf("   { ");
             for (int j = 0; j < node->compress_sequence[i]; j++) {
                 if (block && nodeCount < BLOCK_SIZE) {
                     printf("0x%x", block[nodeCount]);

@@ -127,6 +127,11 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
 
         if (oldNode->isPruned) continue;
 
+        #ifdef DEBUG
+        printf("\n\n *********************** Processing old Node ****************");
+        print_tree_node(oldNode, block, block_index);
+        printf("\n\n ***********************************************************");
+        #endif
         // Uncompressed path
         new_nodes_count = processNodePath(oldNode, mgr, new_nodes_count,
                                           block, block_size, block_index,                                        
@@ -239,7 +244,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     int weight_index = (new_weight == 0) ? 0 : new_weight;
     
     #ifdef DEBUG
-    printf("\n new node created \n");
+    printf("\n\n new node created \n");
     print_tree_node(newNode, block, block_index);
     #endif
 

@@ -39,9 +39,9 @@ int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSe
     // Lookup frequency of the sequence from the hashmap
     const int* freq_ptr = binseq_map_get_frequency(map, new_bin_seq, seq_length);
     int frequency = freq_ptr ? *freq_ptr : 0;
-    //if (frequency == 0) return 0;
+    if (frequency == 0) return 0;
 
-    double savings = (double)(pow(frequency+1, 1.3))*(pow(seq_length, 1.5));
+    double savings = (double)(pow(frequency, 1.3))*(pow(seq_length, 1.5));
     /**
      * Safety Cap:
      * - Maximum possible saving cannot exceed (seq_length - 1) * 8 bits
@@ -96,11 +96,16 @@ static inline void keep_top_k_by_seq_count(TreeNode** nodes, int count, int k) {
     if (count <= SELECTION_SORT_THRESHOLD) {
         // In-place partial selection sort for sequence count (ascending)
         for (int i = 0; i < k && i < count; i++) {
+            if (!nodes[i]->isPruned) continue; //already selected by saving criteria.
             int min_idx = i;
             for (int j = i + 1; j < count; j++) {
-                if (nodes[j]->compress_sequence_count < nodes[min_idx]->compress_sequence_count) {
-                    min_idx = j;
+                for (int j = i + 1; j < count; j++) {
+                    if (nodes[j]->isPruned &&
+                        nodes[j]->compress_sequence_count < nodes[min_idx]->compress_sequence_count) {
+                        min_idx = j;
+                    }
                 }
+                
             }
             if (i != min_idx) {
                 TreeNode* temp = nodes[i];
@@ -135,6 +140,7 @@ void apply_dual_beam_pruning(TreeNodePool *pool, int node_count,
             if (node->incoming_weight == weight) {
                 if (valid_count >= MAX_NODE_PER_WEIGHT) {
                     fprintf(stderr, "\n nodes exceeds the limit \n");
+                    exit(EXIT_FAILURE);
                     break;
                 }
                 nodes[valid_count++] = node;
@@ -147,6 +153,19 @@ void apply_dual_beam_pruning(TreeNodePool *pool, int node_count,
         // Apply both pruning criteria
         keep_top_k_by_savings(nodes, valid_count, BEAM_WIDTH_SAVINGS);
         keep_top_k_by_seq_count(nodes, valid_count, BEAM_WIDTH_SEQ_COUNT);
+
+        #ifdef DEBUG
+        fprintf(stderr, "\n\n === Nodes for weight %d ===\n", weight);
+        for (int i = 0; i < valid_count; i++) {
+            if (!nodes[i]->isPruned) {
+                printf("=== Unproned \n");
+                print_tree_node(nodes[i], block, block_index);
+            } else {
+                printf("=== Pruned \n");
+                print_tree_node(nodes[i], block, block_index);
+            }
+        }
+        #endif
 
     }
 }
