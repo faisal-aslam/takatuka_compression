@@ -8,9 +8,9 @@
 #include "tree_node_pool.h"
 
 // Configuration constants for pruning algorithm
-#define BEAM_WIDTH 7             // Maximum number of nodes to keep per weight level
-#define POTENTIAL_THRESHOLD 0.75f // Percentage of best saving to consider a node as potential
-#define MAXIMUN_SAVING_CAP 500
+#define BEAM_WIDTH_SAVINGS 5      // Keep top 5 paths by savings_so_far
+#define BEAM_WIDTH_SEQ_COUNT 4    // Keep top 4 paths by compress_sequence_count
+#define MAXIMUM_SAVING_CAP 500
 
 /**
  * Calculates the potential savings from compressing a binary sequence
@@ -22,11 +22,9 @@
 int32_t calculate_savings(const uint8_t* seq, uint16_t len, BinSeqMap* map);
 
 /*
- * Applies hybrid pruning strategy combining multiple criteria:
- * - Keeps absolute best node per weight level
- * - Retains nodes forming potential sequences
- * - Preserves nodes with savings above threshold
- * - Enforces beam width limit per weight level
+ * Applies dual-criteria pruning strategy:
+ * - Keeps BEAM_WIDTH_SAVINGS paths with highest savings_so_far
+ * - Keeps BEAM_WIDTH_SEQ_COUNT paths with lowest compress_sequence_count
  * @param pool Pool of tree nodes to process
  * @param node_count Total number of nodes
  * @param block The data block being processed
@@ -34,8 +32,8 @@ int32_t calculate_savings(const uint8_t* seq, uint16_t len, BinSeqMap* map);
  * @param best_index Array tracking best node indices per weight level
  * @param best_saving Array tracking best saving values per weight level
  */
-void apply_hybrid_pruning(TreeNodePool* pool, int node_count, 
-                         const uint8_t* block, uint32_t block_index,
-                         int* best_index, int32_t* best_saving);
+void apply_dual_beam_pruning(TreeNodePool* pool, int node_count, 
+                           const uint8_t* block, uint32_t block_index,
+                           int* best_index, int32_t* best_saving);
 
 #endif // PRUNE_LOGIC_H
