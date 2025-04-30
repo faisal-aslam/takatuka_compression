@@ -1,5 +1,13 @@
 #ifdef DEBUG_MEMORY
+/**
+Replace all malloc and free calls in your code with: 
+                  MEM_ALLOC(size, type) instead of malloc(size)
+                  MEM_FREE(ptr) instead of free(ptr)
+And similarly:
+MEM_CALLOC(count, size, type) instead of calloc(count, size)
+MEM_REALLOC(ptr, new_size, type) instead of realloc(ptr, new_size)
 
+*/
 #include "memory_management.h"
 #include <stdio.h>
 #include <string.h>
