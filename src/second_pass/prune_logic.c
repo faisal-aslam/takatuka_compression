@@ -9,7 +9,7 @@
 #include <stdlib.h>
 
 #define SELECTION_SORT_THRESHOLD 32
-
+#define MAX_NODE_PER_WEIGHT 256
 
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -125,20 +125,21 @@ static inline void keep_top_k_by_seq_count(TreeNode** nodes, int count, int k) {
 }
 
 void apply_dual_beam_pruning(TreeNodePool *pool, int node_count,
-                           const uint8_t *block, uint32_t block_index,
-                           int *best_index, int32_t *best_saving) {
+                           const uint8_t *block, uint32_t block_index) {
     if (!pool || !pool->data || node_count <= 0) return;
 
     for (int weight = 0; weight <= SEQ_LENGTH_LIMIT; weight++) {
-        if (best_index[weight] == -1) continue;
-
         // Collect nodes for this weight level
-        TreeNode* nodes[256]; // Adjust size based on your needs
+        TreeNode* nodes[MAX_NODE_PER_WEIGHT]; 
         int valid_count = 0;
 
         for (int i = 0; i < node_count; i++) {
             TreeNode *node = &pool->data[i];
             if (node->incoming_weight == weight) {
+                if (valid_count >= MAX_NODE_PER_WEIGHT) {
+                    fprintf(stderr, "\n nodes exceeds the limit \n");
+                    break;
+                }
                 nodes[valid_count++] = node;
                 node->isPruned = 1; // Default to pruned
             }
@@ -150,8 +151,5 @@ void apply_dual_beam_pruning(TreeNodePool *pool, int node_count,
         keep_top_k_by_savings(nodes, valid_count, BEAM_WIDTH_SAVINGS);
         keep_top_k_by_seq_count(nodes, valid_count, BEAM_WIDTH_SEQ_COUNT);
 
-        // Always keep the absolute best node for this weight
-        TreeNode *best_node = &pool->data[best_index[weight]];
-        best_node->isPruned = 0;
     }
 }
