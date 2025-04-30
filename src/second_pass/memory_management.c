@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define MAX_TRACKED_ALLOCATIONS 1024
+
 typedef struct {
     void* ptr;
     size_t size;
@@ -12,56 +14,122 @@ typedef struct {
     const char* type;
 } AllocationRecord;
 
-static AllocationRecord allocations[1024]; // Static memory
+static AllocationRecord allocations[MAX_TRACKED_ALLOCATIONS]; // Static memory
 static int allocation_count = 0;
+static size_t total_allocated = 0;
+
+static int find_allocation_index(void* ptr) {
+    for (int i = 0; i < allocation_count; ++i) {
+        if (allocations[i].ptr == ptr)
+            return i;
+    }
+    return -1;
+}
 
 void* debug_malloc(size_t size, const char* file, int line, const char* type) {
+    if (allocation_count >= MAX_TRACKED_ALLOCATIONS) {
+        fprintf(stderr, "ERROR: Memory tracking limit exceeded at %s:%d for type %s\n", file, line, type);
+        return NULL;
+    }
+
     void* ptr = malloc(size);
     if (ptr) {
-        allocations[allocation_count] = (AllocationRecord){
+        allocations[allocation_count++] = (AllocationRecord){
             .ptr = ptr,
             .size = size,
             .file = file,
             .line = line,
             .type = type
         };
-        allocation_count++;
+        total_allocated += size;
     }
     return ptr;
 }
 
-void debug_free(void* ptr) {
-    if (!ptr) return;
-    
-    for (int i = 0; i < allocation_count; i++) {
-        if (allocations[i].ptr == ptr) {
-            // Remove from tracking by swapping with last element
-            allocations[i] = allocations[allocation_count - 1];
-            allocation_count--;
-            free(ptr);
-            return;
-        }
+void* debug_calloc(size_t count, size_t size, const char* file, int line, const char* type) {
+    size_t total_size = count * size;
+    if (allocation_count >= MAX_TRACKED_ALLOCATIONS) {
+        fprintf(stderr, "ERROR: Memory tracking limit exceeded at %s:%d for type %s\n", file, line, type);
+        return NULL;
     }
-    
-    // If we get here, the pointer wasn't tracked
-    printf("WARNING: Freeing untracked pointer %p\n", ptr);
-    free(ptr);
+
+    void* ptr = calloc(count, size);
+    if (ptr) {
+        allocations[allocation_count++] = (AllocationRecord){
+            .ptr = ptr,
+            .size = total_size,
+            .file = file,
+            .line = line,
+            .type = type
+        };
+        total_allocated += total_size;
+    }
+    return ptr;
 }
 
-void dump_memory_leaks() {
+void* debug_realloc(void* ptr, size_t new_size, const char* file, int line, const char* type) {
+    if (!ptr) {
+        // realloc behaves like malloc
+        return debug_malloc(new_size, file, line, type);
+    }
+
+    int idx = find_allocation_index(ptr);
+    if (idx == -1) {
+        fprintf(stderr, "WARNING: Attempted to realloc untracked pointer %p at %s:%d\n", ptr, file, line);
+        return realloc(ptr, new_size); // fall back
+    }
+
+    void* new_ptr = realloc(ptr, new_size);
+    if (new_ptr) {
+        total_allocated -= allocations[idx].size;
+        total_allocated += new_size;
+
+        allocations[idx] = (AllocationRecord){
+            .ptr = new_ptr,
+            .size = new_size,
+            .file = file,
+            .line = line,
+            .type = type
+        };
+    }
+
+    return new_ptr;
+}
+
+void debug_free(void* ptr) {
+    if (!ptr) return;
+
+    int idx = find_allocation_index(ptr);
+    if (idx != -1) {
+        total_allocated -= allocations[idx].size;
+        allocations[idx] = allocations[--allocation_count]; // swap and shrink
+        free(ptr);
+    } else {
+        fprintf(stderr, "WARNING: Attempted to free untracked pointer %p\n", ptr);
+        free(ptr);
+    }
+}
+
+void dump_memory_leaks(void) {
     if (allocation_count == 0) {
-        printf("No memory leaks detected!\n");
+        printf("No memory leaks detected.\n");
         return;
     }
-    
+
     printf("\n=== MEMORY LEAK REPORT ===\n");
-    printf("%d leaks detected:\n", allocation_count);
-    
-    for (int i = 0; i < allocation_count; i++) {
+    printf("Total leaks: %d\n", allocation_count);
+    printf("Total bytes still allocated: %zu\n", total_allocated);
+
+    for (int i = 0; i < allocation_count; ++i) {
         AllocationRecord* r = &allocations[i];
         printf("- Leak %d: %zu bytes (%s) allocated at %s:%d\n",
-               i+1, r->size, r->type, r->file, r->line);
+               i + 1, r->size, r->type, r->file, r->line);
     }
+}
+
+void reset_memory_tracker(void) {
+    allocation_count = 0;
+    total_allocated = 0;
 }
 
 #endif // DEBUG_MEMORY
