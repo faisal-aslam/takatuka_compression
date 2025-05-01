@@ -4,12 +4,13 @@
 #include "tree_visualizer.h"
 #include "tree_node_pool.h"
 #include "tree_node.h"
+#include "prune_logic.h"
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
 #include <math.h>
 #include "../write_in_file/write_in_file.h"
-#include "../weighted_freq.h"
+#include "group.h"
 
 // Global pool manager instance
 TreeNodePoolManager pool_manager = {0};
@@ -26,7 +27,6 @@ static int processNodePath(TreeNode *old_node, TreeNodePoolManager* mgr, int new
                          int to_copy);
 static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
                      const uint8_t* block, uint32_t block_size, uint32_t block_index);
-static int validate_block_access(const uint8_t* block, uint32_t block_size, uint32_t offset, uint16_t length);
 
 static inline uint8_t getCurrentGroup() {
     if (total_codes < getGroupThreshold(0)) {
@@ -61,7 +61,7 @@ void cleanup_node_pools() {
 }
 
 
-static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_len, uint32_t location) {
+static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_len) {
     BinSeqMap* map = node->map;
     if (!map || !sequence || seq_len == 0) {
         fprintf(stderr, "\n unable to update map value ");
@@ -72,7 +72,7 @@ static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_
         return 1;// do not update map value of seq_len of 1.
     }  
 
-    uint8_t group = getCurrentGroup();
+    //uint8_t group = getCurrentGroup();
     // Increment frequency for this sequence
     if (!binseq_map_increment_frequency(map, sequence, seq_len)) {
         /*
@@ -86,17 +86,6 @@ static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_
 }
 
 
-static BinarySequence* isValidSequence(uint16_t sequence_length, const uint8_t* block, uint32_t block_index) {
-    if (sequence_length < SEQ_LENGTH_START || sequence_length > SEQ_LENGTH_LIMIT || 
-        block_index < sequence_length) {
-        return NULL;
-    }
-
-    uint8_t lastSequence[sequence_length];
-    memcpy(lastSequence, block + (block_index - sequence_length), sequence_length);
-    return lookupSequence(lastSequence, sequence_length);
-}
-
 static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
     const uint8_t* block, uint32_t block_size, uint32_t block_index) {
 
@@ -108,7 +97,7 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
     TreeNodePool* old_pool = &mgr->pool[mgr->active_index ^ 1];
     TreeNodePool* new_pool = &mgr->pool[mgr->active_index];
 
-    if (old_node_count > old_pool->size) {
+    if (old_node_count > (int)old_pool->size) {
         fprintf(stderr, "Error: old_node_count (%d) exceeds pool size (%zu)\n", 
         old_node_count, old_pool->size);
         return 0;
@@ -155,7 +144,7 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
     apply_dual_beam_pruning(new_pool, new_nodes_count, block, block_index);
     // VISUALIZE pruning results
     #ifdef DEBUG 
-    visualize_add_level(&viz, &new_pool->data[0], new_nodes_count, block, block_index);
+    visualize_add_level(&viz, &new_pool->data[0], new_nodes_count, block);
     #endif
     
     return new_nodes_count;
@@ -232,17 +221,13 @@ static int processNodePath(TreeNode *old_node, TreeNodePoolManager* mgr, int new
         return new_nodes_count;
     }
     
-    // Update the map with new location (only if seq_len is ge 1)
-    if (seq_len > 1 && !updateMapValue(new_node, sequence, seq_len, 
-                    (new_weight == 0) ? block_index + 1 - seq_len : block_index)) {
+    // Update the map by incrementing frequency 
+    if (seq_len > 1 && !updateMapValue(new_node, sequence, seq_len)) {
         fprintf(stderr,"\n Update node map failed \n");
         new_node->map = NULL;
         return new_nodes_count;
     }
 
-
-    // Only free previous node's map if we're replacing it
-    int weight_index = (new_weight == 0) ? 0 : new_weight;
     
     #ifdef DEBUG
     //printf("\n\n new node created \n");
@@ -302,7 +287,7 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     printf("\nCreated new root node in pool[0][0]:\n");
     print_tree_node(root, block, 0);
     printf("Pool size: %zu\n", pool->size);
-    visualize_add_level(&viz, root, 1, block, 0);
+    visualize_add_level(&viz, root, 1, block);
     #endif
     
 
@@ -317,7 +302,7 @@ static inline TreeNode* resetToBestNode(TreeNodePoolManager* mgr, int node_count
     }
 
     TreeNodePool* pool = &mgr->pool[mgr->active_index];
-    if (!pool || !pool->data || node_count > pool->size) {
+    if (!pool || !pool->data || node_count > (int)pool->size) {
         fprintf(stderr, "Invalid pool state in resetToBestNode\n");
         return NULL;
     }
@@ -379,8 +364,9 @@ static inline TreeNode* resetToBestNode(TreeNodePoolManager* mgr, int node_count
     }
 
     printf("\n\n**************** Successfully created new root node after reset:\n");
-    print_tree_node(new_root, block, block_index);
-
+    print_tree_node(new_root, block, block_index);    
+    writeCompressedOutput("compress.bin", NULL, MAX_NUMBER_OF_SEQUENCES, best_node, block);
+    
     return new_root;
 }
 

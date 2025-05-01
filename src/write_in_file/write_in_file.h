@@ -3,7 +3,7 @@
 #define WRITE_IN_FILE_H
 
 void writeCompressedOutput(const char* filename, BinarySequence** sequences, 
-                          int seq_count, TreeNode *best_node, uint8_t* raw_data);
+                          int seq_count, TreeNode *best_node, const uint8_t* block);
                           
                           
 #endif

@@ -40,7 +40,7 @@ int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSe
     // Lookup frequency of the sequence from the hashmap
     const int* freq_ptr = binseq_map_get_frequency(map, new_bin_seq, seq_length);
     int frequency = freq_ptr ? *freq_ptr : 0;
-    if (frequency == 0){
+    if (frequency == 0) {
         return seq_length*5;
     }
     double savings = (double)(pow(frequency+1, 1.8))*(pow(seq_length, 1.3));
@@ -172,7 +172,7 @@ void apply_dual_beam_pruning(TreeNodePool *pool, int node_count,
         if (BEAM_WIDTH_SEQ_COUNT > 0)  
             keep_top_k_by_seq_count(nodes, valid_count, BEAM_WIDTH_SEQ_COUNT);
   
-        #ifdef DEBUG1
+        #ifdef DEBUG
         if (level == 11 && weight == 0) {
             printf("Stop here");
         }

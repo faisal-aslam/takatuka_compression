@@ -79,7 +79,7 @@ void copy_tree_node_sequences(TreeNode *source, TreeNode *dest, uint16_t count) 
     dest->compress_sequence_count = count;
 }
 
-SequenceRange get_sequence_range(const TreeNode *node, const uint8_t *block, uint32_t block_index) {
+SequenceRange get_sequence_range(const TreeNode *node, const uint8_t *block) {
     SequenceRange range = {0, 0, 0};
     
     // Input validation
@@ -111,6 +111,7 @@ SequenceRange get_sequence_range(const TreeNode *node, const uint8_t *block, uin
 }
 
 void print_tree_node(const TreeNode *node, const uint8_t* block, uint32_t block_index) {
+    (void)block_index;
     if (!node) {
         printf("NULL node\n");
         return;

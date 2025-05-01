@@ -19,7 +19,7 @@ typedef struct TreeNode {
 } TreeNode;
 
 // Function declarations
-SequenceRange get_sequence_range(const TreeNode *node, const uint8_t *block, uint32_t block_index);
+SequenceRange get_sequence_range(const TreeNode *node, const uint8_t *block);
 TreeNode* create_tree_node(uint16_t initial_capacity);
 void free_tree_node(TreeNode* node);
 void init_tree_node(TreeNode* node, uint16_t initial_capacity);

@@ -136,7 +136,7 @@ static void writeCompressedDataInFile(TreeNode *node, uint8_t* block, FILE *file
         memcpy(sequence, block + block_pos, seq_len);
         block_pos += seq_len;
 
-        BinarySequence* bin_seq = lookupSequence(sequence, seq_len);
+        BinarySequence* bin_seq = NULL;//lookupSequence(sequence, seq_len);
 
         #ifdef DEBUG
         printf("Current bit state: buffer=%02X pos=%d\n", bit_buffer, bit_pos);
@@ -248,14 +248,6 @@ static void writeCompressedDataInFile(TreeNode *node, uint8_t* block, FILE *file
     #endif
 }
 
-#ifdef DEBUG
-// Helper function to print binary representation of a byte
-static void print_binary(uint8_t byte) {
-    for (int i = 7; i >= 0; i--) {
-        printf("%d", (byte >> i) & 1);
-    }
-}
-#endif
 
 /**
  * @brief Writes compressed header with bit-perfect packing and optional padding
@@ -451,7 +443,7 @@ static int calcUsedAndAssignGroupID(TreeNode *node, uint8_t* block, uint32_t blo
         block_index += seq_len;
 
         // Look up sequence in dictionary
-        BinarySequence* bin_seq = lookupSequence(sequence, seq_len);
+        BinarySequence* bin_seq =  NULL;//lookupSequence(sequence, seq_len);
         if (!bin_seq) {
             continue;  // Sequence not in dictionary
         }

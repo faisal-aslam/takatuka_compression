@@ -46,7 +46,7 @@ void init_visualizer(TreeVisualizer *viz, const char *filename, bool show_pruned
 }
 
 void visualize_add_level(TreeVisualizer *viz, TreeNode *nodes, int node_count,
-                         const uint8_t *block, uint32_t block_index) {
+                         const uint8_t *block) {
     if (!viz->dot_file)
         return;
 
@@ -60,7 +60,7 @@ void visualize_add_level(TreeVisualizer *viz, TreeNode *nodes, int node_count,
         if (node->isPruned && !viz->show_pruned)
             continue;
 
-        struct SequenceRange range = get_sequence_range(node, block, block_index);
+        struct SequenceRange range = get_sequence_range(node, block);
         char seq_label[256] = "[INVALID]";
         char escaped_label[512] = "";
 
