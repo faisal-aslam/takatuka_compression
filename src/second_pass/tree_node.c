@@ -79,15 +79,38 @@ void copy_tree_node_sequences(TreeNode *source, TreeNode *dest, uint16_t count) 
     dest->compress_sequence_count = count;
 }
 
+SequenceRange get_sequence_range(const TreeNode *node, const uint8_t *block, uint32_t block_index) {
+    SequenceRange range = {0, 0, 0};
+    
+    if (!node || !block || node->compress_sequence_count == 0) {
+        return range;
+    }
+
+    // Calculate the start position in the block
+    range.start = block_index - node->incoming_weight;
+    
+    // Calculate the end position
+    range.end = range.start + node->incoming_weight - 1;
+    
+    // Validate the range
+    if (range.start <= range.end && range.end < BLOCK_SIZE) {
+        range.valid = 1;
+    }
+    
+    return range;
+}
+
+
+
 void print_tree_node(const TreeNode *node, const uint8_t* block, uint32_t block_index) {
     if (!node) {
         printf("NULL node\n");
         return;
     }
-    printf("TreeNode @ %p:\n", (void*)node);
-    printf("  incoming_weight: %u\n", node->incoming_weight);
-    printf("  saving_so_far: %d\n", node->saving_so_far);
-    printf("  isPruned: %u\n ", node->isPruned);
+    printf("\n\nTreeNode @ %p:", (void*)node);
+    printf("  incoming_weight: %u", node->incoming_weight);
+    printf(",  saving_so_far: %d", node->saving_so_far);
+    printf(",  isPruned: %u\n ", node->isPruned);
     int nodeCount = 0;
     if (node->compress_sequence) {
         for (int i = 0; i < node->compress_sequence_count; i++) {
@@ -103,6 +126,7 @@ void print_tree_node(const TreeNode *node, const uint8_t* block, uint32_t block_
                 if (j + 1 < node->compress_sequence[i]) printf(", ");
             }
             printf(" }, ");
+            if (nodeCount%7 == 0) printf("\n");
         }
     } else {
         printf("  compress_sequence: NULL\n");

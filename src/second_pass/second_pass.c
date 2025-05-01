@@ -1,6 +1,7 @@
 // src/second_pass/second_pass.c
 
 #include "second_pass.h"
+#include "tree_visualizer.h"
 #include "tree_node_pool.h"
 #include "tree_node.h"
 #include <string.h>
@@ -10,16 +11,16 @@
 #include "../write_in_file/write_in_file.h"
 #include "../weighted_freq.h"
 
-#define PRUNE
-
 // Global pool manager instance
 TreeNodePoolManager pool_manager = {0};
+
+TreeVisualizer viz;
 
 uint16_t total_codes = 0;
 
 void print_stacktrace(void);
 
-static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_nodes_count,
+static int processNodePath(TreeNode *old_node, TreeNodePoolManager* mgr, int new_nodes_count,
                          const uint8_t* block, uint32_t block_size, uint32_t block_index,                         
                          const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
                          int to_copy);
@@ -103,6 +104,7 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
         return 0;
     }
 
+
     TreeNodePool* old_pool = &mgr->pool[mgr->active_index ^ 1];
     TreeNodePool* new_pool = &mgr->pool[mgr->active_index];
 
@@ -123,25 +125,25 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
     int new_nodes_count = 0;
     
     for (int j = 0; j < old_node_count; j++) {
-        TreeNode *oldNode = &old_pool->data[j];
+        TreeNode *old_node = &old_pool->data[j];
 
-        if (oldNode->isPruned) continue;
+        if (old_node->isPruned) continue;
 
         #ifdef DEBUG
         printf("\n\n *********************** Processing old Node ****************");
-        print_tree_node(oldNode, block, block_index);
+        print_tree_node(old_node, block, block_index);
         printf("\n\n ***********************************************************");
         #endif
         // Uncompressed path
-        new_nodes_count = processNodePath(oldNode, mgr, new_nodes_count,
+        new_nodes_count = processNodePath(old_node, mgr, new_nodes_count,
                                           block, block_size, block_index,                                        
                                           &block[block_index], 1,
-                                          oldNode->incoming_weight + 1,
-                                          oldNode->compress_sequence_count);
+                                          old_node->incoming_weight + 1,
+                                          old_node->compress_sequence_count);
 
         // Compressed paths
-        for (int k = 0; k < oldNode->incoming_weight; k++) {
-            uint16_t seq_len = oldNode->incoming_weight + 1 - k;
+        for (int k = 0; k < old_node->incoming_weight; k++) {
+            uint16_t seq_len = old_node->incoming_weight + 1 - k;
 
             if (seq_len < SEQ_LENGTH_START || seq_len > SEQ_LENGTH_LIMIT ||
                 seq_len > (block_index + 1) || (block_index + 1 - seq_len) >= block_size) {
@@ -149,28 +151,35 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
             }
 
             const uint8_t* seq_start = &block[block_index + 1 - seq_len];
-            new_nodes_count = processNodePath(oldNode, mgr, new_nodes_count,
+            new_nodes_count = processNodePath(old_node, mgr, new_nodes_count,
                                               block, block_size, block_index,                                              
                                               seq_start, seq_len, 0,
-                                              oldNode->compress_sequence_count - oldNode->incoming_weight + k);
+                                              old_node->compress_sequence_count - old_node->incoming_weight + k);
         }
+        #ifdef DEBUG 
+        visualize_add_level(&viz, &new_pool->data[0], new_nodes_count, old_node, block, block_index);
+        #endif
     }
 
     // PRUNE step: mark nodes that are not the best as pruned
     apply_dual_beam_pruning(new_pool, new_nodes_count, block, block_index);
-
+    // VISUALIZE pruning results
+    #ifdef DEBUG
+    visualize_mark_pruned(&viz, new_pool->data, new_nodes_count);
+    #endif
+    
     return new_nodes_count;
 }
 
 
-static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_nodes_count,
+static int processNodePath(TreeNode *old_node, TreeNodePoolManager* mgr, int new_nodes_count,
     const uint8_t* block, uint32_t block_size, uint32_t block_index,
     
     const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
     int to_copy) {
     
     // Validations
-    if (!oldNode || !mgr || !block || block_index >= block_size ||
+    if (!old_node || !mgr || !block || block_index >= block_size ||
 	    block_index >= block_size || seq_len == 0) {
     	fprintf(stderr,"\n processNodePath validation failed \n");
         return new_nodes_count;
@@ -184,13 +193,13 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     }
     
     
-    int32_t new_saving = calculate_savings(sequence, seq_len, oldNode->map);
+    int32_t new_saving = calculate_savings(sequence, seq_len, old_node->map);
     if (new_saving == INT_MIN) {
         // Invalid case, skip this path
         return new_nodes_count;
     }
     
-    new_saving += oldNode->saving_so_far;
+    new_saving += old_node->saving_so_far;
     uint8_t isPruned = 0;
         
 
@@ -212,7 +221,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     
     // Copy sequences if needed
     if (to_copy > 0) {
-        copy_tree_node_sequences(oldNode, newNode, to_copy);
+        copy_tree_node_sequences(old_node, newNode, to_copy);
     }
  
     // Add the new sequence
@@ -224,7 +233,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     newNode->compress_sequence[newNode->compress_sequence_count++] = seq_len;
 
     // copy function also creates map of the new node.
-    if (!binseq_map_copy_to_node(oldNode->map, newNode)) {
+    if (!binseq_map_copy_to_node(old_node->map, newNode)) {
         binseq_map_free(newNode->map);
         newNode->map = NULL;
         fprintf(stderr,"\n map copy failed \n");
@@ -244,7 +253,7 @@ static int processNodePath(TreeNode *oldNode, TreeNodePoolManager* mgr, int new_
     int weight_index = (new_weight == 0) ? 0 : new_weight;
     
     #ifdef DEBUG
-    printf("\n\n new node created \n");
+    //printf("\n\n new node created \n");
     print_tree_node(newNode, block, block_index);
     #endif
 
@@ -395,6 +404,10 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
 
     uint8_t isEven = 0;
     uint32_t blockIndex;
+    #ifdef DEBUG 
+    init_visualizer(&viz, "compression_tree.dot", 1);
+    #endif 
+
 
     for (blockIndex = 1; blockIndex < block_size; blockIndex++) {
         // Switch pools
@@ -481,6 +494,9 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
 #endif
         }
     }
+    #ifdef DEBUG
+    finalize_visualizer(&viz);
+    #endif
 
     cleanup_node_pools();
 }

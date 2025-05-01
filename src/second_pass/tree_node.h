@@ -2,7 +2,7 @@
 #ifndef TREE_NODE_H
 #define TREE_NODE_H
 
-#include <stdint.h>
+#include "sequence_range.h"
 #include "constants.h"
 #include "binseq_hashmap.h"
 
@@ -16,7 +16,8 @@ typedef struct TreeNode {
     BinSeqMap *map;
 } TreeNode;
 
-// Tree Node Management API
+// Function declarations
+SequenceRange get_sequence_range(const TreeNode *node, const uint8_t *block, uint32_t block_index);
 TreeNode* create_tree_node(uint16_t initial_capacity);
 void free_tree_node(TreeNode* node);
 void init_tree_node(TreeNode* node, uint16_t initial_capacity);
