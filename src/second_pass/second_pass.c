@@ -365,7 +365,7 @@ static inline TreeNode* resetToBestNode(TreeNodePoolManager* mgr, int node_count
 
     printf("\n\n**************** Successfully created new root node after reset:\n");
     print_tree_node(new_root, block, block_index);    
-    writeCompressedOutput("compress.bin", NULL, MAX_NUMBER_OF_SEQUENCES, best_node, block);
+    //todo later. writeCompressedOutput("compress.bin", NULL, MAX_NUMBER_OF_SEQUENCES, best_node, block);
     
     return new_root;
 }

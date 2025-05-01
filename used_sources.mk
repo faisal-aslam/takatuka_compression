@@ -11,4 +11,5 @@ SRCS = \
     src/xxhash.c \
     src/second_pass/group.c \
     src/second_pass/tree_node_pool.c \
-    src/second_pass/prune_logic.c
+    src/second_pass/prune_logic.c \
+    src/main.c
