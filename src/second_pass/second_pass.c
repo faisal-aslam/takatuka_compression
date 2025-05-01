@@ -378,10 +378,8 @@ static inline TreeNode* resetToBestNode(TreeNodePoolManager* mgr, int node_count
         }
     }
 
-#ifdef DEBUG
     printf("\n\n**************** Successfully created new root node after reset:\n");
     print_tree_node(new_root, block, block_index);
-#endif
 
     return new_root;
 }

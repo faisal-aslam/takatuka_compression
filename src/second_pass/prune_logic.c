@@ -9,7 +9,7 @@
 #include <stdlib.h>
 
 #define SELECTION_SORT_THRESHOLD 32
-#define MAX_NODE_PER_WEIGHT 6000
+
 
 static int level = 0;
 /**
@@ -144,7 +144,8 @@ void apply_dual_beam_pruning(TreeNodePool *pool, int node_count,
 
     for (int weight = 0; weight < SEQ_LENGTH_LIMIT; weight++) {
         // Collect nodes for this weight level
-        TreeNode* nodes[MAX_NODE_PER_WEIGHT]; 
+        TreeNode* nodes[MAX_NODE_PER_WEIGHT];         
+        fflush(stdout);
         int valid_count = 0;
 
         for (int i = 0; i < node_count; i++) {
@@ -167,12 +168,10 @@ void apply_dual_beam_pruning(TreeNodePool *pool, int node_count,
 
         // Apply both pruning criteria
         keep_top_k_by_savings(nodes, valid_count, BEAM_WIDTH_SAVINGS);
-        if (weight != 0) {
-            keep_top_k_by_seq_count(nodes, valid_count, BEAM_WIDTH_SEQ_COUNT);
-        } else {
-            keep_top_k_by_seq_count(nodes, valid_count, BEAM_WIDTH_SEQ_COUNT_WEIGHT_0);
-        }
 
+        if (BEAM_WIDTH_SEQ_COUNT > 0)  
+            keep_top_k_by_seq_count(nodes, valid_count, BEAM_WIDTH_SEQ_COUNT);
+  
         #ifdef DEBUG1
         if (level == 11 && weight == 0) {
             printf("Stop here");
