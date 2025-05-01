@@ -8,9 +8,9 @@
 #include "tree_node_pool.h"
 
 // Configuration constants for pruning algorithm
-#define BEAM_WIDTH_SAVINGS 2      // Keep top 5 paths by savings_so_far
-#define BEAM_WIDTH_SEQ_COUNT 3   // Keep top 4 paths by compress_sequence_count
-#define MAXIMUM_SAVING_CAP 500
+#define BEAM_WIDTH_SAVINGS 7     // Keep top x paths by savings_so_far
+#define BEAM_WIDTH_SEQ_COUNT 0   // Keep top y paths by compress_sequence_count
+#define BEAM_WIDTH_SEQ_COUNT_WEIGHT_0 0   // Keep top z paths by compress_sequence_count at level 0
 
 /**
  * Calculates the potential savings from compressing a binary sequence

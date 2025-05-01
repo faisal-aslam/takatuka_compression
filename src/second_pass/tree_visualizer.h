@@ -23,8 +23,7 @@ typedef struct {
 
 
 void init_visualizer(TreeVisualizer* viz, const char* filename, bool show_pruned);
-void visualize_add_level(TreeVisualizer* viz, TreeNode* nodes, int node_count,
-                       TreeNode* old_node, const uint8_t* block, uint32_t block_index);
+void visualize_add_level(TreeVisualizer* viz, TreeNode* nodes, int node_count, const uint8_t* block, uint32_t block_index);
 void finalize_visualizer(TreeVisualizer* viz);
 
 #endif

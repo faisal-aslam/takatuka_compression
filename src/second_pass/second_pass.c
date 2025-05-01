@@ -148,16 +148,14 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
                                               seq_start, seq_len, 0,
                                               old_node->compress_sequence_count - old_node->incoming_weight + k);
         }
-        #ifdef DEBUG 
-        visualize_add_level(&viz, &new_pool->data[0], new_nodes_count, old_node, block, block_index);
-        #endif
+        
     }
 
     // PRUNE step: mark nodes that are not the best as pruned
     apply_dual_beam_pruning(new_pool, new_nodes_count, block, block_index);
     // VISUALIZE pruning results
-    #ifdef DEBUG
-    visualize_mark_pruned(&viz, new_pool->data, new_nodes_count);
+    #ifdef DEBUG 
+    visualize_add_level(&viz, &new_pool->data[0], new_nodes_count, block, block_index);
     #endif
     
     return new_nodes_count;
@@ -304,7 +302,7 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     printf("\nCreated new root node in pool[0][0]:\n");
     print_tree_node(root, block, 0);
     printf("Pool size: %zu\n", pool->size);
-    visualize_add_level(&viz, root, 1, NULL, block, 0);
+    visualize_add_level(&viz, root, 1, block, 0);
     #endif
     
 

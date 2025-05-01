@@ -33,20 +33,24 @@ void init_visualizer(TreeVisualizer *viz, const char *filename, bool show_pruned
     viz->edges = NULL;
     viz->edge_count = 0;
     viz->edge_capacity = 0;
-    
+
     if (viz->dot_file) {
         fprintf(viz->dot_file, "digraph compression_tree {\n");
         fprintf(viz->dot_file, "  rankdir=TB;\n");
         fprintf(viz->dot_file, "  node [shape=record, style=filled];\n");
+        fprintf(viz->dot_file, "  size=\"100,100\"; ratio=compress;\n");
+        fprintf(viz->dot_file, "  nodesep=0.2; ranksep=0.3;\n");
+        fprintf(viz->dot_file, "  node [shape=record, style=filled, fontsize=8, width=0.5];\n");
     }
+
 }
 
 void visualize_add_level(TreeVisualizer *viz, TreeNode *nodes, int node_count,
-                         TreeNode *old_node, const uint8_t *block, uint32_t block_index) {
+                         const uint8_t *block, uint32_t block_index) {
     if (!viz->dot_file)
         return;
 
-    // First pass: Create all nodes
+    // First pass: Create all nodes with vertical layout
     for (int i = 0; i < node_count; i++) {
         TreeNode *node = &nodes[i];
         if (node->isPruned && !viz->show_pruned)
@@ -68,7 +72,7 @@ void visualize_add_level(TreeVisualizer *viz, TreeNode *nodes, int node_count,
                 ptr += written;
                 remaining -= written;
 
-                if (j < range.end && remaining > 0) {
+                if (j < range.end - 1 && remaining > 0) {
                     *ptr++ = ',';
                     *ptr++ = ' ';
                     remaining -= 2;
@@ -81,55 +85,39 @@ void visualize_add_level(TreeVisualizer *viz, TreeNode *nodes, int node_count,
         const char *fillcolor = node->isPruned ? "fillcolor=\"#ffdddd\"" : "fillcolor=\"#ddffdd\"";
         const char *penwidth = node->isPruned ? "penwidth=1" : "penwidth=2";
 
-        fprintf(viz->dot_file, "  node_%u [label=\"[%u-%u]|%s|savings: %d\", %s, %s];\n",
+        // Vertical layout using newlines instead of pipes
+        fprintf(viz->dot_file,
+                "  node_%u [label=\"[%u-%u]\\n%s\\nsavings: %d\", %s, %s];\n",
                 node->id, range.start, range.end, escaped_label,
                 node->saving_so_far, fillcolor, penwidth);
     }
 
-    // Second pass: Track unique edges
+    // Second pass: Create edges (same as before)
     for (int i = 0; i < node_count; i++) {
         TreeNode *node = &nodes[i];
         if ((!node->isPruned || viz->show_pruned) && node->parent_id != 0) {
-            // Check if edge already exists
             bool edge_exists = false;
             for (size_t j = 0; j < viz->edge_count; j++) {
-                if (viz->edges[j].parent_id == node->parent_id && 
+                if (viz->edges[j].parent_id == node->parent_id &&
                     viz->edges[j].child_id == node->id) {
                     edge_exists = true;
                     break;
                 }
             }
-            
+
             if (!edge_exists) {
-                // Resize edges array if needed
                 if (viz->edge_count >= viz->edge_capacity) {
                     viz->edge_capacity = viz->edge_capacity ? viz->edge_capacity * 2 : 16;
                     viz->edges = realloc(viz->edges, viz->edge_capacity * sizeof(Edge));
                 }
-                
-                // Add new edge
-                viz->edges[viz->edge_count].parent_id = node->parent_id;
-                viz->edges[viz->edge_count].child_id = node->id;
-                viz->edge_count++;
-                
-                // Write edge to file
-                fprintf(viz->dot_file, "  node_%u -> node_%u [label=\"w:%d\"];\n",
-                        node->parent_id, node->id, node->incoming_weight);
+
+                viz->edges[viz->edge_count++] = (Edge){node->parent_id, node->id};
+                fprintf(viz->dot_file, "  node_%u -> node_%u [label=\"w:%d, l:%d\"];\n",
+                        node->parent_id, node->id, node->incoming_weight, viz->current_level);
             }
         }
     }
     viz->current_level++;
-}
-
-void visualize_mark_pruned(TreeVisualizer* viz, TreeNode* level_nodes, int node_count) {
-    if (!viz->dot_file) return;
-    
-    for (int i = 0; i < node_count; i++) {
-        TreeNode* node = &level_nodes[i];
-        if (node->isPruned) {
-            fprintf(viz->dot_file, "  node_%p [fillcolor=\"#ffdddd\", penwidth=1];\n", (void*)node);
-        }
-    }
 }
 
 void finalize_visualizer(TreeVisualizer* viz) {
@@ -154,11 +142,7 @@ int main() {
     TreeNode* old_node =  ... ;
     visualize_add_level(&viz, new_nodes, node_count, old_node, block, block_count);
     
-    // After pruning:
-    TreeNode* level_nodes =  ... ;
-    int pruned_count =  ... ;
-    visualize_mark_pruned(&viz, level_nodes, pruned_count);
-    
+ 
     // When done:
     finalize_visualizer(&viz);
     return 0;
