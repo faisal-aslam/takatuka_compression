@@ -44,9 +44,9 @@ int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSe
         return seq_length*5;
     }
     double savings = (double)(pow(frequency+1, 1.8))*(pow(seq_length, 1.3));
+    
     /**
      * Safety Cap:
-     * - Maximum possible saving cannot exceed (seq_length - 1) * 8 bits
      * - Ensures theoretical limits are respected
      */
     return (int32_t)MIN(savings, INT32_MAX);
@@ -145,7 +145,7 @@ void apply_dual_beam_pruning(TreeNodePool *pool, int node_count,
     for (int weight = 0; weight < SEQ_LENGTH_LIMIT; weight++) {
         // Collect nodes for this weight level
         TreeNode* nodes[MAX_NODE_PER_WEIGHT];         
-        fflush(stdout);
+        
         int valid_count = 0;
 
         for (int i = 0; i < node_count; i++) {
