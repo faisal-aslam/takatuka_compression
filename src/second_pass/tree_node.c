@@ -82,25 +82,33 @@ void copy_tree_node_sequences(TreeNode *source, TreeNode *dest, uint16_t count) 
 SequenceRange get_sequence_range(const TreeNode *node, const uint8_t *block, uint32_t block_index) {
     SequenceRange range = {0, 0, 0};
     
-    if (!node || !block || node->compress_sequence_count == 0) {
+    // Input validation
+    if (!node || !block || node->compress_sequence_count == 0 || !node->compress_sequence) {
         return range;
     }
 
-    // Calculate the start position in the block
-    range.start = block_index - node->incoming_weight;
+    // Calculate total length and find start position
+    uint32_t total_length = 0;
+    uint32_t start_pos = 0;
     
-    // Calculate the end position
-    range.end = range.start + node->incoming_weight - 1;
+    // Sum all but the last segment to find start position
+    for (int i = 0; i < node->compress_sequence_count - 1; i++) {
+        total_length += node->compress_sequence[i];
+    }
+    start_pos = total_length;
+    
+    // Add the last segment to get the full length
+    total_length += node->compress_sequence[node->compress_sequence_count - 1];
+    
+    // Set the range values
+    range.start = start_pos;
+    range.end = total_length;
     
     // Validate the range
-    if (range.start <= range.end && range.end < BLOCK_SIZE) {
-        range.valid = 1;
-    }
+    range.valid = (range.start <= range.end && range.end < BLOCK_SIZE);
     
     return range;
 }
-
-
 
 void print_tree_node(const TreeNode *node, const uint8_t* block, uint32_t block_index) {
     if (!node) {
@@ -108,6 +116,8 @@ void print_tree_node(const TreeNode *node, const uint8_t* block, uint32_t block_
         return;
     }
     printf("\n\nTreeNode @ %p:", (void*)node);
+    printf("  id: %u", node->id);
+    printf("  parent_id: %u", node->parent_id);
     printf("  incoming_weight: %u", node->incoming_weight);
     printf(",  saving_so_far: %d", node->saving_so_far);
     printf(",  isPruned: %u\n ", node->isPruned);

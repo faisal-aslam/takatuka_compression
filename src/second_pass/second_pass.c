@@ -114,14 +114,6 @@ static int createNodes(TreeNodePoolManager* mgr, int old_node_count,
         return 0;
     }
 
-    int best_index[SEQ_LENGTH_LIMIT+1];
-    int32_t best_saving[SEQ_LENGTH_LIMIT+1];
-    
-    for (int i = 0; i < SEQ_LENGTH_LIMIT+1; i++) {
-        best_saving[i] = INT_MIN;  // <- must initialize to INT_MIN
-        best_index[i] = -1;
-    }
-
     int new_nodes_count = 0;
     
     for (int j = 0; j < old_node_count; j++) {
@@ -203,48 +195,50 @@ static int processNodePath(TreeNode *old_node, TreeNodePoolManager* mgr, int new
     uint8_t isPruned = 0;
         
 
-    TreeNode* newNode = alloc_tree_node(mgr);
-    if (!newNode) {
+    TreeNode* new_node = alloc_tree_node(mgr);
+    if (!new_node) {
         fprintf(stderr,"\n node allocation failed \n");
         return new_nodes_count;
     }
 
     // Initialize with default capacity (e.g., 16)
-    init_tree_node(newNode, 16);     
+    init_tree_node(new_node, 16);     
 
-    // Initialize new node
-    memset(newNode, 0, sizeof(TreeNode));
-    newNode->incoming_weight = (new_weight >= SEQ_LENGTH_LIMIT) ? SEQ_LENGTH_LIMIT - 1 : new_weight;
-    newNode->saving_so_far = new_saving;
-    newNode->isPruned = isPruned;
-    newNode->compress_sequence_count = 0;
+    new_node->id = ++viz.next_node_id;
+    new_node->parent_id = old_node ? old_node->id : 0;
+
+
+    new_node->incoming_weight = (new_weight >= SEQ_LENGTH_LIMIT) ? SEQ_LENGTH_LIMIT - 1 : new_weight;
+    new_node->saving_so_far = new_saving;
+    new_node->isPruned = isPruned;
+    new_node->compress_sequence_count = 0;
     
     // Copy sequences if needed
     if (to_copy > 0) {
-        copy_tree_node_sequences(old_node, newNode, to_copy);
+        copy_tree_node_sequences(old_node, new_node, to_copy);
     }
  
     // Add the new sequence
-    if (!ensure_sequence_capacity(newNode, newNode->compress_sequence_count + 1)) {
+    if (!ensure_sequence_capacity(new_node, new_node->compress_sequence_count + 1)) {
         fprintf(stderr,"\n Failed to expand sequence capacity\n");
-        free_tree_node(newNode);
+        free_tree_node(new_node);
         return new_nodes_count;
     }
-    newNode->compress_sequence[newNode->compress_sequence_count++] = seq_len;
+    new_node->compress_sequence[new_node->compress_sequence_count++] = seq_len;
 
     // copy function also creates map of the new node.
-    if (!binseq_map_copy_to_node(old_node->map, newNode)) {
-        binseq_map_free(newNode->map);
-        newNode->map = NULL;
+    if (!binseq_map_copy_to_node(old_node->map, new_node)) {
+        binseq_map_free(new_node->map);
+        new_node->map = NULL;
         fprintf(stderr,"\n map copy failed \n");
         return new_nodes_count;
     }
     
     // Update the map with new location (only if seq_len is ge 1)
-    if (seq_len > 1 && !updateMapValue(newNode, sequence, seq_len, 
+    if (seq_len > 1 && !updateMapValue(new_node, sequence, seq_len, 
                     (new_weight == 0) ? block_index + 1 - seq_len : block_index)) {
         fprintf(stderr,"\n Update node map failed \n");
-        newNode->map = NULL;
+        new_node->map = NULL;
         return new_nodes_count;
     }
 
@@ -254,7 +248,7 @@ static int processNodePath(TreeNode *old_node, TreeNodePoolManager* mgr, int new
     
     #ifdef DEBUG
     //printf("\n\n new node created \n");
-    print_tree_node(newNode, block, block_index);
+    print_tree_node(new_node, block, block_index);
     #endif
 
 
@@ -287,6 +281,9 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     TreeNode* root = &pool->data[pool->size++];
     init_tree_node(root, 16);
 
+    root->id = ++viz.next_node_id;
+    root->parent_id = 0;
+
     // Initialize basic fields
     root->compress_sequence[0] = 1;
     root->compress_sequence_count = 1;
@@ -307,7 +304,10 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     printf("\nCreated new root node in pool[0][0]:\n");
     print_tree_node(root, block, 0);
     printf("Pool size: %zu\n", pool->size);
+    visualize_add_level(&viz, root, 1, NULL, block, 0);
     #endif
+    
+
 }
 
 
@@ -354,6 +354,8 @@ static inline TreeNode* resetToBestNode(TreeNodePoolManager* mgr, int node_count
                                  best_node->compress_sequence_count : 1;
 
     TreeNode* new_root = create_tree_node(initial_capacity);
+    new_root->id = ++viz.next_node_id;
+    new_root->parent_id = 0;
     if (!new_root) {
         fprintf(stderr, "Failed to create new root node\n");
         return NULL;
@@ -379,7 +381,7 @@ static inline TreeNode* resetToBestNode(TreeNodePoolManager* mgr, int node_count
     }
 
 #ifdef DEBUG
-    printf("\nSuccessfully created new root node after reset:\n");
+    printf("\n\n**************** Successfully created new root node after reset:\n");
     print_tree_node(new_root, block, block_index);
 #endif
 
@@ -393,6 +395,9 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
         cleanup_node_pools();
         return;
     }
+    #ifdef DEBUG 
+    init_visualizer(&viz, "compression_tree.dot", 1);
+    #endif 
 
     createRoot(block, block_size);
 
@@ -404,9 +409,6 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
 
     uint8_t isEven = 0;
     uint32_t blockIndex;
-    #ifdef DEBUG 
-    init_visualizer(&viz, "compression_tree.dot", 1);
-    #endif 
 
 
     for (blockIndex = 1; blockIndex < block_size; blockIndex++) {
@@ -483,15 +485,6 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
             
 
             isEven = 0;
-
-            if ((blockIndex + 1) == block_size) {
-                printf("\n\n ***** After reset at position %u:\n", blockIndex);
-                print_tree_node(root_node, block, blockIndex);
-            }
-#ifdef DEBUG
-            printf("\n\n ***** After reset at position %u:\n", blockIndex);
-            print_tree_node(root_node, block, blockIndex);
-#endif
         }
     }
     #ifdef DEBUG

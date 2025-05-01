@@ -13,6 +13,8 @@ typedef struct TreeNode {
     int32_t saving_so_far;
     uint16_t incoming_weight;
     uint8_t isPruned;
+    uint32_t id; // to uniquely identifying a node.
+    uint32_t parent_id; //to identify parent node.
     BinSeqMap *map;
 } TreeNode;
 

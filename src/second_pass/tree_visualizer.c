@@ -4,7 +4,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-
 // Helper function to escape special DOT characters
 static void escape_dot_chars(char* dest, const char* src, size_t max_len) {
     size_t j = 0;
@@ -30,7 +29,11 @@ void init_visualizer(TreeVisualizer *viz, const char *filename, bool show_pruned
     viz->dot_file = fopen(filename, "w");
     viz->current_level = 0;
     viz->show_pruned = show_pruned;
-
+    viz->next_node_id = 0;
+    viz->edges = NULL;
+    viz->edge_count = 0;
+    viz->edge_capacity = 0;
+    
     if (viz->dot_file) {
         fprintf(viz->dot_file, "digraph compression_tree {\n");
         fprintf(viz->dot_file, "  rankdir=TB;\n");
@@ -43,30 +46,28 @@ void visualize_add_level(TreeVisualizer *viz, TreeNode *nodes, int node_count,
     if (!viz->dot_file)
         return;
 
-    for (int i = 0; i < node_count; i++)
-    {
+    // First pass: Create all nodes
+    for (int i = 0; i < node_count; i++) {
         TreeNode *node = &nodes[i];
-
         if (node->isPruned && !viz->show_pruned)
             continue;
 
-        // Get the sequence range for this node
         struct SequenceRange range = get_sequence_range(node, block, block_index);
         char seq_label[256] = "[INVALID]";
         char escaped_label[512] = "";
-        if (range.valid)
-        {
-            // Format the sequence bytes
-            char* ptr = seq_label;
+
+        if (range.valid) {
+            char *ptr = seq_label;
             int remaining = sizeof(seq_label);
             int written = 0;
-            
-            for (uint32_t j = range.start; j <= range.end && remaining > 0; j++) {
+
+            for (uint32_t j = range.start; j < range.end && remaining > 0; j++) {
                 written = snprintf(ptr, remaining, "0x%02x", block[j]);
-                if (written < 0 || written >= remaining) break;
+                if (written < 0 || written >= remaining)
+                    break;
                 ptr += written;
                 remaining -= written;
-                
+
                 if (j < range.end && remaining > 0) {
                     *ptr++ = ',';
                     *ptr++ = ' ';
@@ -74,26 +75,49 @@ void visualize_add_level(TreeVisualizer *viz, TreeNode *nodes, int node_count,
                 }
             }
             *ptr = '\0';
-            
-            // Escape special characters for DOT format
             escape_dot_chars(escaped_label, seq_label, sizeof(escaped_label));
         }
 
-        // Node appearance
-        const char* fillcolor = node->isPruned ? "fillcolor=\"#ffdddd\"" : "fillcolor=\"#ddffdd\"";
-        const char* penwidth = node->isPruned ? "penwidth=1" : "penwidth=2";
-        
-        fprintf(viz->dot_file, "  node_%p [label=\"[%u-%u]|%s|savings: %d\", %s, %s];\n", 
-                (void*)node, range.start, range.end, escaped_label, 
+        const char *fillcolor = node->isPruned ? "fillcolor=\"#ffdddd\"" : "fillcolor=\"#ddffdd\"";
+        const char *penwidth = node->isPruned ? "penwidth=1" : "penwidth=2";
+
+        fprintf(viz->dot_file, "  node_%u [label=\"[%u-%u]|%s|savings: %d\", %s, %s];\n",
+                node->id, range.start, range.end, escaped_label,
                 node->saving_so_far, fillcolor, penwidth);
-        
-        // Create edge from parent if exists
-        if (old_node) {
-            fprintf(viz->dot_file, "  node_%p -> node_%p [label=\"w:%d\"];\n",
-                    (void*)old_node, (void*)node, node->incoming_weight);
-        }
     }
 
+    // Second pass: Track unique edges
+    for (int i = 0; i < node_count; i++) {
+        TreeNode *node = &nodes[i];
+        if ((!node->isPruned || viz->show_pruned) && node->parent_id != 0) {
+            // Check if edge already exists
+            bool edge_exists = false;
+            for (size_t j = 0; j < viz->edge_count; j++) {
+                if (viz->edges[j].parent_id == node->parent_id && 
+                    viz->edges[j].child_id == node->id) {
+                    edge_exists = true;
+                    break;
+                }
+            }
+            
+            if (!edge_exists) {
+                // Resize edges array if needed
+                if (viz->edge_count >= viz->edge_capacity) {
+                    viz->edge_capacity = viz->edge_capacity ? viz->edge_capacity * 2 : 16;
+                    viz->edges = realloc(viz->edges, viz->edge_capacity * sizeof(Edge));
+                }
+                
+                // Add new edge
+                viz->edges[viz->edge_count].parent_id = node->parent_id;
+                viz->edges[viz->edge_count].child_id = node->id;
+                viz->edge_count++;
+                
+                // Write edge to file
+                fprintf(viz->dot_file, "  node_%u -> node_%u [label=\"w:%d\"];\n",
+                        node->parent_id, node->id, node->incoming_weight);
+            }
+        }
+    }
     viz->current_level++;
 }
 
@@ -114,8 +138,8 @@ void finalize_visualizer(TreeVisualizer* viz) {
         fclose(viz->dot_file);
         viz->dot_file = NULL;
     }
+    free(viz->edges);  // Clean up edge tracking
 }
-
 /*
 // In your main compression code:
 #include "tree_visualizer.h"
