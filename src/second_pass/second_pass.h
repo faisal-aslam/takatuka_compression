@@ -5,7 +5,6 @@
 //#define DEBUG_PRINT 1
 
 #include <limits.h>
-#include "../weighted_freq.h"
 #include "tree_node.h"
 
 

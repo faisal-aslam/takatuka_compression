@@ -15,8 +15,5 @@ typedef struct {
 } BinarySequence;
 
 
-// Forward declarations only
-typedef struct SequenceMapEntry SequenceMapEntry;
-typedef struct HashEntry HashEntry;
 
 #endif

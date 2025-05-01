@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h> 
-#include "../weighted_freq.h"
-#include "../second_pass/second_pass.h"
+#include "write_in_file.h"
+
 
 #define BUFFER_SIZE (1024 * 1024)  // 1MB buffer for better I/O performance
 #define MAX_SEQ_LENGTH 8
@@ -95,7 +95,7 @@ static inline void write_bit(uint8_t bit, uint8_t* buffer, uint8_t* bit_pos,
 /**
  * @brief Writes compressed data to a file with extensive debugging output
  */
-static void writeCompressedDataInFile(TreeNode *node, uint8_t* block, FILE *file) {
+static void writeCompressedDataInFile(TreeNode *node, const uint8_t* block, FILE *file) {
     if (!node || !block || !file) {
         fprintf(stderr, "Error: Invalid inputs in writeCompressedDataInFile\n");
         return;
@@ -405,7 +405,7 @@ static void write_bits(uint16_t value, uint8_t num_bits, uint8_t* bit_buffer, ui
  * @param block_index Starting index in block
  * @return int Number of used sequences found (or -1 on error)
  */
-static int calcUsedAndAssignGroupID(TreeNode *node, uint8_t* block, uint32_t block_index) {
+static int calcUsedAndAssignGroupID(TreeNode *node, const uint8_t* block, uint32_t block_index) {
     // Validate inputs
     if (!node || !block) {
         fprintf(stderr, "Error: Invalid node or block pointer\n");
@@ -499,7 +499,7 @@ static int calcUsedAndAssignGroupID(TreeNode *node, uint8_t* block, uint32_t blo
   * @param raw_data Pointer to raw data block
   */
 void writeCompressedOutput(const char* filename, BinarySequence** sequences, 
-                         int seq_count, TreeNode *best_node, uint8_t* raw_data) {
+                         int seq_count, TreeNode *best_node, const uint8_t* raw_data) {
     if (!filename || !sequences || seq_count <= 0 || !best_node || !raw_data) {
         fprintf(stderr, "Error: Invalid inputs in writeCompressedOutput\n");
         return;
