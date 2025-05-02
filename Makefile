@@ -23,14 +23,14 @@ DEBUG_COMPRESS_TARGET = compress-debug
 # Load source files
 include used_sources.mk
 
-# Split sources into compression and decompression files
+# Separate source sets
 COMPRESS_SRCS = $(filter-out src/decompress/decompress.c, $(SRCS))
 DECOMPRESS_SRCS = src/decompress/decompress.c
 
 # Object files
 COMPRESS_RELEASE_OBJS = $(patsubst src/%.c,$(BUILD_DIR)/release/%.o,$(COMPRESS_SRCS))
 COMPRESS_DEBUG_OBJS = $(patsubst src/%.c,$(BUILD_DIR)/debug/%.o,$(COMPRESS_SRCS))
-DECOMPRESS_OBJ = $(BUILD_DIR)/release/decompress/decompress.o
+DECOMPRESS_OBJ = $(patsubst src/%.c,$(BUILD_DIR)/release/%.o,$(DECOMPRESS_SRCS))
 
 # Dependencies
 DEPS = $(COMPRESS_RELEASE_OBJS:.o=.d) $(COMPRESS_DEBUG_OBJS:.o=.d) $(DECOMPRESS_OBJ:.o=.d)
@@ -40,33 +40,23 @@ DEPS = $(COMPRESS_RELEASE_OBJS:.o=.d) $(COMPRESS_DEBUG_OBJS:.o=.d) $(DECOMPRESS_
 all: compress decompress
 
 release: compress decompress
-	@echo "Built release versions: ./$(COMPRESS_TARGET) and ./$(DECOMPRESS_TARGET)"
+	@echo "Built release versions: ./compress and ./decompress"
 
 debug: $(DEBUG_COMPRESS_TARGET) decompress
-	@echo "Built debug version: ./$(DEBUG_COMPRESS_TARGET) and ./$(DECOMPRESS_TARGET)"
+	@echo "Built debug version: ./compress-debug and ./decompress"
 
-compress: $(COMPRESS_TARGET)
-	@echo "Built compression tool: ./$(COMPRESS_TARGET)"
+compress: $(COMPRESS_RELEASE_OBJS)
+	$(CC) $(LDFLAGS_RELEASE) -o $(COMPRESS_TARGET) $^ -lm
+	@echo "Built compression tool: ./compress"
 
-decompress: $(DECOMPRESS_TARGET)
-	@echo "Built decompression tool: ./$(DECOMPRESS_TARGET)"
+decompress: $(DECOMPRESS_OBJ)
+	$(CC) $(LDFLAGS_RELEASE) -o $(DECOMPRESS_TARGET) $^ -lm
+	@echo "Built decompression tool: ./decompress"
 
-$(COMPRESS_TARGET): CFLAGS = $(CFLAGS_RELEASE)
-$(COMPRESS_TARGET): LDFLAGS = $(LDFLAGS_RELEASE)
-$(COMPRESS_TARGET): $(COMPRESS_RELEASE_OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^ -lm
-
-$(DEBUG_COMPRESS_TARGET): CFLAGS = $(CFLAGS_DEBUG)
-$(DEBUG_COMPRESS_TARGET): LDFLAGS = $(LDFLAGS_DEBUG)
 $(DEBUG_COMPRESS_TARGET): $(COMPRESS_DEBUG_OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^ -lm
+	$(CC) $(LDFLAGS_DEBUG) -o $@ $^ -lm
 
-$(DECOMPRESS_TARGET): CFLAGS = $(CFLAGS_RELEASE)
-$(DECOMPRESS_TARGET): LDFLAGS = $(LDFLAGS_RELEASE)
-$(DECOMPRESS_TARGET): $(DECOMPRESS_OBJ)
-	$(CC) $(LDFLAGS) -o $@ $^ -lm
-
-# Build rules
+# Compile rules
 $(BUILD_DIR)/release/%.o: src/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS_RELEASE) -c $< -o $@

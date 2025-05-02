@@ -7,6 +7,7 @@
 #include "prune_logic.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <limits.h>
 #include <math.h>
 #include "../write_in_file/write_in_file.h"
@@ -19,7 +20,6 @@ TreeVisualizer viz;
 
 uint16_t total_codes = 0;
 
-void print_stacktrace(void);
 
 static int processNodePath(TreeNode *old_node, TreeNodePoolManager* mgr, int new_nodes_count,
                          const uint8_t* block, uint32_t block_size, uint32_t block_index,                         
@@ -44,7 +44,7 @@ static inline uint8_t getCurrentGroup() {
 }
 
 
-void cleanup_node_pools() {
+static void cleanup_node_pools() {
     for (int i = 0; i < 2; i++) {
         TreeNodePool* pool = &pool_manager.pool[i];
         if (pool->data) {
@@ -371,7 +371,7 @@ static inline TreeNode* resetToBestNode(TreeNodePoolManager* mgr, int node_count
 }
 
 
-void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
+static void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
     if (SEQ_LENGTH_LIMIT <= 1 || block_size == 0 || !block) {
         fprintf(stderr, "Error: Invalid parameters in processBlockSecondPass\n");
         cleanup_node_pools();
@@ -477,7 +477,7 @@ void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
 }
 
 
-void processSecondPass(const char* filename) {
+static void processSecondPass(const char* filename) {
     FILE* file = fopen(filename, "rb");
     if (!file) {
         perror("Failed to open file");
@@ -505,4 +505,17 @@ void processSecondPass(const char* filename) {
 
     fclose(file);
     cleanup_node_pools();
+}
+
+
+
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        printf("Usage: %s <binary_file>\n", argv[0]);
+        return 1;
+    }
+    
+    processSecondPass(argv[1]);
+
+    return 0;
 }
