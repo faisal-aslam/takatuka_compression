@@ -4,7 +4,6 @@
 
 #include "common_types.h"
 #include "../second_pass/group.h"
-#include "../second_pass/second_pass.h"
 #include "../second_pass/tree_node.h"
 
 void writeCompressedOutput(const char* filename, BinarySequence** sequences, 
