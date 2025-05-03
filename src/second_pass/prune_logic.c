@@ -11,7 +11,7 @@
 #define SELECTION_SORT_THRESHOLD 32
 
 
-static int level = 0;
+static int level = 1;
 /**
  * Calculates compression savings for a binary sequence based on:
  * - Frequency (higher frequency => higher savings)
@@ -142,16 +142,16 @@ void apply_dual_beam_pruning(TreeNodePool *pool, int node_count,
                            const uint8_t *block, uint32_t block_index) {
     if (!pool || !pool->data || node_count <= 0) return;
 
-    for (int weight = 0; weight < SEQ_LENGTH_LIMIT; weight++) {
+    for (int weight = 0; weight <= SEQ_LENGTH_LIMIT; weight++) {
         // Collect nodes for this weight level
-        TreeNode* nodes[MAX_NODE_PER_WEIGHT];         
+        TreeNode* nodes[MAX_NODE_PER_LEVEL];         
         
         int valid_count = 0;
 
         for (int i = 0; i < node_count; i++) {
             TreeNode *node = &pool->data[i];
             if (node->incoming_weight == weight) {
-                if (valid_count >= MAX_NODE_PER_WEIGHT) {
+                if (valid_count >= MAX_NODE_PER_LEVEL) {
                     fprintf(stderr, "\n nodes exceeds the limit: level=%d, weight=%d, nodes=%d\n", level, weight, valid_count);
                     exit(EXIT_FAILURE);
                     break;
@@ -160,11 +160,7 @@ void apply_dual_beam_pruning(TreeNodePool *pool, int node_count,
                 node->isPruned = 1; // Default to pruned
             }
         }
-
         if (valid_count == 0) continue;
-        if (level == 2 && weight == 0) {
-            printf("Stop here");
-        }
 
         // Apply both pruning criteria
         keep_top_k_by_savings(nodes, valid_count, BEAM_WIDTH_SAVINGS);
@@ -196,7 +192,7 @@ void apply_dual_beam_pruning(TreeNodePool *pool, int node_count,
     level++;
     
     #ifdef DEBUG
-    printf("\n\n ----------------- End of one level=%d, node_count=%d------------------- \n\n\n\n", level, node_count);
+    printf("\n\n ----------------- End of one level=%d, node_count=%d, max_node=%d ------------------- \n\n\n\n", level, node_count, MAX_NODE_PER_LEVEL);
     int unproned = 0;
     for (int loop=0; loop < node_count; loop++){
         TreeNode *node = &pool->data[loop];

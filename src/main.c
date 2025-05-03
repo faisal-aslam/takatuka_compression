@@ -19,8 +19,6 @@ TreeVisualizer viz;
 
 uint16_t total_codes = 0;
 
-char outputfile[100];
-
 static int processNodePath(TreeNode *old_node, TreeNodePoolManager* mgr, int new_nodes_count,
                          const uint8_t* block, uint32_t block_size, uint32_t block_index,                         
                          const uint8_t* sequence, uint16_t seq_len, uint8_t new_weight,
@@ -510,8 +508,9 @@ static void processSecondPass(const char* filename) {
 
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        printf("Usage: %s <input_file> <output_file>\n", argv[0]);
+    if (argc != 2) {
+        //printf("Usage: %s <input_file> <output_file>\n", argv[0]);
+        printf("Usage: %s <input_file>\n", argv[0]);
         return 1;
     }
     

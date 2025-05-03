@@ -50,10 +50,6 @@ void visualize_add_level(TreeVisualizer *viz, TreeNode *nodes, int node_count,
     if (!viz->dot_file)
         return;
 
-    if (viz->current_level <20 || viz->current_level > 21) {
-        viz->current_level++;
-        return;
-    }
     // First pass: Create all nodes with vertical layout
     for (int i = 0; i < node_count; i++) {
         TreeNode *node = &nodes[i];
