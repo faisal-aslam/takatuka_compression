@@ -9,6 +9,7 @@ SRCS = \
     src/second_pass/binseq_hashmap.c \
     src/second_pass/memory_management.c \
     src/xxhash.c \
+    src/graph/graph.c \
     src/second_pass/group.c \
     src/second_pass/prune_logic.c
 

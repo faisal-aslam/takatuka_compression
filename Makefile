@@ -1,38 +1,35 @@
 # Compiler and base flags
 CC = gcc
-
+STD = -std=c17  # Explicitly set C standard (C11 or C17)
 BUILD_DIR = build
 
 # Release flags (optimized)
-CFLAGS_RELEASE = -Wall -Wextra -pedantic -O3 -march=native -flto -funroll-loops \
-                 -fomit-frame-pointer -MMD -I./src \
-                 -fno-signed-zeros -fno-trapping-math -fassociative-math -fno-math-errno \
-                 -fstrict-aliasing -ftree-vectorize -fno-stack-protector
+CFLAGS_RELEASE = $(STD) -Wall -Wextra -pedantic -O3 -march=native -flto \
+                 -funroll-loops -fomit-frame-pointer -MMD -I./src \
+                 -fno-signed-zeros -fno-trapping-math -fassociative-math \
+                 -fno-math-errno -fstrict-aliasing -ftree-vectorize \
+                 -fno-stack-protector
 LDFLAGS_RELEASE = -flto -O3 -fuse-linker-plugin
 
 # Debug flags
-CFLAGS_DEBUG = -Wall -Wextra -pedantic -g -rdynamic -O0 -I./src -MMD -DDEBUG \
-               -fno-omit-frame-pointer -fno-inline
+CFLAGS_DEBUG = $(STD) -Wall -Wextra -pedantic -g -rdynamic -O0 -I./src -MMD \
+               -DDEBUG -fno-omit-frame-pointer -fno-inline
 LDFLAGS_DEBUG = -g -rdynamic
 
-# Targets
+# Targets and dependencies
 COMPRESS_TARGET = compress
 DECOMPRESS_TARGET = decompress
 DEBUG_COMPRESS_TARGET = compress-debug
 
-# Load source files
 include used_sources.mk
 
-# Separate source sets
 COMPRESS_SRCS = $(filter-out src/decompress/decompress.c, $(SRCS))
 DECOMPRESS_SRCS = src/decompress/decompress.c
 
-# Object files
 COMPRESS_RELEASE_OBJS = $(patsubst src/%.c,$(BUILD_DIR)/release/%.o,$(COMPRESS_SRCS))
 COMPRESS_DEBUG_OBJS = $(patsubst src/%.c,$(BUILD_DIR)/debug/%.o,$(COMPRESS_SRCS))
 DECOMPRESS_OBJ = $(patsubst src/%.c,$(BUILD_DIR)/release/%.o,$(DECOMPRESS_SRCS))
 
-# Dependencies
 DEPS = $(COMPRESS_RELEASE_OBJS:.o=.d) $(COMPRESS_DEBUG_OBJS:.o=.d) $(DECOMPRESS_OBJ:.o=.d)
 
 .PHONY: all clean release debug compress decompress help
