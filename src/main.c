@@ -253,9 +253,10 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     GraphNode* root = get_next_node();
     
     //todo root->id = ++viz.next_node_id;
-    root->incoming_weight = 1;
-    root->parent_count = 0;
-    root->compress_sequence = 1;
+    root->incoming_weight = 1; //root default weight is 1.
+    root->parent_count = 0; //root has no parents.
+    root->compress_sequence = 1; //there is nothing to compress yet at the root level.
+    root->level = 1; //root is at level 1
 
     // Create empty map
    /* todo root->map = binseq_map_create(3);
@@ -369,9 +370,9 @@ static void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
     createRoot(block, block_size);
 
     uint32_t blockIndex;
-
-
-    for (blockIndex = 1; blockIndex < block_size; blockIndex++) {
+    uint16_t number_of_level_nodes = get_number_of_level_nodes();
+    //these are all the nodes of current level.
+    for (blockIndex = 1; blockIndex < number_of_level_nodes  && blockIndex < block_size; blockIndex++) {
         // Switch pools
         switch_tree_node_pool(&pool_manager);
         int old_pool_size = pool_manager.pool[pool_manager.active_index ^ 1].size;

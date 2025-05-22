@@ -3,6 +3,8 @@
 
 // Static memory pool
 static GraphNode nodes[GRAPH_MAX_NODES];
+static uint16_t number_of_level_nodes = 0;
+static GraphNode level_nodes[SEQ_LENGTH_LIMIT];
 static bool initialized = false;
 static uint32_t currentNode = 0;
 
@@ -17,6 +19,9 @@ void graph_init(void) {
     }
 }
 
+uint16_t get_number_of_level_nodes() {
+    return number_of_level_nodes;
+}
 
 GraphNode* graph_get_node(uint32_t index) {
     return (index < GRAPH_MAX_NODES) ? &nodes[index] : NULL;
