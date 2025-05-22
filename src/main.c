@@ -370,10 +370,12 @@ static void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
     createRoot(block, block_size);
 
     uint32_t blockIndex;
-    uint32_t currentIndex = get_current_graph_node_index();
+    uint32_t current_index = get_current_graph_node_index();
+    uint32_t current_level = graph_get_node(current_index)->level;
     //these are all the nodes of current level.
     for (blockIndex = 1; blockIndex < block_size; blockIndex++) {           
-        // Step 1: get 
+        graph_get_node(blockIndex);    
+
 
         // Reset root periodically or at the end
         if ((blockIndex + 1) % RESET_ROOT_LENGTH == 0 || (blockIndex + 1) == block_size) {
