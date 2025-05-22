@@ -18,19 +18,28 @@
 #define GRAPH_MAX_NODES 10000
 #define GRAPH_MAX_CONNECTIONS 32
 
+
 typedef struct __attribute__((packed)) {
-    uint32_t id;                    // 4 bytes
+    uint16_t id;                     //1 byte
     uint8_t parent_count;           // 1 byte
     uint8_t child_count;            // 1 byte
     uint8_t parents[GRAPH_MAX_CONNECTIONS];  // 32 bytes
     uint8_t children[GRAPH_MAX_CONNECTIONS]; // 32 bytes
     uint8_t incoming_weight;        // 1 byte
-    uint32_t sequence_range;        // 4 bytes (packed start/end)
+    uint32_t compress_start_index;   //4 bytes
+    uint8_t compress_sequence;        // 4 bytes
     int32_t saving_so_far;          // 4 bytes
-    // Total: 4+1+1+32+32+1+4+4 = 79 bytes
+    // Total: 2+1+1+32+32+1+4+1+4 = 78 bytes
 } GraphNode;
 
 // Verify padding hasn't changed the size
-STATIC_ASSERT(sizeof(GraphNode) == 79, "GraphNode size mismatch - check compiler padding");
+STATIC_ASSERT(sizeof(GraphNode) == 78, "GraphNode size mismatch - check compiler padding");
+
+void graph_init(void);
+GraphNode* graph_get_node(uint32_t index);
+bool graph_add_edge(uint32_t from, uint32_t to);
+GraphNode* get_next_node();
+bool is_graph_full();
+void print_graph_node(const GraphNode *node, const uint8_t* block);
 
 #endif

@@ -11,6 +11,7 @@
 #include <math.h>
 #include "write_in_file/write_in_file.h"
 #include "second_pass/group.h"
+#include "graph/graph.h"
 
 // Global pool manager instance
 TreeNodePoolManager pool_manager = {0};
@@ -240,54 +241,40 @@ static int processNodePath(TreeNode *old_node, TreeNodePoolManager* mgr, int new
 
 static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     if (!block || block_size == 0) return;
-
-    cleanup_node_pools();
-
-    // Get the active pool (should be pool[0] after cleanup)
-    TreeNodePool* pool = &pool_manager.pool[0];
-    
+    // initialize the graph.
+    graph_init();
     // Ensure pool has capacity
-    if (pool->size >= pool->capacity) {
-        size_t new_capacity = pool->capacity ? pool->capacity * 2 : 1;
-        TreeNode* new_data = realloc(pool->data, new_capacity * sizeof(TreeNode));
-        if (!new_data) {
-            fprintf(stderr, "FATAL: Failed to expand root pool\n");
-            exit(EXIT_FAILURE);
-        }
-        pool->data = new_data;
-        pool->capacity = new_capacity;
+    if (is_graph_full()) {
+        fprintf(stderr, "FATAL: Graph is full\n");
+        exit(EXIT_FAILURE);
     }
 
     // Initialize the root node directly in the pool
-    TreeNode* root = &pool->data[pool->size++];
-    init_tree_node(root, 16);
-
-    root->id = ++viz.next_node_id;
-    root->parent_id = 0;
-
-    // Initialize basic fields
-    root->compress_sequence[0] = 1;
-    root->compress_sequence_count = 1;
+    GraphNode* root = get_next_node();
+    
+    //todo root->id = ++viz.next_node_id;
     root->incoming_weight = 1;
+    root->parent_count = 0;
+    root->compress_sequence = 1;
 
     // Create empty map
-    root->map = binseq_map_create(3);
+   /* todo root->map = binseq_map_create(3);
     if (!root->map) {
         fprintf(stderr, "\n Unable to create map");
         pool->size--; // Remove the failed node from pool
         free_tree_node_pool_manager(&pool_manager);
         exit(EXIT_FAILURE);
     }
-
-    root->saving_so_far = calculate_savings(&block[0], 1, root->map);
+    */
+    root->saving_so_far = calculate_savings(&block[0], 1, NULL);
 
     #ifdef DEBUG
     printf("\nCreated new root node in pool[0][0]:\n");
-    print_tree_node(root, block, 0);
-    printf("Pool size: %zu\n", pool->size);
-    visualize_add_level(&viz, root, 1, block);
+    print_graph_node(root, block);
+    //todo printf("Pool size: %zu\n", pool->size);
+    //visualize_add_level(&viz, root, 1, block);
     #endif
-    
+  
 
 }
 
@@ -381,13 +368,6 @@ static void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
 
     createRoot(block, block_size);
 
-    if (pool_manager.pool[0].size == 0) {
-        fprintf(stderr, "Error: No root node created\n");
-        cleanup_node_pools();
-        return;
-    }
-
-    uint8_t isEven = 0;
     uint32_t blockIndex;
 
 
@@ -401,7 +381,6 @@ static void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
             cleanup_node_pools();
             return;
         }
-        isEven = !isEven;
 
         // Reset root periodically or at the end
         if ((blockIndex + 1) % RESET_ROOT_LENGTH == 0 || (blockIndex + 1) == block_size) {
@@ -463,8 +442,6 @@ static void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
             free(new_root);
             new_root = NULL;
             
-
-            isEven = 0;
         }
     }
     #ifdef DEBUG
