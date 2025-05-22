@@ -1,4 +1,5 @@
-// graph_node.h
+// graph/graph.h
+
 #ifndef GRAPH_NODE_H
 #define GRAPH_NODE_H
 
@@ -29,12 +30,12 @@ typedef struct __attribute__((packed)) {
     uint32_t compress_start_index;   //4 bytes
     uint8_t compress_sequence;        //1 bytes
     int32_t saving_so_far;          // 4 bytes
-    uint16_t level;                 //2 bytes
-    // Total: 2+1+1+SEQ_LENGTH_LIMIT+SEQ_LENGTH_LIMIT+1+4+1+4+2 = 16+(2*SEQ_LENGTH_LIMIT) bytes
+    uint32_t level;                 //2 bytes
+    // Total: 2+1+1+SEQ_LENGTH_LIMIT+SEQ_LENGTH_LIMIT+1+4+1+4+4 = 18+(2*SEQ_LENGTH_LIMIT) bytes
 } GraphNode;
 
 // Verify padding hasn't changed the size
-STATIC_ASSERT(sizeof(GraphNode) == 16+(2*SEQ_LENGTH_LIMIT), "GraphNode size mismatch - check compiler padding");
+STATIC_ASSERT(sizeof(GraphNode) == 18+(2*SEQ_LENGTH_LIMIT), "GraphNode size mismatch - check compiler padding");
 STATIC_ASSERT(SEQ_LENGTH_LIMIT <= 255, "SEQ_LENGTH_LIMIT cannot be greater than 255");
 
 void graph_init(void);
@@ -43,6 +44,7 @@ bool graph_add_edge(uint32_t from, uint32_t to);
 GraphNode* get_next_node();
 bool is_graph_full();
 void print_graph_node(const GraphNode *node, const uint8_t* block);
-uint16_t get_number_of_level_nodes();
+
+uint32_t get_current_graph_node_index();
 
 #endif

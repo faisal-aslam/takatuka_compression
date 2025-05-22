@@ -370,18 +370,10 @@ static void processBlockSecondPass(const uint8_t* block, uint32_t block_size) {
     createRoot(block, block_size);
 
     uint32_t blockIndex;
-    uint16_t number_of_level_nodes = get_number_of_level_nodes();
+    uint32_t currentIndex = get_current_graph_node_index();
     //these are all the nodes of current level.
-    for (blockIndex = 1; blockIndex < number_of_level_nodes  && blockIndex < block_size; blockIndex++) {
-        // Switch pools
-        switch_tree_node_pool(&pool_manager);
-        int old_pool_size = pool_manager.pool[pool_manager.active_index ^ 1].size;
-
-        if (!createNodes(&pool_manager, old_pool_size, block, block_size, blockIndex)) {
-            fprintf(stderr, "Failed to create nodes\n");
-            cleanup_node_pools();
-            return;
-        }
+    for (blockIndex = 1; blockIndex < block_size; blockIndex++) {           
+        // Step 1: get 
 
         // Reset root periodically or at the end
         if ((blockIndex + 1) % RESET_ROOT_LENGTH == 0 || (blockIndex + 1) == block_size) {

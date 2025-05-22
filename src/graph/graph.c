@@ -1,12 +1,12 @@
-// graph.c
+// graph/graph.c
+
 #include "graph.h"
 
 // Static memory pool
 static GraphNode nodes[GRAPH_MAX_NODES];
-static uint16_t number_of_level_nodes = 0;
-static GraphNode level_nodes[SEQ_LENGTH_LIMIT];
 static bool initialized = false;
-static uint32_t currentNode = 0;
+static uint32_t current_node_index = 0;
+
 
 void graph_init(void) {
     if (initialized) return;
@@ -19,12 +19,13 @@ void graph_init(void) {
     }
 }
 
-uint16_t get_number_of_level_nodes() {
-    return number_of_level_nodes;
-}
 
 GraphNode* graph_get_node(uint32_t index) {
     return (index < GRAPH_MAX_NODES) ? &nodes[index] : NULL;
+}
+
+uint32_t get_current_graph_node_index() {
+    return current_node_index;
 }
 
 bool graph_add_edge(uint32_t from, uint32_t to) {
@@ -34,8 +35,8 @@ bool graph_add_edge(uint32_t from, uint32_t to) {
     GraphNode* dst = &nodes[to];
     
     // Fast boundary checks
-    if (src->child_count >= GRAPH_MAX_CONNECTIONS || 
-        dst->parent_count >= GRAPH_MAX_CONNECTIONS) {
+    if (src->child_count >= SEQ_LENGTH_LIMIT || 
+        dst->parent_count >= SEQ_LENGTH_LIMIT) {
         return false;
     }
     
@@ -47,16 +48,19 @@ bool graph_add_edge(uint32_t from, uint32_t to) {
 
 
 GraphNode* get_next_node() {
-    if (currentNode < GRAPH_MAX_NODES) {
-        return &nodes[currentNode++];
+    if (current_node_index < GRAPH_MAX_NODES) {
+        return &nodes[current_node_index++];
     } else {
         return NULL;
     }
 }
 
+uint32_t get_current_index() {
+
+}
 
 bool is_graph_full() {
-    if (currentNode >= GRAPH_MAX_NODES) {
+    if (current_node_index >= GRAPH_MAX_NODES) {
         return true;
     } 
     return false;
