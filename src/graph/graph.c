@@ -1,6 +1,8 @@
 // graph/graph.c
 
 #include "graph.h"
+#include <stdio.h>
+
 
 // Static memory pool
 static GraphNode nodes[GRAPH_MAX_NODES];
@@ -25,7 +27,7 @@ GraphNode* graph_get_node(uint32_t index) {
 }
 
 uint32_t get_current_graph_node_index() {
-    return current_node_index;
+    return current_node_index-1;
 }
 
 bool graph_add_edge(uint32_t from, uint32_t to) {
@@ -47,7 +49,7 @@ bool graph_add_edge(uint32_t from, uint32_t to) {
 }
 
 
-GraphNode* get_next_node() {
+GraphNode* create_new_node() {
     if (current_node_index < GRAPH_MAX_NODES) {
         return &nodes[current_node_index++];
     } else {
