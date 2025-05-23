@@ -1,6 +1,7 @@
 #include "graph/graph_visualizer.h"
 #include <stdlib.h>
 #include <string.h>
+#include "graph/graph_visualizer.h"
 
 // Helper to escape special characters in DOT labels
 static void escape_label(char* dest, const char* src, size_t max_len) {
@@ -33,12 +34,13 @@ void graphviz_init(GraphVisualizer* viz, const char* filename, bool show_all) {
     }
 }
 
-void graphviz_add_level(GraphVisualizer* viz, GraphNode* nodes, uint32_t node_count, const uint8_t* block) {
-    if (!viz->dot_file) return;
+void graphviz_add_level(GraphVisualizer* viz, uint32_t start_index, uint32_t end_index, const uint8_t* block) {
+    if (!viz->dot_file || start_index >= end_index) return;
 
     // Create nodes
-    for (uint32_t i = 0; i < node_count; i++) {
-        GraphNode* node = &nodes[i];
+    for (uint32_t i = start_index; i < end_index; i++) {
+        GraphNode* node = graph_get_node(i);
+        if (!node) continue;
         
         char seq_label[512] = "";
         for (uint8_t j = 0; j < node->compress_sequence; j++) {
@@ -61,8 +63,9 @@ void graphviz_add_level(GraphVisualizer* viz, GraphNode* nodes, uint32_t node_co
     }
 
     // Create edges
-    for (uint32_t i = 0; i < node_count; i++) {
-        GraphNode* node = &nodes[i];
+    for (uint32_t i = start_index; i < end_index; i++) {
+        GraphNode* node = graph_get_node(i);
+        if (!node) continue;
         
         for (uint8_t p = 0; p < node->parent_count; p++) {
             uint32_t parent_id = node->parents[p];
@@ -91,13 +94,17 @@ void graphviz_add_level(GraphVisualizer* viz, GraphNode* nodes, uint32_t node_co
 
     // Level alignment
     fprintf(viz->dot_file, "  { rank=same; ");
-    for (uint32_t i = 0; i < node_count; i++) {
-        fprintf(viz->dot_file, "node_%u; ", nodes[i].id);
+    for (uint32_t i = start_index; i < end_index; i++) {
+        GraphNode* node = graph_get_node(i);
+        if (node) {
+            fprintf(viz->dot_file, "node_%u; ", node->id);
+        }
     }
     fprintf(viz->dot_file, "}\n");
     
     viz->current_level++;
 }
+
 
 void graphviz_finalize(GraphVisualizer* viz) {
     if (viz->dot_file) {

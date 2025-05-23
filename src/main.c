@@ -1,6 +1,6 @@
 // src/second_pass/second_pass.c
 
-#include "second_pass/tree_visualizer.h"
+#include "graph/graph_visualizer.h"
 #include "second_pass/tree_node_pool.h"
 #include "second_pass/tree_node.h"
 #include "second_pass/prune_logic.h"
@@ -16,7 +16,9 @@
 // Global pool manager instance
 TreeNodePoolManager pool_manager = {0};
 
-TreeVisualizer viz;
+#ifdef DEBUG
+GraphVisualizer viz;
+#endif
 
 uint16_t total_codes = 0;
 
@@ -39,21 +41,6 @@ static inline uint8_t getCurrentGroup() {
 }
 
 
-static void cleanup_node_pools() {
-    for (int i = 0; i < 2; i++) {
-        TreeNodePool* pool = &pool_manager.pool[i];
-        if (pool->data) {
-            for (size_t j = 0; j < pool->size; j++) {
-                free_tree_node(&pool->data[j]);
-            }
-            free(pool->data);
-            pool->data = NULL;
-        }
-        pool->size = 0;
-        pool->capacity = 0;
-    }
-    pool_manager.active_index = 0;
-}
 
 
 static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_len) {
@@ -107,8 +94,7 @@ static void processNodePath(GraphNode *old_node, const uint8_t* block, uint32_t 
     }
     
     new_saving += old_node->saving_so_far;
-    uint8_t isPruned = 0;
-        
+            
 
     GraphNode* new_node = create_new_node();
     if (!new_node) {
@@ -122,8 +108,7 @@ static void processNodePath(GraphNode *old_node, const uint8_t* block, uint32_t 
     new_node->incoming_weight = (new_weight >= SEQ_LENGTH_LIMIT) ? SEQ_LENGTH_LIMIT - 1 : new_weight;
     new_node->saving_so_far = new_saving;
     new_node->compress_sequence = 0;
-    
-
+    new_node->level = old_node->level+1;
     new_node->compress_sequence = seq_len;
 
     
@@ -149,7 +134,6 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     // Initialize the root node directly in the pool
     GraphNode* root = create_new_node();
     
-    //todo root->id = ++viz.next_node_id;
     root->incoming_weight = 1; //root default weight is 1.
     root->parent_count = 0; //root has no parents.
     root->compress_sequence = 1; //there is nothing to compress yet at the root level.
@@ -169,101 +153,25 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     #ifdef DEBUG
     printf("\nCreated new root node in pool[0][0]:\n");
     print_graph_node(root, block);
-    //todo printf("Pool size: %zu\n", pool->size);
-    //visualize_add_level(&viz, root, 1, block);
+    graphviz_add_level(&viz, 0, 1, block);
     #endif
   
 
 }
 
 
-static inline TreeNode* resetToBestNode(TreeNodePoolManager* mgr, int node_count, 
-    const uint8_t* block, uint32_t block_index) {
-    if (!mgr || node_count <= 0 || !block) {
-        fprintf(stderr, "Invalid parameters to resetToBestNode\n");
-        return NULL;
-    }
-
-    TreeNodePool* pool = &mgr->pool[mgr->active_index];
-    if (!pool || !pool->data || node_count > (int)pool->size) {
-        fprintf(stderr, "Invalid pool state in resetToBestNode\n");
-        return NULL;
-    }
-
-    // Find the best node
-    int32_t max_saving = INT_MIN;
-    int best_index = -1;
-    
-    for (int i = 0; i < node_count; i++) {
-        TreeNode* current = &pool->data[i];
-        if (!current->compress_sequence) continue;
-
-        if (current->saving_so_far > max_saving) {
-            max_saving = current->saving_so_far;
-            best_index = i;
-        } else if (current->saving_so_far == max_saving) {
-            if (current->compress_sequence_count < pool->data[best_index].compress_sequence_count) {
-                best_index = i;
-            }
-        }
-    }
-
-    if (best_index == -1) {
-        fprintf(stderr, "No valid node found in resetToBestNode\n");
-        return NULL;
-    }
-
-    TreeNode* best_node = &pool->data[best_index];
-
-    // Create a fresh new_root (heap-allocated)
-    uint16_t initial_capacity = best_node->compress_sequence_count > 0 ? 
-                                 best_node->compress_sequence_count : 1;
-
-    TreeNode* new_root = create_tree_node(initial_capacity);
-    new_root->id = ++viz.next_node_id;
-    new_root->parent_id = 0;
-    if (!new_root) {
-        fprintf(stderr, "Failed to create new root node\n");
-        return NULL;
-    }
-
-    // Manually copy fields
-    new_root->saving_so_far = best_node->saving_so_far;
-    new_root->incoming_weight = best_node->incoming_weight;
-    new_root->isPruned = best_node->isPruned;
-    new_root->compress_sequence_count = best_node->compress_sequence_count;
-
-    if (best_node->compress_sequence && best_node->compress_sequence_count > 0) {
-        memcpy(new_root->compress_sequence, best_node->compress_sequence,
-               best_node->compress_sequence_count * sizeof(uint16_t));
-    }
-
-    if (best_node->map) {
-        if (!binseq_map_copy_to_node(best_node->map, new_root)) {
-            fprintf(stderr, "Failed to copy map to new root\n");
-            free_tree_node(new_root);
-            return NULL;
-        }
-    }
-
-    printf("\n\n**************** Successfully created new root node after reset:\n");
-    print_tree_node(new_root, block, block_index);    
-    //todo later. writeCompressedOutput("compress.bin", NULL, MAX_NUMBER_OF_SEQUENCES, best_node, block);
-    
-    return new_root;
-}
-
 static void processBlock(const uint8_t *block, uint32_t block_size) {
     if (SEQ_LENGTH_LIMIT <= 1 || block_size == 0 || !block) {
         fprintf(stderr, "Error: Invalid parameters in processBlock\n");
-        cleanup_node_pools();
         return;
     }
 #ifdef DEBUG
-    init_visualizer(&viz, "compression_tree.dot", 1);
+    graphviz_init(&viz, "compression_tree.dot", true);
 #endif
 
     createRoot(block, block_size);
+    //graphviz_add_level
+    int level_node_count = 0;
 
     uint32_t block_index;
     /*
@@ -278,7 +186,10 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
             exit(EXIT_FAILURE);
         }
         uint32_t old_node_level = graph_get_node(current_index)->level;
+        level_node_count = 0;
+        int end_index = current_index;
         for (int index = current_index; index >= 0; index--) {
+            
             GraphNode *old_node = graph_get_node(index);
             if (old_node == NULL) {
                 fprintf(stderr, "null node encountered");
@@ -287,10 +198,8 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
             if (old_node->level != old_node_level) {
                 break; // done with creating new nodes of the last level.
             }
+            level_node_count++;
             // Uncompressed path
-// processNodePath(GraphNode *old_node, const uint8_t* block, uint32_t block_size, uint32_t block_index,  
-//   const uint32_t* sequence, uint8_t seq_len, uint8_t new_weight) 
-
             processNodePath(old_node, block, block_size, block_index,
                 &block[block_index], 1, old_node->incoming_weight + 1);
 
@@ -305,58 +214,52 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
                 }
                 
                 const uint8_t *seq_start = &block[block_index + 1 - seq_len];
-// processNodePath(GraphNode *old_node, const uint8_t* block, uint32_t block_size, uint32_t block_index,  
-//   const uint32_t* sequence, uint8_t seq_len, uint8_t new_weight)                 
                 processNodePath(old_node, block, block_size, block_index, seq_start, seq_len, 0
                     /*,old_node->compress_sequence - old_node->incoming_weight + k*/);
             }
+            #ifdef DEBUG 
+            int start_index = level_node_count - end_index;            
+            graphviz_add_level(&viz, start_index, end_index, block);
+            #endif
         }
     }
 #ifdef DEBUG
-    finalize_visualizer(&viz);
+    graphviz_finalize(&viz);
 #endif
 }
 
-static void process(const char* filename) {
-    FILE* file = fopen(filename, "rb");
-    if (!file) {
-        perror("Failed to open file");
-        return;
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        // printf("Usage: %s <input_file> <output_file>\n", argv[0]);
+        printf("Usage: %s <input_file>\n", argv[0]);
+        return 1;
     }
 
-    init_tree_node_pool_manager(&pool_manager);
-    uint8_t* block = malloc(BLOCK_SIZE);
+    FILE *file = fopen(argv[1], "rb");
+    if (!file) {
+        perror("Failed to open file");
+        return 1;
+    }
+
+    uint8_t *block = malloc(BLOCK_SIZE);
     if (!block) {
         perror("Failed to allocate memory for block");
         fclose(file);
-        cleanup_node_pools();
-        return;
+        return 1;
     }
 
     while (1) {
         long bytesRead = fread(block, 1, BLOCK_SIZE, file);
-        if (bytesRead <= 0) break;
-      
+        if (bytesRead <= 0)
+            break;
+
         processBlock(block, bytesRead);
     }
-    
+
     free(block);
     block = NULL;
 
     fclose(file);
-    cleanup_node_pools();
-}
-
-
-
-int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        //printf("Usage: %s <input_file> <output_file>\n", argv[0]);
-        printf("Usage: %s <input_file>\n", argv[0]);
-        return 1;
-    }
-    
-    process(argv[1]);
 
     return 0;
 }
