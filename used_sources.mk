@@ -4,7 +4,7 @@ SRCS = \
     src/write_in_file/write_in_file.c \
     src/decompress/decompress.c \
     src/second_pass/tree_node_pool.c \
-    src/second_pass/tree_visualizer.c \
+    src/graph/graph_visualizer.c \
     src/second_pass/tree_node.c \
     src/second_pass/binseq_hashmap.c \
     src/second_pass/memory_management.c \

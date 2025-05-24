@@ -1,4 +1,4 @@
-// src/second_pass/second_pass.c
+// src/main.c
 
 #include "graph/graph_visualizer.h"
 #include "second_pass/tree_node_pool.h"
@@ -95,8 +95,8 @@ static void processNodePath(GraphNode *old_node, const uint8_t* block, uint32_t 
     
     new_saving += old_node->saving_so_far;
             
-
-    GraphNode* new_node = create_new_node();
+    uint8_t weight = (new_weight >= SEQ_LENGTH_LIMIT) ? SEQ_LENGTH_LIMIT - 1 : new_weight;
+    GraphNode* new_node = create_new_node(weight, old_node->level+1);
     if (!new_node) {
         fprintf(stderr,"\n node allocation failed \n");
         return;
@@ -105,7 +105,7 @@ static void processNodePath(GraphNode *old_node, const uint8_t* block, uint32_t 
     new_node->parents[0] = old_node ? old_node->id : 0;
 
 
-    new_node->incoming_weight = (new_weight >= SEQ_LENGTH_LIMIT) ? SEQ_LENGTH_LIMIT - 1 : new_weight;
+    new_node->incoming_weight = weight;
     new_node->saving_so_far = new_saving;
     new_node->compress_sequence = 0;
     new_node->level = old_node->level+1;
@@ -132,7 +132,7 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     }
 
     // Initialize the root node directly in the pool
-    GraphNode* root = create_new_node();
+    GraphNode* root = create_new_node(1, 1);
     
     root->incoming_weight = 1; //root default weight is 1.
     root->parent_count = 0; //root has no parents.
