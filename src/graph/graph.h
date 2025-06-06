@@ -3,7 +3,7 @@
 #ifndef GRAPH_NODE_H
 #define GRAPH_NODE_H
 
-#include "constants.h"
+#include "../constants.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -20,8 +20,16 @@
 #define STATIC_ASSERT(cond, msg) typedef char static_assert_##msg[(cond) ? 1 : -1]
 #endif
 
+/**
+ * Graph node structure with read-only ID after initialization.
+ * 
+ * The ID field is not declared const to allow initialization,
+ * but should be treated as immutable after graph_init() completes.
+ * 
+ * All other fields may be modified during graph operations.
+ */
 typedef struct __attribute__((packed)) {
-    uint32_t id;
+    uint32_t id;  // Immutable after initialization (treat as read-only)
     uint8_t parent_count;
     uint8_t child_count;
     uint8_t parents[SEQ_LENGTH_LIMIT];
@@ -32,7 +40,6 @@ typedef struct __attribute__((packed)) {
     int32_t saving_so_far;
     uint32_t level;
 } GraphNode;
-
 typedef struct {
     uint32_t* indices;  // Array of node indices
     uint32_t count;

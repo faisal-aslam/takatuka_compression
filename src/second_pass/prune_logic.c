@@ -27,7 +27,7 @@ static int level = 1;
  */
 int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSeqMap* map) {
     // Validate inputs
-    if (!new_bin_seq || seq_length <= 0 || !map) {
+    if (!new_bin_seq || seq_length <= 0) {
         fprintf(stderr, "Error: Invalid parameters in calculate_savings\n");
         return INT_MIN;
     }
@@ -38,7 +38,7 @@ int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSe
     }
 
     // Lookup frequency of the sequence from the hashmap
-    const int* freq_ptr = binseq_map_get_frequency(map, new_bin_seq, seq_length);
+    const int* freq_ptr = map == NULL? 0: binseq_map_get_frequency(map, new_bin_seq, seq_length);
     int frequency = freq_ptr ? *freq_ptr : 0;
     if (frequency == 0) {
         return seq_length*5;

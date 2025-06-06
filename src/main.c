@@ -120,9 +120,20 @@ static void processNodePath(GraphNode *old_node, const uint8_t* block, uint32_t 
 }
 
 
-
+/**
+ * Create root of the graph
+ * @block bytes of the block read from the file.
+ * @block_size the size of the array block.
+*/
 static inline void createRoot(const uint8_t* block, uint32_t block_size) {
-    if (!block || block_size == 0) return;
+    /**
+     * Return if the block is null or empty.
+     * This only happens when we have reached the end of file. 
+    */ 
+    if (!block || block_size == 0) {
+        return;
+    }
+
     // initialize the graph.
     graph_init();
     // Ensure pool has capacity
@@ -131,10 +142,10 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
         exit(EXIT_FAILURE);
     }
 
-    // Initialize the root node directly in the pool
+    // create root node and set its values
     GraphNode* root = create_new_node(1, 1);
     
-    root->incoming_weight = 1; //root default weight is 1.
+    root->incoming_weight = 1; //root weight must be 1.
     root->parent_count = 0; //root has no parents.
     root->compress_sequence = 1; //there is nothing to compress yet at the root level.
     root->level = 1; //root is at level 1
@@ -168,8 +179,9 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
 #ifdef DEBUG
     graphviz_init(&viz, "compression_tree.dot", true);
 #endif
-
+    //create root of the graph.
     createRoot(block, block_size);
+
     //graphviz_add_level
     int level_node_count = 0;
 
@@ -188,6 +200,15 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
         uint32_t old_node_level = graph_get_node(current_index)->level;
         level_node_count = 0;
         int end_index = current_index;
+// Process all nodes with weight=5 at level=1
+/*uint32_t count;
+const uint32_t* indices = get_nodes_by_weight_and_level(5, 1, &count);
+for (uint32_t i = 0; i < count; i++) {
+    GraphNode* node = graph_get_node(indices[i]);
+    // Process node
+}
+*/
+        
         for (int index = current_index; index >= 0; index--) {
             
             GraphNode *old_node = graph_get_node(index);
@@ -252,7 +273,7 @@ int main(int argc, char *argv[]) {
         long bytesRead = fread(block, 1, BLOCK_SIZE, file);
         if (bytesRead <= 0)
             break;
-
+        //process of block of file at a time.
         processBlock(block, bytesRead);
     }
 

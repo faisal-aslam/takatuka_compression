@@ -5,18 +5,30 @@
 
 Graph graph = {0};
 
+/**
+ * Initializes the graph structure with default values.
+ * 
+ * This function:
+ * - Sets all graph fields to zero initially
+ * - Assigns permanent, immutable IDs to each node (0 to GRAPH_MAX_NODES-1)
+ * - Initializes the weight-level index structure
+ * - Marks the graph as initialized to prevent reinitialization
+ * 
+ * The node IDs are designed to be immutable after initialization to maintain
+ * consistency throughout the graph's lifetime.
+ */
 void graph_init(void) {
     if (graph.initialized) return;
     
+    // Clear entire graph structure
     memset(&graph, 0, sizeof(graph));
-    graph.initialized = true;
     
-    // Initialize all nodes with their IDs
+    // Assign permanent IDs to nodes
     for (uint32_t i = 0; i < GRAPH_MAX_NODES; i++) {
         graph.nodes[i].id = i;
     }
     
-    // Initialize weight-level index
+    // Initialize weight-level index structure
     for (int w = 0; w < MAX_WEIGHT; w++) {
         for (int l = 0; l < MAX_LEVELS; l++) {
             graph.index.slots[w][l].indices = NULL;
@@ -25,6 +37,9 @@ void graph_init(void) {
         }
     }
     graph.index.max_level = 0;
+    
+    // Mark graph as initialized (must be last operation)
+    graph.initialized = true;
 }
 
 GraphNode* graph_get_node(uint32_t index) {
@@ -53,7 +68,6 @@ GraphNode* create_new_node(uint8_t weight, uint32_t level) {
     }
     
     GraphNode* node = &graph.nodes[graph.current_node_index];
-    node->id = graph.current_node_index;
     node->incoming_weight = weight;
     node->level = level;
     
@@ -133,3 +147,21 @@ void print_graph_node(const GraphNode *node, const uint8_t* block) {
         printf("0x%x ", block[i]);
     }
 }
+
+
+/*
+// Create nodes with weight and level
+GraphNode* node1 = create_new_node(5, 1);
+GraphNode* node2 = create_new_node(5, 1);
+
+// Add edges (works the same as before)
+graph_add_edge(node1->id, node2->id);
+
+// Process all nodes with weight=5 at level=1
+uint32_t count;
+const uint32_t* indices = get_nodes_by_weight_and_level(5, 1, &count);
+for (uint32_t i = 0; i < count; i++) {
+    GraphNode* node = graph_get_node(indices[i]);
+    // Process node
+}
+*/
