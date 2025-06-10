@@ -49,37 +49,27 @@ bool graph_add_edge(uint32_t from, uint32_t to) {
 
 // Create a new node with given weight and level
 GraphNode* create_new_node(uint8_t weight, uint32_t level) {
-    // Check if graph is full
-    if (graph.current_node_index >= GRAPH_MAX_NODES) return NULL;
+    if (graph.current_node_index >= GRAPH_MAX_NODES) {
+        return NULL; // Graph full
+    }
+    if (level >= MAX_LEVELS) {
+        return NULL; // Exceeds max levels
+    }
+    WeightLevelSlot* slot = &graph.index.slots[level][weight];
+    if (slot->count >= SEQ_LENGTH_LIMIT) {
+        return NULL; // Invariant violated (per-level limit exceeded)
+    }
 
-    // Get the new node and initialize its properties
     GraphNode* node = &graph.nodes[graph.current_node_index];
     node->incoming_weight = weight;
     node->level = level;
 
-    // Try to add to the appropriate weight/level slot
-    WeightLevelSlot* slot = &graph.index.slots[weight][level];
-    if (slot->count < SEQ_LENGTH_LIMIT) {
-        // Regular slot has space
-        slot->indices[slot->count++] = graph.current_node_index;
-    } else {
-        // Regular slot full, try overflow
-        WeightOverflowSlot* overflow = &graph.overflow_slots[weight];
-        if (overflow->count < OVERFLOW_SLOT_CAPACITY) {
-            overflow->indices[overflow->count++] = graph.current_node_index;
-        } else {
-            // Overflow also full, can't create node
-            return NULL;
-        }
-    }
+    slot->indices[slot->count++] = graph.current_node_index;
+    graph.current_node_index++;
 
-    // Update max level if needed
     if (level > graph.index.max_level) {
         graph.index.max_level = level;
     }
-
-    // Increment node counter and return the new node
-    graph.current_node_index++;
     return node;
 }
 
@@ -100,22 +90,11 @@ const uint32_t* get_nodes_by_weight_and_level(uint8_t weight, uint32_t level, ui
         *count = 0;
         return NULL;
     }
-    WeightLevelSlot* slot = &graph.index.slots[weight][level];
+    WeightLevelSlot* slot = &graph.index.slots[level][weight];
     *count = slot->count;
     return slot->indices;
 }
 
-// Get overflow nodes for a specific weight
-const uint32_t* get_overflow_nodes_by_weight(uint8_t weight, uint32_t* count) {
-    // Check for valid weight
-    if (weight >= MAX_WEIGHT) {
-        *count = 0;
-        return NULL;
-    }
-    WeightOverflowSlot* slot = &graph.overflow_slots[weight];
-    *count = slot->count;
-    return slot->indices;
-}
 
 // Get the current maximum level in the graph
 uint32_t get_max_level(void) {

@@ -40,23 +40,16 @@ typedef struct {
     uint8_t count;                       // Number of nodes in this slot
 } WeightLevelSlot;
 
-// Structure for overflow storage when regular slots are full
-typedef struct {
-    uint32_t indices[OVERFLOW_SLOT_CAPACITY];  // Array of node indices
-    uint32_t count;                            // Number of nodes in overflow
-} WeightOverflowSlot;
-
 // Index structure to organize nodes by weight and level
 typedef struct {
-    WeightLevelSlot slots[MAX_WEIGHT][MAX_LEVELS];  // 2D array of slots
-    uint32_t max_level;                            // Current maximum level in graph
+    WeightLevelSlot slots[MAX_LEVELS][MAX_WEIGHT]; // 2D array of slots
+    uint32_t max_level;         // Current maximum level in graph
 } GraphIndex;
 
 // Main graph structure containing all nodes and indexing
 typedef struct {
     GraphNode nodes[GRAPH_MAX_NODES];      // Array of all graph nodes
     GraphIndex index;                      // Weight/level index structure
-    WeightOverflowSlot overflow_slots[MAX_WEIGHT];  // Overflow storage
     uint32_t current_node_index;          // Next available node index
     bool initialized;                     // Flag indicating if graph is initialized
 } Graph;
@@ -78,7 +71,6 @@ bool is_graph_full(void);  // Check if graph is at maximum capacity
 void print_graph_node(const GraphNode *node, const uint8_t* block);  // Print node info
 uint32_t get_current_graph_node_index(void);  // Get current node index
 const uint32_t* get_nodes_by_weight_and_level(uint8_t weight, uint32_t level, uint32_t* count);  // Query nodes by weight/level
-const uint32_t* get_overflow_nodes_by_weight(uint8_t weight, uint32_t* count);  // Get overflow nodes
 uint32_t get_max_level(void);  // Get maximum level in graph
 
 #endif
