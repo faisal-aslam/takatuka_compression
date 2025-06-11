@@ -135,3 +135,13 @@ void print_graph_node(const GraphNode *node, const uint8_t* block) {
         printf("0x%x ", block[i]);
     }
 }
+
+
+// Process all nodes with weight=5 at level=1
+/*uint32_t count;
+const uint32_t* indices = get_nodes_by_weight_and_level(5, 1, &count);
+for (uint32_t i = 0; i < count; i++) {
+    GraphNode* node = graph_get_node(indices[i]);
+    // Process node
+}
+*/

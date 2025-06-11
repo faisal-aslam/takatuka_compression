@@ -176,74 +176,55 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
         fprintf(stderr, "Error: Invalid parameters in processBlock\n");
         return;
     }
+
 #ifdef DEBUG
     graphviz_init(&viz, "compression_tree.dot", true);
 #endif
-    //create root of the graph.
+
+    // Create root of the graph
     createRoot(block, block_size);
 
-    //graphviz_add_level
-    int level_node_count = 0;
-
-    uint32_t block_index;
-    /*
-        Using each block_index use all the previous level nodes to create new
-       level.
-    */
-    for (block_index = 1; block_index < block_size; block_index++) {
-        uint32_t current_index = get_current_graph_node_index();
-        GraphNode *current_node = graph_get_node(current_index);
-        if (current_node == NULL) {
-            fprintf(stderr, "null node encountered");
-            exit(EXIT_FAILURE);
-        }
-        uint32_t old_node_level = graph_get_node(current_index)->level;
-        level_node_count = 0;
-        int end_index = current_index;
-// Process all nodes with weight=5 at level=1
-/*uint32_t count;
-const uint32_t* indices = get_nodes_by_weight_and_level(5, 1, &count);
-for (uint32_t i = 0; i < count; i++) {
-    GraphNode* node = graph_get_node(indices[i]);
-    // Process node
-}
-*/
+    for (uint32_t block_index = 1; block_index < block_size; block_index++) {
+        uint32_t current_level = get_max_level(); // Get current max level
         
-        for (int index = current_index; index >= 0; index--) {
+        // Process all nodes at current level
+        for (uint8_t weight = 1; weight <= MAX_WEIGHT; weight++) {
+            uint32_t node_count = 0;
+            const uint32_t* node_indices = get_nodes_by_weight_and_level(weight, current_level, &node_count);
             
-            GraphNode *old_node = graph_get_node(index);
-            if (old_node == NULL) {
-                fprintf(stderr, "null node encountered");
-                exit(EXIT_FAILURE);
-            }
-            if (old_node->level != old_node_level) {
-                break; // done with creating new nodes of the last level.
-            }
-            level_node_count++;
-            // Uncompressed path
-            processNodePath(old_node, block, block_size, block_index,
-                &block[block_index], 1, old_node->incoming_weight + 1);
-
-            // Compressed paths
-            for (int k = 0; k < old_node->incoming_weight; k++) {
-                uint16_t seq_len = old_node->incoming_weight + 1 - k;
-
-                if (seq_len < SEQ_LENGTH_START || seq_len > SEQ_LENGTH_LIMIT ||
-                    seq_len > (block_index + 1) ||
-                    (block_index + 1 - seq_len) >= block_size) {
+            for (uint32_t i = 0; i < node_count; i++) {
+                GraphNode *old_node = graph_get_node(node_indices[i]);
+                if (!old_node) {
+                    fprintf(stderr, "Error: Null node encountered\n");
                     continue;
                 }
-                
-                const uint8_t *seq_start = &block[block_index + 1 - seq_len];
-                processNodePath(old_node, block, block_size, block_index, seq_start, seq_len, 0
-                    /*,old_node->compress_sequence - old_node->incoming_weight + k*/);
+
+                // Uncompressed path (weight increases by 1)
+                processNodePath(old_node, block, block_size, block_index,
+                              &block[block_index], 1, old_node->incoming_weight + 1);
+
+                // Compressed paths (various sequence lengths)
+                for (int k = 0; k < old_node->incoming_weight; k++) {
+                    uint16_t seq_len = old_node->incoming_weight + 1 - k;
+
+                    if (seq_len < SEQ_LENGTH_START || seq_len > SEQ_LENGTH_LIMIT ||
+                        seq_len > (block_index + 1) ||
+                        (block_index + 1 - seq_len) >= block_size) {
+                        continue;
+                    }
+                    
+                    const uint8_t *seq_start = &block[block_index + 1 - seq_len];
+                    processNodePath(old_node, block, block_size, block_index, 
+                                  seq_start, seq_len, 0);
+                }
+
+#ifdef DEBUG
+                graphviz_add_level(&viz, i, node_count, block);
+#endif
             }
-            #ifdef DEBUG 
-            int start_index = level_node_count - end_index;            
-            graphviz_add_level(&viz, start_index, end_index, block);
-            #endif
         }
     }
+
 #ifdef DEBUG
     graphviz_finalize(&viz);
 #endif
