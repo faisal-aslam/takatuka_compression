@@ -20,6 +20,13 @@
 #define STATIC_ASSERT(cond, msg) typedef char static_assert_##msg[(cond) ? 1 : -1]
 #endif
 
+
+// To track the first node at a level with a given weight
+typedef struct {
+    uint32_t first_node_with_weight; // Tracks first node with each weight at current level
+    uint8_t weight;
+} WeightTracker;
+
 // Graph node structure representing a node in the graph
 typedef struct __attribute__((packed)) {
     uint32_t id;                 // Unique identifier for the node
@@ -51,6 +58,7 @@ typedef struct {
     GraphNode nodes[GRAPH_MAX_NODES];      // Array of all graph nodes
     GraphIndex index;                      // Weight/level index structure
     uint32_t current_node_index;          // Next available node index
+    WeightTracker weight_cache[MAX_WEIGHT]; //Record first node of each weight.
     bool initialized;                     // Flag indicating if graph is initialized
 } Graph;
 

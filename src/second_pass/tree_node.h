@@ -3,7 +3,7 @@
 #define TREE_NODE_H
 
 #include "sequence_range.h"
-#include "constants.h"
+#include "../constants.h"
 #include "binseq_hashmap.h"
 
 typedef struct TreeNode {

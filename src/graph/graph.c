@@ -18,6 +18,7 @@ void graph_init(void) {
     for (uint32_t i = 0; i < GRAPH_MAX_NODES; i++) {
         graph.nodes[i].id = i;
     }
+    memset(graph.weight_cache, 0, sizeof(graph.weight_cache));
     
     // Set initial max level and mark as initialized
     graph.index.max_level = 0;

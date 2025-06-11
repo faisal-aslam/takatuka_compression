@@ -102,8 +102,8 @@ static void processNodePath(GraphNode *old_node, const uint8_t* block, uint32_t 
         return;
     }
 
-    new_node->parents[0] = old_node ? old_node->id : 0;
-
+    //add an edge.
+    graph_add_edge(old_node, new_node);
 
     new_node->incoming_weight = weight;
     new_node->saving_so_far = new_saving;
@@ -181,32 +181,56 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
     graphviz_init(&viz, "compression_tree.dot", true);
 #endif
 
-    // Create root of the graph
     createRoot(block, block_size);
 
     for (uint32_t block_index = 1; block_index < block_size; block_index++) {
-        uint32_t current_level = get_max_level(); // Get current max level
+        uint32_t current_level = get_max_level();
+        
+        // Initialize weight cache to "not found" state
+        for (int w = 0; w < MAX_WEIGHT; w++) {
+            graph.weight_cache[w].first_node_with_weight = UINT32_MAX;
+            graph.weight_cache[w].weight = 0;
+        }
         
         // Process all nodes at current level
         for (uint8_t weight = 1; weight <= MAX_WEIGHT; weight++) {
             uint32_t node_count = 0;
             const uint32_t* node_indices = get_nodes_by_weight_and_level(weight, current_level, &node_count);
             
+            if (node_count == 0) continue;
+
             for (uint32_t i = 0; i < node_count; i++) {
                 GraphNode *old_node = graph_get_node(node_indices[i]);
-                if (!old_node) {
-                    fprintf(stderr, "Error: Null node encountered\n");
+                if (!old_node) continue;
+
+                // Check if we've already processed this weight
+                if (graph.weight_cache[weight].first_node_with_weight != UINT32_MAX && 
+                    graph.weight_cache[weight].first_node_with_weight != node_indices[i]) 
+                {
+                    // Reuse children from first node with same weight
+                    GraphNode *first_node = graph_get_node(graph.weight_cache[weight].first_node_with_weight);
+                    
+                    // Link to existing children
+                    for (uint8_t c = 0; c < first_node->child_count; c++) {
+                        graph_add_edge(old_node, graph_get_node(first_node->children[c]));
+                    }
                     continue;
                 }
 
-                // Uncompressed path (weight increases by 1)
+                // Only set first_node_with_weight if not already set
+                if (graph.weight_cache[weight].first_node_with_weight == UINT32_MAX) {
+                    graph.weight_cache[weight].first_node_with_weight = node_indices[i];
+                    graph.weight_cache[weight].weight = weight;
+                }
+
+                // Process paths only for first node with this weight
+                // Uncompressed path
                 processNodePath(old_node, block, block_size, block_index,
                               &block[block_index], 1, old_node->incoming_weight + 1);
 
-                // Compressed paths (various sequence lengths)
+                // Compressed paths
                 for (int k = 0; k < old_node->incoming_weight; k++) {
                     uint16_t seq_len = old_node->incoming_weight + 1 - k;
-
                     if (seq_len < SEQ_LENGTH_START || seq_len > SEQ_LENGTH_LIMIT ||
                         seq_len > (block_index + 1) ||
                         (block_index + 1 - seq_len) >= block_size) {
