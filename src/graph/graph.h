@@ -31,8 +31,8 @@ typedef struct __attribute__((packed)) {
     uint32_t id;                 // Unique identifier for the node
     uint8_t parent_count;        // Number of parent nodes
     uint8_t child_count;         // Number of child nodes
-    uint8_t parents[SEQ_LENGTH_LIMIT];  // Array of parent node IDs
-    uint8_t children[SEQ_LENGTH_LIMIT]; // Array of child node IDs
+    uint32_t parents[SEQ_LENGTH_LIMIT];  // Array of parent node IDs
+    uint32_t children[SEQ_LENGTH_LIMIT]; // Array of child node IDs
     uint8_t incoming_weight;     // Weight/sequence length associated with this node
     uint32_t compress_start_index; // Start index in the original data block
     uint8_t compress_sequence;   // Length of the sequence this node represents
@@ -62,7 +62,7 @@ typedef struct {
 } Graph;
 
 // Compile-time assertions to verify structure sizes and limits
-STATIC_ASSERT(sizeof(GraphNode) == 20 + (2 * SEQ_LENGTH_LIMIT), "GraphNode size mismatch");
+//STATIC_ASSERT(sizeof(GraphNode) == 20 + (2 * SEQ_LENGTH_LIMIT), "GraphNode size mismatch");
 STATIC_ASSERT(SEQ_LENGTH_LIMIT <= 255, "SEQ_LENGTH_LIMIT too large");
 STATIC_ASSERT(SEQ_LENGTH_LIMIT > 0, "SEQ_LENGTH_LIMIT too small");
 

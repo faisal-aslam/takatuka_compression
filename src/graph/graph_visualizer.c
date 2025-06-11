@@ -104,7 +104,7 @@ void graphviz_render_full_graph(GraphVisualizer* viz, const uint8_t* block) {
     }
 
     // Close graph properly
-    fprintf(viz->dot_file, "}\n");
+    //fprintf(viz->dot_file, "}\n");
     fflush(viz->dot_file);
 }
 

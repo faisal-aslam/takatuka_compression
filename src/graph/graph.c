@@ -36,6 +36,10 @@ bool graph_add_edge(uint32_t from, uint32_t to) {
     // Check for valid node indices
     if (from >= GRAPH_MAX_NODES || to >= GRAPH_MAX_NODES) return false;
 
+#ifdef DEBUG
+    printf("Adding edge: %u -> %u\n", from, to);
+#endif
+
     GraphNode* src = &graph.nodes[from];
     GraphNode* dst = &graph.nodes[to];
 

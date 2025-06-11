@@ -16,7 +16,7 @@ GraphVisualizer viz;
 
 uint16_t total_codes = 0;
 
-static void processNodePath(GraphNode *old_node, const uint8_t* block, uint32_t block_size, uint32_t block_index,    
+static void processNodePath(uint32_t old_node_index, const uint8_t* block, uint32_t block_size, uint32_t block_index,    
     const uint8_t* sequence, uint8_t seq_len, uint8_t new_weight);
 
 static inline uint8_t getCurrentGroup() {
@@ -60,56 +60,52 @@ static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_
 */
 
 
-static void processNodePath(GraphNode *old_node, const uint8_t* block, uint32_t block_size, uint32_t block_index,    
+static void processNodePath(uint32_t old_node_index, const uint8_t* block, uint32_t block_size, uint32_t block_index,    
     const uint8_t* sequence, uint8_t seq_len, uint8_t new_weight) {
-    
-    // Validations
-    if (!old_node ||  !block || block_index >= block_size ||
-	    block_index >= block_size || seq_len == 0) {
-    	fprintf(stderr,"\n processNodePath validation failed \n");
+    GraphNode *old_node = graph_get_node(old_node_index);
+    // Validations (unchanged)
+    if (!old_node || !block || block_index >= block_size || seq_len == 0) {
+        fprintf(stderr,"\n processNodePath validation failed \n");
         return;
     }
     
-        
     uint32_t seq_start_offset = (new_weight == 0) ? block_index + 1 - seq_len : block_index;
     if (seq_start_offset >= block_size || (seq_start_offset + seq_len) > block_size) {
-    	fprintf(stderr,"\n invalid seq_start \n");
+        fprintf(stderr,"\n invalid seq_start \n");
         return;
     }
-    
     
     int32_t new_saving = calculate_savings(sequence, seq_len, NULL);
     if (new_saving == INT_MIN) {
-        // Invalid case, skip this path
         return;
     }
-    
     new_saving += old_node->saving_so_far;
             
     uint8_t weight = (new_weight >= SEQ_LENGTH_LIMIT) ? SEQ_LENGTH_LIMIT - 1 : new_weight;
+    
+    // CREATE NODE FIRST
     GraphNode* new_node = create_new_node(weight, old_node->level+1);
     if (!new_node) {
         fprintf(stderr,"\n node allocation failed \n");
         return;
     }
 
-    //add an edge.
-    graph_add_edge(old_node, new_node);
-
+    // SET NODE PROPERTIES
     new_node->incoming_weight = weight;
     new_node->saving_so_far = new_saving;
-    new_node->compress_sequence = 0;
-    new_node->level = old_node->level+1;
     new_node->compress_sequence = seq_len;
-
+    new_node->level = old_node->level + 1;
     
-    #ifdef DEBUG
-    //printf("\n\n new node created \n");
+    // ADD EDGE AFTER NODE IS FULLY INITIALIZED
+    if (!graph_add_edge(old_node_index, new_node->id)) {  // Use new_node->id instead of get_current_graph_node_index()
+        fprintf(stderr, "Failed to add edge from %u to %u\n", old_node_index, new_node->id);
+        return;
+    }
+
+#ifdef DEBUG
     print_graph_node(new_node, block);
-    #endif
-
+#endif
 }
-
 
 /**
  * Create root of the graph
@@ -167,14 +163,13 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
         return;
     }
 
-
-    //Create the root node.
+    // Create the root node
     createRoot(block, block_size);
 
     for (uint32_t block_index = 1; block_index < block_size; block_index++) {
         uint32_t current_level = get_max_level();
         
-        // Initialize weight cache to "not found" state
+        // Initialize weight cache for this block index
         for (int w = 0; w < MAX_WEIGHT; w++) {
             graph.weight_cache[w].first_node_with_weight = UINT32_MAX;
             graph.weight_cache[w].weight = 0;
@@ -188,36 +183,50 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
             if (node_count == 0) continue;
 
             for (uint32_t i = 0; i < node_count; i++) {
-                GraphNode *old_node = graph_get_node(node_indices[i]);
-                if (!old_node) continue;
+                uint32_t node_idx = node_indices[i];
+                GraphNode *old_node = graph_get_node(node_idx);
+                if (!old_node) {
+                    fprintf(stderr, "Error: Null node encountered at index %u\n", node_idx);
+                    continue;
+                }
 
                 // Check if we've already processed this weight
                 if (graph.weight_cache[weight].first_node_with_weight != UINT32_MAX && 
-                    graph.weight_cache[weight].first_node_with_weight != node_indices[i]) {
+                    graph.weight_cache[weight].first_node_with_weight != node_idx)  {
                     // Reuse children from first node with same weight
                     GraphNode *first_node = graph_get_node(graph.weight_cache[weight].first_node_with_weight);
+                    if (!first_node) {
+                        fprintf(stderr, "Error: Null first node for weight %u\n", weight);
+                        continue;
+                    }
                     
                     // Link to existing children
                     for (uint8_t c = 0; c < first_node->child_count; c++) {
-                        graph_add_edge(old_node, graph_get_node(first_node->children[c]));
+                        if (!graph_add_edge(node_idx, first_node->children[c])) {
+                            fprintf(stderr, "Failed to add reused edge from %u to %u\n", 
+                                    node_idx, first_node->children[c]);
+                        }
                     }
                     continue;
                 }
 
                 // Only set first_node_with_weight if not already set
                 if (graph.weight_cache[weight].first_node_with_weight == UINT32_MAX) {
-                    graph.weight_cache[weight].first_node_with_weight = node_indices[i];
+                    graph.weight_cache[weight].first_node_with_weight = node_idx;
                     graph.weight_cache[weight].weight = weight;
                 }
 
                 // Process paths only for first node with this weight
-                // Uncompressed path
-                processNodePath(old_node, block, block_size, block_index,
+                
+                // Uncompressed path (weight increases by 1)
+                processNodePath(node_idx, block, block_size, block_index,
                               &block[block_index], 1, old_node->incoming_weight + 1);
 
-                // Compressed paths
+                // Compressed paths (various sequence lengths)
                 for (int k = 0; k < old_node->incoming_weight; k++) {
                     uint16_t seq_len = old_node->incoming_weight + 1 - k;
+
+                    // Validate sequence length
                     if (seq_len < SEQ_LENGTH_START || seq_len > SEQ_LENGTH_LIMIT ||
                         seq_len > (block_index + 1) ||
                         (block_index + 1 - seq_len) >= block_size) {
@@ -225,13 +234,12 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
                     }
                     
                     const uint8_t *seq_start = &block[block_index + 1 - seq_len];
-                    processNodePath(old_node, block, block_size, block_index, 
+                    processNodePath(node_idx, block, block_size, block_index, 
                                   seq_start, seq_len, 0);
                 }
             }
         }
     }
-
 }
 
 int main(int argc, char *argv[]) {
