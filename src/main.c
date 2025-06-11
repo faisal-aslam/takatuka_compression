@@ -1,20 +1,14 @@
 // main.c
 
 #include "graph/graph_visualizer.h"
-#include "second_pass/tree_node_pool.h"
-#include "second_pass/tree_node.h"
-#include "second_pass/prune_logic.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits.h>
 #include <math.h>
-#include "write_in_file/write_in_file.h"
+//#include "write_in_file/write_in_file.h"
 #include "second_pass/group.h"
 #include "graph/graph.h"
-
-// Global pool manager instance
-TreeNodePoolManager pool_manager = {0};
 
 #ifdef DEBUG
 GraphVisualizer viz;
@@ -42,7 +36,7 @@ static inline uint8_t getCurrentGroup() {
 
 
 
-
+/*
 static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_len) {
     BinSeqMap* map = node->map;
     if (!map || !sequence || seq_len == 0) {
@@ -57,16 +51,13 @@ static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_
     //uint8_t group = getCurrentGroup();
     // Increment frequency for this sequence
     if (!binseq_map_increment_frequency(map, sequence, seq_len)) {
-        /*
-        *  If entry doesn't exist, 
-        *  ** create it with frequency 1
-        */
+        // If entry doesn't exist, create it with frequency 1
         return binseq_map_put(map, sequence, seq_len, 1);
     }
        
     return 1;
 }
-
+*/
 
 
 static void processNodePath(GraphNode *old_node, const uint8_t* block, uint32_t block_size, uint32_t block_index,    
