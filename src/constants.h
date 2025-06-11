@@ -11,10 +11,9 @@
 #endif
 
 #define SEQ_LENGTH_START 2
-#define SEQ_LENGTH_LIMIT 16 //a.k.a k
-#define BLOCK_SIZE (1 << 20)
+#define SEQ_LENGTH_LIMIT 64 //a.k.a k
+#define BLOCK_SIZE 10000
 #define LEAST_REDUCTION 16
-#define RESET_ROOT_LENGTH 1000//SEQ_LENGTH_LIMIT*4
 
 #define MAX_NUMBER_OF_SEQUENCES 4144 //a.k.a m
 

@@ -9,7 +9,7 @@ Graph graph = {0};
 
 // Initialize the graph structure
 void graph_init(void) {
-    if (graph.initialized) return;  // Only initialize once
+    //if (graph.initialized) return;  // Only initialize once
 
     // Clear the entire graph structure
     memset(&graph, 0, sizeof(graph));

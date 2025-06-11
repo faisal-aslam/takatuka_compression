@@ -180,7 +180,7 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
 #ifdef DEBUG
     graphviz_init(&viz, "compression_tree.dot", true);
 #endif
-
+    //Create the root node.
     createRoot(block, block_size);
 
     for (uint32_t block_index = 1; block_index < block_size; block_index++) {

@@ -8,9 +8,9 @@
 #include <stdbool.h>
 
 // Graph configuration constants
-#define GRAPH_MAX_NODES 10000    // Maximum number of nodes in the graph
-#define MAX_WEIGHT SEQ_LENGTH_LIMIT  // Maximum weight/sequence length a node can have
-#define MAX_LEVELS 1024          // Maximum number of levels in the graph
+#define MAX_LEVELS BLOCK_SIZE  // Maximum number of levels in the graph
+#define GRAPH_MAX_NODES ((MAX_LEVELS+1)*(SEQ_LENGTH_LIMIT+1))    // Maximum number of nodes in the graph
+#define MAX_WEIGHT SEQ_LENGTH_LIMIT  // Maximum weight/sequence length a node can have       
 #define OVERFLOW_SLOT_CAPACITY 8192  // Capacity for overflow slots when main slots are full
 
 // Compile-time assertion macro for different C standards
