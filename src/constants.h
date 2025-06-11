@@ -15,8 +15,6 @@
 #define BLOCK_SIZE 10000
 #define LEAST_REDUCTION 16
 
-#define MAX_NUMBER_OF_SEQUENCES 4144 //a.k.a m
-
 #define TOTAL_GROUPS 4
 
 #endif

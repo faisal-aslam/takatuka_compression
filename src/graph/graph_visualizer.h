@@ -1,3 +1,4 @@
+//graph_visualizer.h
 #ifndef GRAPH_VISUALIZER_H
 #define GRAPH_VISUALIZER_H
 
@@ -20,7 +21,7 @@ typedef struct {
 } GraphVisualizer;
 
 void graphviz_init(GraphVisualizer* viz, const char* filename, bool show_all);
-void graphviz_add_level(GraphVisualizer* viz, uint32_t start_index, uint32_t end_index, const uint8_t* block);
+void graphviz_render_full_graph(GraphVisualizer* viz, const uint8_t* block);
 void graphviz_finalize(GraphVisualizer* viz);
 
 

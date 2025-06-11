@@ -45,13 +45,20 @@ debug: $(DEBUG_COMPRESS_TARGET) decompress
 compress: $(COMPRESS_RELEASE_OBJS)
 	$(CC) $(LDFLAGS_RELEASE) -o $(COMPRESS_TARGET) $^ -lm
 	@echo "Built compression tool: ./compress"
+	@echo "Static memory usage (compress):"
+	@size $(COMPRESS_TARGET)
 
 decompress: $(DECOMPRESS_OBJ)
 	$(CC) $(LDFLAGS_RELEASE) -o $(DECOMPRESS_TARGET) $^ -lm
 	@echo "Built decompression tool: ./decompress"
+	@echo "Static memory usage (decompress):"
+	@size $(DECOMPRESS_TARGET)
 
 $(DEBUG_COMPRESS_TARGET): $(COMPRESS_DEBUG_OBJS)
 	$(CC) $(LDFLAGS_DEBUG) -o $@ $^ -lm
+	@echo "Built debug compression tool: ./compress-debug"
+	@echo "Static memory usage (compress-debug):"
+	@size $@
 
 # Compile rules
 $(BUILD_DIR)/release/%.o: src/%.c

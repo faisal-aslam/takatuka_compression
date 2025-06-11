@@ -1,3 +1,5 @@
+//graph_visualizer.c
+
 #include "graph/graph_visualizer.h"
 #include <stdlib.h>
 #include <string.h>
@@ -16,29 +18,42 @@ static void escape_label(char* dest, const char* src, size_t max_len) {
     dest[j] = '\0';
 }
 
-void graphviz_init(GraphVisualizer* viz, const char* filename, bool show_all) {
-    viz->dot_file = fopen(filename, "w");
-    viz->current_level = 0;
-    viz->show_all = show_all;
-    viz->edges = NULL;
+void graphviz_init(GraphVisualizer* viz, const char* filename, bool overwrite) {
+    if (!viz) return;
+    
+    if (overwrite) {
+        viz->dot_file = fopen(filename, "w");
+    } else {
+        viz->dot_file = fopen(filename, "a");
+    }
+    
+    if (!viz->dot_file) {
+        perror("Failed to open Graphviz file");
+        return;
+    }
+    
+    // Don't write any graph declarations here
     viz->edge_count = 0;
     viz->edge_capacity = 0;
-
-    if (viz->dot_file) {
-        fprintf(viz->dot_file, "digraph compression_graph {\n");
-        fprintf(viz->dot_file, "  rankdir=TB;\n");
-        fprintf(viz->dot_file, "  node [shape=record, style=filled];\n");
-        fprintf(viz->dot_file, "  edge [fontsize=8];\n");
-        fprintf(viz->dot_file, "  node [fontsize=10, width=0.5, height=0.3];\n");
-        fprintf(viz->dot_file, "  nodesep=0.15; ranksep=0.25;\n");
-    }
+    viz->edges = NULL;
+    viz->current_level = 0;
 }
 
-void graphviz_add_level(GraphVisualizer* viz, uint32_t start_index, uint32_t end_index, const uint8_t* block) {
-    if (!viz->dot_file || start_index >= end_index) return;
+void graphviz_render_full_graph(GraphVisualizer* viz, const uint8_t* block) {
+    if (!viz->dot_file) return;
 
-    // Create nodes
-    for (uint32_t i = start_index; i < end_index; i++) {
+    uint32_t max_level = get_max_level();
+    
+    // Write graph header (only once)
+    fprintf(viz->dot_file, "digraph compression_graph {\n"
+           "  rankdir=TB;\n"
+           "  node [shape=record, style=filled];\n"
+           "  edge [fontsize=8];\n"
+           "  node [fontsize=10, width=0.5, height=0.3];\n"
+           "  nodesep=0.15; ranksep=0.25;\n");
+
+    // First pass: Create all nodes
+    for (uint32_t i = 0; i < graph.current_node_index; i++) {
         GraphNode* node = graph_get_node(i);
         if (!node) continue;
         
@@ -51,58 +66,46 @@ void graphviz_add_level(GraphVisualizer* viz, uint32_t start_index, uint32_t end
             if (j < node->compress_sequence - 1) strcat(seq_label, ", ");
         }
 
-        char escaped_label[1024];
-        escape_label(escaped_label, seq_label, sizeof(escaped_label));
-
         const char* colors[] = {"#ffdddd", "#ddffdd", "#ddddff", "#ffffdd"};
         fprintf(viz->dot_file,
             "  node_%u [label=\"[%u]\\n%s\\nSavings: %d\", "
             "fillcolor=\"%s\"];\n",
-            node->id, node->compress_sequence, escaped_label, 
-            node->saving_so_far, colors[viz->current_level % 4]);
+            node->id, node->compress_sequence, seq_label, 
+            node->saving_so_far, colors[node->level % 4]);
     }
 
-    // Create edges
-    for (uint32_t i = start_index; i < end_index; i++) {
+    // Second pass: Create all edges
+    for (uint32_t i = 0; i < graph.current_node_index; i++) {
         GraphNode* node = graph_get_node(i);
         if (!node) continue;
         
         for (uint8_t p = 0; p < node->parent_count; p++) {
             uint32_t parent_id = node->parents[p];
+            GraphNode* parent = graph_get_node(parent_id);
+            if (!parent) continue;
             
-            bool exists = false;
-            for (size_t j = 0; j < viz->edge_count; j++) {
-                if (viz->edges[j].parent_id == parent_id && 
-                    viz->edges[j].child_id == node->id) {
-                    exists = true;
-                    break;
-                }
-            }
-            
-            if (!exists) {
-                if (viz->edge_count >= viz->edge_capacity) {
-                    viz->edge_capacity = viz->edge_capacity ? viz->edge_capacity * 2 : 64;
-                    viz->edges = realloc(viz->edges, viz->edge_capacity * sizeof(GraphEdge));
-                }
-                
-                viz->edges[viz->edge_count++] = (GraphEdge){parent_id, node->id};
-                fprintf(viz->dot_file, "  node_%u -> node_%u [label=\"w:%u\"];\n",
-                    parent_id, node->id, node->incoming_weight);
-            }
+            fprintf(viz->dot_file, "  node_%u -> node_%u [label=\"w:%u\"];\n",
+                parent_id, node->id, node->incoming_weight);
         }
     }
 
-    // Level alignment
-    fprintf(viz->dot_file, "  { rank=same; ");
-    for (uint32_t i = start_index; i < end_index; i++) {
-        GraphNode* node = graph_get_node(i);
-        if (node) {
-            fprintf(viz->dot_file, "node_%u; ", node->id);
+    // Third pass: Create level groupings
+    for (uint32_t level = 1; level <= max_level; level++) {
+        fprintf(viz->dot_file, "  { rank=same; ");
+        
+        // Find all nodes at this level
+        for (uint32_t i = 0; i < graph.current_node_index; i++) {
+            GraphNode* node = graph_get_node(i);
+            if (node && node->level == level) {
+                fprintf(viz->dot_file, "node_%u; ", node->id);
+            }
         }
+        fprintf(viz->dot_file, "} /* level %u */\n", level);
     }
+
+    // Close graph properly
     fprintf(viz->dot_file, "}\n");
-    
-    viz->current_level++;
+    fflush(viz->dot_file);
 }
 
 

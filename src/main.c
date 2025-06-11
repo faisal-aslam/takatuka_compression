@@ -1,4 +1,4 @@
-// src/main.c
+// main.c
 
 #include "graph/graph_visualizer.h"
 #include "second_pass/tree_node_pool.h"
@@ -164,7 +164,6 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     #ifdef DEBUG
     printf("\nCreated new root node in pool[0][0]:\n");
     print_graph_node(root, block);
-    graphviz_add_level(&viz, 0, 1, block);
     #endif
   
 
@@ -177,9 +176,7 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
         return;
     }
 
-#ifdef DEBUG
-    graphviz_init(&viz, "compression_tree.dot", true);
-#endif
+
     //Create the root node.
     createRoot(block, block_size);
 
@@ -205,8 +202,7 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
 
                 // Check if we've already processed this weight
                 if (graph.weight_cache[weight].first_node_with_weight != UINT32_MAX && 
-                    graph.weight_cache[weight].first_node_with_weight != node_indices[i]) 
-                {
+                    graph.weight_cache[weight].first_node_with_weight != node_indices[i]) {
                     // Reuse children from first node with same weight
                     GraphNode *first_node = graph_get_node(graph.weight_cache[weight].first_node_with_weight);
                     
@@ -241,17 +237,10 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
                     processNodePath(old_node, block, block_size, block_index, 
                                   seq_start, seq_len, 0);
                 }
-
-#ifdef DEBUG
-                graphviz_add_level(&viz, i, node_count, block);
-#endif
             }
         }
     }
 
-#ifdef DEBUG
-    graphviz_finalize(&viz);
-#endif
 }
 
 int main(int argc, char *argv[]) {
@@ -278,8 +267,16 @@ int main(int argc, char *argv[]) {
         long bytesRead = fread(block, 1, BLOCK_SIZE, file);
         if (bytesRead <= 0)
             break;
-        //process of block of file at a time.
+
+        // process of block of file at a time.
         processBlock(block, bytesRead);
+
+#ifdef DEBUG
+    graphviz_init(&viz, "compression_tree.dot", true);
+    // Process entire graph at once
+    graphviz_render_full_graph(&viz, block);
+    graphviz_finalize(&viz);
+#endif
     }
 
     free(block);
