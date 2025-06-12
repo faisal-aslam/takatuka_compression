@@ -98,15 +98,16 @@ static void processNodePath(uint32_t old_node_index, const uint8_t* block, uint3
     new_node->level = old_node->level + 1;
     new_node->compress_start_index = block_index-seq_len+1;
     
+#ifdef DEBUG
+    print_graph_node(new_node, block);
+#endif
     // ADD EDGE AFTER NODE IS FULLY INITIALIZED
     if (!graph_add_edge(old_node_index, new_node->id)) {  // Use new_node->id instead of get_current_graph_node_index()
         fprintf(stderr, "Failed to add edge from %u to %u\n", old_node_index, new_node->id);
         return;
     }
 
-#ifdef DEBUG
-    print_graph_node(new_node, block);
-#endif
+
 }
 
 /**

@@ -38,6 +38,7 @@ bool graph_add_edge(uint32_t from, uint32_t to) {
 
 #ifdef DEBUG
     printf("Adding edge: %u -> %u\n", from, to);
+    fflush(stdout);
 #endif
 
     GraphNode* src = &graph.nodes[from];
