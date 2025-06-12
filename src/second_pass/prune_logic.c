@@ -11,7 +11,6 @@
 #define SELECTION_SORT_THRESHOLD 32
 
 
-static int level = 1;
 /**
  * Calculates compression savings for a binary sequence based on:
  * - Frequency (higher frequency => higher savings)

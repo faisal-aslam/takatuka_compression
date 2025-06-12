@@ -138,6 +138,7 @@ void print_graph_node(const GraphNode *node, const uint8_t* block) {
          i < node->compress_start_index + node->compress_sequence; 
          i++) {
         printf("0x%x ", block[i]);
+        fflush(stdout);
     }
 }
 

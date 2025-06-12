@@ -5,18 +5,6 @@
 #include <string.h>
 #include "graph/graph_visualizer.h"
 
-// Helper to escape special characters in DOT labels
-static void escape_label(char* dest, const char* src, size_t max_len) {
-    size_t j = 0;
-    for (size_t i = 0; src[i] != '\0' && j < max_len - 1; i++) {
-        switch(src[i]) {
-            case '\"': if (j+2 < max_len) { dest[j++] = '\\'; dest[j++] = '\"'; } break;
-            case '\\': if (j+2 < max_len) { dest[j++] = '\\'; dest[j++] = '\\'; } break;
-            default: dest[j++] = src[i];
-        }
-    }
-    dest[j] = '\0';
-}
 
 void graphviz_init(GraphVisualizer* viz, const char* filename, bool overwrite) {
     if (!viz) return;

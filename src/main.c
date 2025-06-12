@@ -9,6 +9,7 @@
 //#include "write_in_file/write_in_file.h"
 #include "second_pass/group.h"
 #include "graph/graph.h"
+#include "second_pass/prune_logic.h"
 
 #ifdef DEBUG
 GraphVisualizer viz;
@@ -95,6 +96,7 @@ static void processNodePath(uint32_t old_node_index, const uint8_t* block, uint3
     new_node->saving_so_far = new_saving;
     new_node->compress_sequence = seq_len;
     new_node->level = old_node->level + 1;
+    new_node->compress_start_index = block_index-seq_len+1;
     
     // ADD EDGE AFTER NODE IS FULLY INITIALIZED
     if (!graph_add_edge(old_node_index, new_node->id)) {  // Use new_node->id instead of get_current_graph_node_index()
@@ -115,7 +117,7 @@ static void processNodePath(uint32_t old_node_index, const uint8_t* block, uint3
 static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     /**
      * Return if the block is null or empty.
-     * This only happens when we have reached the end of file. 
+     * This only happens when we have reached the end of file. a
     */ 
     if (!block || block_size == 0) {
         return;
@@ -135,6 +137,7 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     root->incoming_weight = 1; //root weight must be 1.
     root->parent_count = 0; //root has no parents.
     root->compress_sequence = 1; //there is nothing to compress yet at the root level.
+    root->compress_start_index = 0;
     root->level = 1; //root is at level 1
 
     // Create empty map

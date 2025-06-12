@@ -36,8 +36,8 @@ typedef struct __attribute__((packed)) {
     uint8_t incoming_weight;     // Weight/sequence length associated with this node
     uint32_t compress_start_index; // Start index in the original data block
     uint8_t compress_sequence;   // Length of the sequence this node represents
-    int32_t saving_so_far;       // Compression savings up to this node
-    uint32_t level;              // Level of this node in the graph hierarchy
+    uint32_t saving_so_far;       // Compression savings up to this node
+    uint16_t level;              // Level of this node in the graph hierarchy
 } GraphNode;
 
 // Structure representing a slot for nodes with specific weight and level
