@@ -87,7 +87,8 @@ static void processNodePath(uint32_t old_node_index, const uint8_t* block, uint3
     // CREATE NODE FIRST
     GraphNode* new_node = create_new_node(weight, old_node->level+1);
     if (!new_node) {
-        fprintf(stderr,"\n node allocation failed \n");
+        fprintf(stderr,"\n node allocation failed level=%d, old_node_id=%d, weight=%u\n", old_node->level+1, old_node->id, weight);
+        exit(1);
         return;
     }
 
@@ -172,7 +173,7 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
 
     for (uint32_t block_index = 1; block_index < block_size; block_index++) {
         uint32_t current_level = get_max_level();
-                
+
         // Initialize weight cache for this block index
         for (int w = 0; w < MAX_WEIGHT; w++) {
             graph.weight_cache[w].first_node_with_weight = UINT32_MAX;

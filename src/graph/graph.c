@@ -56,13 +56,16 @@ bool graph_add_edge(uint32_t from, uint32_t to) {
 // Create a new node with given weight and level
 GraphNode* create_new_node(uint8_t weight, uint32_t level) {
     if (graph.current_node_index >= GRAPH_MAX_NODES) {
+        fprintf(stderr, " Nodes are more than max allowed\n");
         return NULL; // Graph full
     }
     if (level >= MAX_LEVELS) {
+        fprintf(stderr, " Level are more than max allowed\n");
         return NULL; // Exceeds max levels
     }
     WeightLevelSlot* slot = &graph.index.slots[level][weight];
     if (slot->count >= SEQ_LENGTH_LIMIT) {
+        fprintf(stderr, " Number of nodes on level are more than allowed \n");
         return NULL; // Invariant violated (per-level limit exceeded)
     }
 
