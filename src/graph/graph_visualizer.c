@@ -60,7 +60,7 @@ void graphviz_render_full_graph(GraphVisualizer *viz, const uint8_t *block) {
         fprintf(viz->dot_file,
                 "  node_%u [label=\"[%u]\\n%s\\nSavings: %d\", "
                 "fillcolor=\"%s\"];\n",
-                node->id, node->compress_sequence, seq_label,
+                node->id, node->id, seq_label,
                 node->saving_so_far, colors[node->level % 4]);
     }
 

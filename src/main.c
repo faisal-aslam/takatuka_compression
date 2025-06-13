@@ -60,6 +60,58 @@ static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_
 }
 */
 
+static void processCompressPath(const uint8_t* block, uint32_t block_size, uint32_t block_index,    
+    const uint8_t* sequence, uint8_t seq_len, uint32_t current_level) {
+    
+    uint32_t seq_start_offset = block_index + 1 - seq_len;
+    if (seq_start_offset >= block_size || (seq_start_offset + seq_len) > block_size) {
+        fprintf(stderr,"\n invalid seq_start \n");
+        return;
+    }
+    
+    int32_t new_saving = calculate_savings(sequence, seq_len, NULL);
+    if (new_saving == INT_MIN) {
+        return;
+    }
+    //todo new_saving += old_node->saving_so_far;
+            
+    uint8_t weight = 0;
+    
+    // CREATE NODE FIRST
+    GraphNode* new_node = create_new_node(weight, current_level+1);
+    if (!new_node) {
+        fprintf(stderr,"\n node allocation failed level=%d, weight=%u\n", current_level+1, weight);
+        exit(1);
+        return;
+    }
+
+    // SET NODE PROPERTIES
+    new_node->incoming_weight = weight;
+    new_node->saving_so_far = new_saving;
+    new_node->compress_sequence = seq_len;
+    new_node->level = current_level+1;
+    new_node->compress_start_index = seq_start_offset;
+    
+#ifdef DEBUG
+    print_graph_node(new_node, block);
+#endif
+    for (uint8_t parent_weight = seq_len - 1;
+         parent_weight < SEQ_LENGTH_LIMIT &&
+         parent_weight <= (uint8_t)current_level;
+         parent_weight++) {
+        uint32_t count;
+        const uint32_t *indexes = get_nodes_by_weight_and_level(parent_weight, current_level, &count);
+        if (count == 0) {
+            continue;
+        }
+        // ADD EDGE AFTER NODE IS FULLY INITIALIZED
+        if (!graph_add_edge(indexes[0], new_node->id)) {
+            fprintf(stderr, "Failed to add edge from %u to %u\n", indexes[0],
+                    new_node->id);
+            return;
+        }
+    }
+}
 
 static void processNodePath(uint32_t old_node_index, const uint8_t* block, uint32_t block_size, uint32_t block_index,    
     const uint8_t* sequence, uint8_t seq_len, uint8_t new_weight) {
@@ -97,7 +149,7 @@ static void processNodePath(uint32_t old_node_index, const uint8_t* block, uint3
     new_node->saving_so_far = new_saving;
     new_node->compress_sequence = seq_len;
     new_node->level = old_node->level + 1;
-    new_node->compress_start_index = block_index-seq_len+1;
+    new_node->compress_start_index = seq_start_offset;
     
 #ifdef DEBUG
     print_graph_node(new_node, block);
@@ -175,13 +227,13 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
         uint32_t current_level = get_max_level();
 
         // Initialize weight cache for this block index
-        for (int w = 0; w < MAX_WEIGHT; w++) {
+        for (int w = 0; w < MAX_WEIGHT && w <= (int)current_level; w++) {
             graph.weight_cache[w].first_node_with_weight = UINT32_MAX;
             graph.weight_cache[w].weight = 0;
         }
         
         // Process all nodes at current level
-        for (uint8_t weight = 0; weight <= MAX_WEIGHT; weight++) {
+        for (uint8_t weight = 0; weight <= MAX_WEIGHT && weight <= (int)current_level; weight++) {
             uint32_t node_count = 0;
             const uint32_t* node_indices = get_nodes_by_weight_and_level(weight, current_level, &node_count);
             
@@ -227,6 +279,7 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
                 processNodePath(node_idx, block, block_size, block_index,
                               &block[block_index], 1, old_node->incoming_weight + 1);
 
+                /*
                 // Compressed paths (various sequence lengths)
                 for (int k = 0; k < old_node->incoming_weight; k++) {
                     uint16_t seq_len = old_node->incoming_weight + 1 - k;
@@ -242,8 +295,12 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
                     const uint8_t *seq_start = &block[block_index + 1 - seq_len];
                     processNodePath(node_idx, block, block_size, block_index, 
                                   seq_start, seq_len, 0);
-                }
+                }*/
             }
+        }
+        for (uint16_t seq_len = 2; seq_len <= current_level+1 && seq_len <= SEQ_LENGTH_LIMIT; seq_len++) {          
+            const uint8_t *seq_start = &block[block_index + 1 - seq_len];
+            processCompressPath(block, block_size, block_index, seq_start, seq_len, current_level);
         }
     }
 }
