@@ -172,7 +172,7 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
 
     for (uint32_t block_index = 1; block_index < block_size; block_index++) {
         uint32_t current_level = get_max_level();
-        
+                
         // Initialize weight cache for this block index
         for (int w = 0; w < MAX_WEIGHT; w++) {
             graph.weight_cache[w].first_node_with_weight = UINT32_MAX;
@@ -180,7 +180,7 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
         }
         
         // Process all nodes at current level
-        for (uint8_t weight = 1; weight <= MAX_WEIGHT; weight++) {
+        for (uint8_t weight = 0; weight <= MAX_WEIGHT; weight++) {
             uint32_t node_count = 0;
             const uint32_t* node_indices = get_nodes_by_weight_and_level(weight, current_level, &node_count);
             
@@ -234,7 +234,8 @@ static void processBlock(const uint8_t *block, uint32_t block_size) {
                     if (seq_len < SEQ_LENGTH_START || seq_len > SEQ_LENGTH_LIMIT ||
                         seq_len > (block_index + 1) ||
                         (block_index + 1 - seq_len) >= block_size) {
-                        continue;
+                            fprintf(stderr, "\n seq_len is not valid \n");
+                            continue;
                     }
                     
                     const uint8_t *seq_start = &block[block_index + 1 - seq_len];
