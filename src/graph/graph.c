@@ -95,7 +95,7 @@ uint32_t get_current_graph_node_index(void) {
 // Get all nodes with a specific weight and level
 const uint32_t* get_nodes_by_weight_and_level(uint8_t weight, uint32_t level, uint32_t* count) {
     // Check for valid weight and level
-    if (weight >= MAX_WEIGHT || level >= MAX_LEVELS) {
+    if (weight >= SEQ_LENGTH_LIMIT || level >= MAX_LEVELS) {
         *count = 0;
         return NULL;
     }

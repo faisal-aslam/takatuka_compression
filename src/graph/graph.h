@@ -10,7 +10,6 @@
 // Graph configuration constants
 #define MAX_LEVELS BLOCK_SIZE  // Maximum number of levels in the graph
 #define GRAPH_MAX_NODES ((MAX_LEVELS+1)*(SEQ_LENGTH_LIMIT+1))    // Maximum number of nodes in the graph
-#define MAX_WEIGHT SEQ_LENGTH_LIMIT  // Maximum weight/sequence length a node can have       
 
 // Compile-time assertion macro for different C standards
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
@@ -40,6 +39,8 @@ typedef struct __attribute__((packed)) {
     uint16_t level;              // Level of this node in the graph hierarchy
 } GraphNode;
 
+
+
 // Structure representing a slot for nodes with specific weight and level
 typedef struct {
     uint32_t indices[SEQ_LENGTH_LIMIT];  // Array of node indices
@@ -48,7 +49,8 @@ typedef struct {
 
 // Index structure to organize nodes by weight and level
 typedef struct {
-    WeightLevelSlot slots[MAX_LEVELS][MAX_WEIGHT]; // 2D array of slots
+    //array of level and weight.
+    WeightLevelSlot slots[MAX_LEVELS][SEQ_LENGTH_LIMIT]; // 2D array of slots
     uint32_t max_level;         // Current maximum level in graph
 } GraphIndex;
 
@@ -57,12 +59,12 @@ typedef struct {
     GraphNode nodes[GRAPH_MAX_NODES];      // Array of all graph nodes
     GraphIndex index;                      // Weight/level index structure
     uint32_t current_node_index;          // Next available node index
-    WeightTracker weight_cache[MAX_WEIGHT]; //Record first node of each weight.
+    WeightTracker weight_cache[SEQ_LENGTH_LIMIT]; //Record first node of each weight.
     bool initialized;                     // Flag indicating if graph is initialized
 } Graph;
 
 // Compile-time assertions to verify structure sizes and limits
-//STATIC_ASSERT(sizeof(GraphNode) == 20 + (2 * SEQ_LENGTH_LIMIT), "GraphNode size mismatch");
+STATIC_ASSERT(sizeof(GraphNode) == 18 + (8 * SEQ_LENGTH_LIMIT), "GraphNode size mismatch");
 STATIC_ASSERT(SEQ_LENGTH_LIMIT <= 255, "SEQ_LENGTH_LIMIT too large");
 STATIC_ASSERT(SEQ_LENGTH_LIMIT > 0, "SEQ_LENGTH_LIMIT too small");
 
