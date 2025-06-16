@@ -110,6 +110,29 @@ uint32_t get_max_level(void) {
     return graph.index.max_level;
 }
 
+//returns the first node of the last level.
+GraphNode* get_first_node_of_last_level(void) {
+    uint32_t min_index = GRAPH_MAX_NODES;  // Larger than any valid index
+    uint32_t max_level = graph.index.max_level;
+
+    for (uint8_t weight = 0; weight < SEQ_LENGTH_LIMIT; ++weight) {
+        WeightLevelSlot* slot = &graph.index.slots[max_level][weight];
+        if (slot->count > 0) {
+            uint32_t candidate = slot->indices[0]; // First node inserted for this weight
+            if (candidate < min_index) {
+                min_index = candidate;
+            }
+        }
+    }
+
+    if (min_index == GRAPH_MAX_NODES) {
+        return NULL;  // No node found at last level
+    }
+
+    return &graph.nodes[min_index];
+}
+
+
 // Print detailed information about a graph node
 void print_graph_node(const GraphNode *node, const uint8_t* block) {
     if (!node) {

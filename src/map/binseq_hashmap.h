@@ -4,9 +4,11 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "../constants.h"
 
 // Opaque pointer to hide implementation details
 typedef struct BinSeqMap BinSeqMap;
+
 
 // Create/destroy functions
 BinSeqMap* binseq_map_create(size_t initial_capacity);
@@ -28,8 +30,6 @@ size_t binseq_map_size(const BinSeqMap* map);
 size_t binseq_map_capacity(const BinSeqMap* map);
 void binseq_map_print(const BinSeqMap* map);
 
-// Special copy function for TreeNode (implementation can see TreeNode definition)
-struct TreeNode;
-int binseq_map_copy_to_node(const BinSeqMap* source, struct TreeNode* target);
+BinSeqMap* binseq_map_deep_copy(const BinSeqMap* source);
 
 #endif

@@ -35,7 +35,7 @@ typedef struct __attribute__((packed)) {
     uint8_t incoming_weight;     // Weight/sequence length associated with this node
     uint32_t compress_start_index; // Start index in the original data block
     uint8_t compress_sequence;   // Length of the sequence this node represents
-    uint32_t saving_so_far;       // Compression savings up to this node
+    int32_t saving_so_far;       // Compression savings up to this node
     uint16_t level;              // Level of this node in the graph hierarchy
 } GraphNode;
 
@@ -51,7 +51,7 @@ typedef struct {
 typedef struct {
     //array of level and weight.
     WeightLevelSlot slots[MAX_LEVELS][SEQ_LENGTH_LIMIT]; // 2D array of slots
-    uint32_t max_level;         // Current maximum level in graph
+    uint16_t max_level;         // Current maximum level in graph
 } GraphIndex;
 
 // Main graph structure containing all nodes and indexing
@@ -81,5 +81,5 @@ void print_graph_node(const GraphNode *node, const uint8_t* block);  // Print no
 uint32_t get_current_graph_node_index(void);  // Get current node index
 const uint32_t* get_nodes_by_weight_and_level(uint8_t weight, uint32_t level, uint32_t* count);  // Query nodes by weight/level
 uint32_t get_max_level(void);  // Get maximum level in graph
-
+GraphNode* get_first_node_of_last_level(void); // returns the first node of the last level of the graph. This is use to create maps.
 #endif

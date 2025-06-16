@@ -4,7 +4,7 @@
 #define PRUNE_LOGIC_H
 
 
-#include "binseq_hashmap.h"
+#include "../map/binseq_hashmap.h"
 #include "../constants.h"
 
 

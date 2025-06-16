@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "xxhash.h"
-#include "tree_node.h"
+
 
 // Internal structures
 typedef struct {
@@ -221,43 +221,20 @@ void binseq_map_print(const BinSeqMap* map) {
     }
 }
 
-int binseq_map_copy_to_node(const BinSeqMap* source, struct TreeNode* target) {
-    if (!target) {
-        fprintf(stderr, "Invalid target node\n");
-        return 0;
-    }
+BinSeqMap* binseq_map_deep_copy(const BinSeqMap* source) {
+    if (!source) return NULL;
 
-    // If source is NULL, just set target's map to NULL
-    if (!source) {
-        if (target->map) {
-            binseq_map_free(target->map);
-        }
-        target->map = NULL;
-        return 1;
-    }
+    BinSeqMap* new_map = binseq_map_create(source->capacity + 1);
+    if (!new_map) return NULL;
 
-    BinSeqMap* new_map = binseq_map_create(source->capacity+1);
-    if (!new_map) {
-        fprintf(stderr, "Failed to create new map\n");
-        return 0;
-    }
-
-    // Copy all entries
     for (size_t i = 0; i < source->capacity; i++) {
         const Entry* src = &source->entries[i];
         if (!src->used) continue;
 
         if (!binseq_map_put(new_map, src->binary_sequence, src->length, src->frequency)) {
-            fprintf(stderr, "Failed to put entry in new map\n");
             binseq_map_free(new_map);
-            return 0;  // Return failure but new_map is already freed
+            return NULL;
         }
     }
-
-    // Free old map if it exists
-    if (target->map) {
-        binseq_map_free(target->map);
-    }
-    target->map = new_map;
-    return 1;
+    return new_map;
 }
