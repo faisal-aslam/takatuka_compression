@@ -1,4 +1,4 @@
-// binseq_hashmap.h 
+// Cleaned-up binseq_hashmap.h for use with statically allocated map pool
 #ifndef BINSEQ_HASHMAP_H
 #define BINSEQ_HASHMAP_H
 
@@ -6,30 +6,32 @@
 #include <stddef.h>
 #include "../constants.h"
 
-// Opaque pointer to hide implementation details
-typedef struct BinSeqMap BinSeqMap;
+// Entry for a binary sequence -> frequency map
+typedef struct {
+    uint8_t* binary_sequence;  // Key part
+    uint16_t length;           // Key part
+    int frequency;             // Value part
+    int used;
+} Entry;
 
+// Map containing statically allocated entries
+typedef struct BinSeqMap {
+    Entry* entries;   // Provided externally (from a pool)
+    size_t capacity;  // Capacity of the entries array
+    size_t size;      // Number of used entries
+} BinSeqMap;
 
-// Create/destroy functions
-BinSeqMap* binseq_map_create(size_t initial_capacity);
-void binseq_map_free(BinSeqMap* map);
-
-// Map operations
-int binseq_map_put(BinSeqMap* map, 
+// Map operations for static use
+int binseq_map_put(BinSeqMap* map,
                   const uint8_t* key_sequence, uint16_t key_length,
                   int value_frequency);
 
-const int* binseq_map_get_frequency(const BinSeqMap* map, 
+const int* binseq_map_get_frequency(const BinSeqMap* map,
                                    const uint8_t* key_sequence, uint16_t key_length);
 
-int binseq_map_increment_frequency(BinSeqMap* map, 
+int binseq_map_increment_frequency(BinSeqMap* map,
                                  const uint8_t* key_sequence, uint16_t key_length);
 
-// Utility functions
-size_t binseq_map_size(const BinSeqMap* map);
-size_t binseq_map_capacity(const BinSeqMap* map);
-void binseq_map_print(const BinSeqMap* map);
-
-BinSeqMap* binseq_map_deep_copy(const BinSeqMap* source);
+void binseq_map_reset(BinSeqMap* map); // Reset entries in-place (for reuse)
 
 #endif
