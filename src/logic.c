@@ -1,4 +1,4 @@
-// main.c
+// logic.c
 
 #include "graph/graph_visualizer.h"
 #include <string.h>
@@ -226,15 +226,19 @@ void processBlock(const uint8_t *block, uint32_t block_size) {
         uint32_t current_level = get_max_level();
 
         // Initialize weight cache for this block index
-        for (int w = 0; w < SEQ_LENGTH_LIMIT && w <= (int)current_level; w++) {
+
+        int u = (current_level < SEQ_LENGTH_LIMIT) ? (int)current_level
+                                                       : SEQ_LENGTH_LIMIT - 1;
+        for (int w = 0; w <= u; w++) {
             graph.weight_cache[w].first_node_with_weight = UINT32_MAX;
             graph.weight_cache[w].weight = 0;
         }
 
         // Process all nodes at current level
-        for (uint8_t weight = 0;
-             weight <= SEQ_LENGTH_LIMIT && weight <= (int)current_level;
-             weight++) {
+        uint8_t upper = current_level < SEQ_LENGTH_LIMIT
+                  ? (uint8_t)current_level
+                  : SEQ_LENGTH_LIMIT;
+        for (uint8_t weight = 0; weight <= upper; weight++) {
             uint32_t node_count = 0;
             const uint32_t *node_indices = get_nodes_by_weight_and_level(
                 weight, current_level, &node_count);
