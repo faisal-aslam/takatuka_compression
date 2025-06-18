@@ -71,7 +71,7 @@ void graphviz_render_full_graph(GraphVisualizer *viz, const uint8_t *block) {
             continue;
 
         for (uint8_t p = 0; p < node->parent_count; p++) {
-            uint32_t parent_id = node->parents[p];
+            uint32_t parent_id = node->parents[p].node_id;
             GraphNode *parent = graph_get_node(parent_id);
             if (!parent)
                 continue;

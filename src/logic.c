@@ -274,10 +274,10 @@ void processBlock(const uint8_t *block, uint32_t block_size) {
                     // Link to existing children
                     for (uint8_t c = 0; c < first_node->child_count; c++) {
                         if (!graph_add_edge(node_idx,
-                                            first_node->children[c])) {
+                                            first_node->children[c].node_id)) {
                             fprintf(stderr,
                                     "Failed to add reused edge from %u to %u\n",
-                                    node_idx, first_node->children[c]);
+                                    node_idx, first_node->children[c].node_id);
                         }
                     }
                     continue;

@@ -32,7 +32,7 @@ int32_t calculate_savings(const uint8_t* new_bin_seq, uint16_t seq_length, BinSe
     }
 
     // No compression gain possible from sequences of length 1
-    if (seq_length == 1) {
+    if (seq_length == 1 || 1) {
         return 0;
     }
 

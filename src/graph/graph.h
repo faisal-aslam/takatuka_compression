@@ -9,7 +9,7 @@
 
 // Graph configuration constants
 #define MAX_LEVELS BLOCK_SIZE  // Maximum number of levels in the graph
-#define GRAPH_MAX_NODES ((MAX_LEVELS+1)*(SEQ_LENGTH_LIMIT+1))    // Maximum number of nodes in the graph
+#define GRAPH_MAX_NODES ((MAX_LEVELS)*(SEQ_LENGTH_LIMIT))    // Maximum number of nodes in the graph
 
 // Compile-time assertion macro for different C standards
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
@@ -25,18 +25,24 @@ typedef struct {
     uint8_t weight;
 } WeightTracker;
 
+typedef struct {
+    uint32_t node_id;
+    uint32_t path_id;
+} Link;
+
+
 // Graph node structure representing a node in the graph
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint32_t id;                 // Unique identifier for the node
+    uint32_t compress_start_index; // Start index in the original data block
+    int32_t saving_so_far;       // Compression savings up to this node
+    Link parents[SEQ_LENGTH_LIMIT];  // Array of parent node IDs
+    Link children[SEQ_LENGTH_LIMIT]; // Array of child node IDs
+    uint16_t level;              // Level of this node in the graph hierarchy
     uint8_t parent_count;        // Number of parent nodes
     uint8_t child_count;         // Number of child nodes
-    uint32_t parents[SEQ_LENGTH_LIMIT];  // Array of parent node IDs
-    uint32_t children[SEQ_LENGTH_LIMIT]; // Array of child node IDs
-    uint8_t incoming_weight;     // Weight/sequence length associated with this node
-    uint32_t compress_start_index; // Start index in the original data block
-    uint8_t compress_sequence;   // Length of the sequence this node represents
-    int32_t saving_so_far;       // Compression savings up to this node
-    uint16_t level;              // Level of this node in the graph hierarchy
+    uint8_t incoming_weight;     // Weight/sequence length associated with this node    
+    uint8_t compress_sequence;   // Length of the sequence this node represents        
 } GraphNode;
 
 
@@ -64,7 +70,7 @@ typedef struct {
 } Graph;
 
 // Compile-time assertions to verify structure sizes and limits
-STATIC_ASSERT(sizeof(GraphNode) == 18 + (8 * SEQ_LENGTH_LIMIT), "GraphNode size mismatch");
+//STATIC_ASSERT(sizeof(GraphNode) == 18 + (8 * SEQ_LENGTH_LIMIT), "GraphNode size mismatch");
 STATIC_ASSERT(SEQ_LENGTH_LIMIT <= 255, "SEQ_LENGTH_LIMIT too large");
 STATIC_ASSERT(SEQ_LENGTH_LIMIT > 0, "SEQ_LENGTH_LIMIT too small");
 

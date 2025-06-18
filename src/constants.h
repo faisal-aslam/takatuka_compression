@@ -12,7 +12,7 @@
 
 #define SEQ_LENGTH_START 2
 #define SEQ_LENGTH_LIMIT 64 //a.k.a k
-#define BLOCK_SIZE 10000
+#define BLOCK_SIZE 1000
 
 #define TOTAL_GROUPS 4
 

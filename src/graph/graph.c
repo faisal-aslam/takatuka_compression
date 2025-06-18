@@ -48,8 +48,8 @@ bool graph_add_edge(uint32_t from, uint32_t to) {
     if (src->child_count >= SEQ_LENGTH_LIMIT || dst->parent_count >= SEQ_LENGTH_LIMIT) return false;
 
     // Add the edge in both directions
-    src->children[src->child_count++] = to;
-    dst->parents[dst->parent_count++] = from;
+    src->children[src->child_count++].node_id = to;
+    dst->parents[dst->parent_count++].node_id = from;
     return true;
 }
 
@@ -150,13 +150,13 @@ void print_graph_node(const GraphNode *node, const uint8_t* block) {
     // Print parent nodes
     printf("\nParents: ");
     for (int i = 0; i < node->parent_count; i++) {
-        printf("%u ", node->parents[i]);
+        printf("%u ", node->parents[i].node_id);
     }
 
     // Print child nodes
     printf("\nChildren: ");
     for (int i = 0; i < node->child_count; i++) {
-        printf("%u ", node->children[i]);
+        printf("%u ", node->children[i].node_id);
     }
 
     // Print the sequence this node represents
