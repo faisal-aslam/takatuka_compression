@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "binseq_hashmap.h"  // For BinSeqMap
 
-#define MAX_NODE_MAPS (SEQ_LENGTH_LIMIT * SEQ_LENGTH_LIMIT)
+#define MAX_LINK_MAPS (SEQ_LENGTH_LIMIT * SEQ_LENGTH_LIMIT)
 
 typedef struct {
     int node_id;        // Will be updated when reused

@@ -1,11 +1,11 @@
 #include "node_map_pool.h"
 #include <string.h>
 
-static NodeMapEntry pool[MAX_NODE_MAPS];
+static NodeMapEntry pool[MAX_LINK_MAPS];
 static int current_index = 0;
 
 NodeMapEntry* node_map_pool_get(int node_id) {
-    if (current_index >= MAX_NODE_MAPS) return NULL;
+    if (current_index >= MAX_LINK_MAPS) return NULL;
 
     NodeMapEntry* entry = &pool[current_index++];
     entry->node_id = node_id;
@@ -20,7 +20,7 @@ NodeMapEntry* node_map_pool_find(int node_id) {
 }
 
 void node_map_pool_reset() {
-    for (int i = 0; i < MAX_NODE_MAPS; i++) {
+    for (int i = 0; i < MAX_LINK_MAPS; i++) {
         binseq_map_reset(&pool[i].map);  // Frees internal keys
     }
     current_index = 0;
