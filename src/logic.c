@@ -87,7 +87,7 @@ static void processCompressPath(const uint8_t* block, uint32_t block_size, uint3
 
     // SET NODE PROPERTIES
     new_node->incoming_weight = weight;
-    new_node->saving_so_far = new_saving;
+    //new_node->saving_so_far = new_saving;
     new_node->compress_sequence = seq_len;
     new_node->level = current_level+1;
     new_node->compress_start_index = seq_start_offset;
@@ -132,7 +132,7 @@ static void processNodePath(uint32_t old_node_index, const uint8_t* block, uint3
     if (new_saving == INT_MIN) {
         return;
     }
-    new_saving += old_node->saving_so_far;
+    //new_saving += old_node->saving_so_far;
             
     uint8_t weight = (new_weight >= SEQ_LENGTH_LIMIT) ? SEQ_LENGTH_LIMIT - 1 : new_weight;
     
@@ -146,7 +146,7 @@ static void processNodePath(uint32_t old_node_index, const uint8_t* block, uint3
 
     // SET NODE PROPERTIES
     new_node->incoming_weight = weight;
-    new_node->saving_so_far = new_saving;
+    //new_node->saving_so_far = new_saving;
     new_node->compress_sequence = seq_len;
     new_node->level = old_node->level + 1;
     new_node->compress_start_index = seq_start_offset;
@@ -203,7 +203,7 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
         exit(EXIT_FAILURE);
     }
     */
-    root->saving_so_far = calculate_savings(&block[0], 1, NULL);
+    //root->saving_so_far = calculate_savings(&block[0], 1, NULL);
 
     #ifdef DEBUG
     printf("\nCreated new root node in pool[0][0]:\n");
@@ -272,12 +272,12 @@ void processBlock(const uint8_t *block, uint32_t block_size) {
                     }
 
                     // Link to existing children
-                    for (uint8_t c = 0; c < first_node->child_count; c++) {
+                    for (uint8_t c = 0; c < first_node->parent_count; c++) {
                         if (!graph_add_edge(node_idx,
-                                            first_node->children[c].node_id)) {
+                                            first_node->parents[c].parent_node_id)) {
                             fprintf(stderr,
                                     "Failed to add reused edge from %u to %u\n",
-                                    node_idx, first_node->children[c].node_id);
+                                    node_idx, first_node->parents[c].parent_node_id);
                         }
                     }
                     continue;

@@ -58,10 +58,10 @@ void graphviz_render_full_graph(GraphVisualizer *viz, const uint8_t *block) {
 
         const char *colors[] = {"#ffdddd", "#ddffdd", "#ddddff", "#ffffdd"};
         fprintf(viz->dot_file,
-                "  node_%u [label=\"[%u]\\n%s\\nSavings: %d\", "
+                "  node_%u [label=\"[%u]\\n%s\", "
                 "fillcolor=\"%s\"];\n",
                 node->id, node->id, seq_label,
-                node->saving_so_far, colors[node->level % 4]);
+                colors[node->level % 4]);
     }
 
     // Second pass: Create all edges
@@ -71,7 +71,7 @@ void graphviz_render_full_graph(GraphVisualizer *viz, const uint8_t *block) {
             continue;
 
         for (uint8_t p = 0; p < node->parent_count; p++) {
-            uint32_t parent_id = node->parents[p].node_id;
+            uint32_t parent_id = node->parents[p].parent_node_id;
             GraphNode *parent = graph_get_node(parent_id);
             if (!parent)
                 continue;

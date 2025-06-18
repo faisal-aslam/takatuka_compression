@@ -25,22 +25,20 @@ typedef struct {
     uint8_t weight;
 } WeightTracker;
 
-typedef struct {
-    uint32_t node_id;
+typedef struct {    
     uint32_t path_id;
-} Link;
+    uint32_t saving_so_far;       // Compression savings up to this node
+    uint8_t parent_node_id;
+} ParentLink;
 
 
 // Graph node structure representing a node in the graph
 typedef struct {
     uint32_t id;                 // Unique identifier for the node
-    uint32_t compress_start_index; // Start index in the original data block
-    int32_t saving_so_far;       // Compression savings up to this node
-    Link parents[SEQ_LENGTH_LIMIT];  // Array of parent node IDs
-    Link children[SEQ_LENGTH_LIMIT]; // Array of child node IDs
+    uint32_t compress_start_index; // Start index in the original data block    
+    ParentLink parents[SEQ_LENGTH_LIMIT];  // Array of parent node IDs
     uint16_t level;              // Level of this node in the graph hierarchy
-    uint8_t parent_count;        // Number of parent nodes
-    uint8_t child_count;         // Number of child nodes
+    uint8_t parent_count;        // Number of parent nodes    
     uint8_t incoming_weight;     // Weight/sequence length associated with this node    
     uint8_t compress_sequence;   // Length of the sequence this node represents        
 } GraphNode;
