@@ -104,7 +104,7 @@ static void processCompressPath(const uint8_t* block, uint32_t block_size, uint3
             continue;
         }
         // ADD EDGE AFTER NODE IS FULLY INITIALIZED
-        if (!graph_add_parent_edge(new_node->id, indexes[0])) {
+        if (!graph_add_parent_edge(new_node, graph_get_node(indexes[0]))) {
             fprintf(stderr, "Failed to add edge from %u to %u\n", new_node->id, indexes[0]);
             return;
         }
@@ -192,7 +192,7 @@ static void processNodePath(uint8_t weight, const uint8_t *block,
             continue;
         }
 
-        if (!graph_add_parent_edge(new_node->id, parent_id)) {
+        if (!graph_add_parent_edge(new_node, parent)) {
             fprintf(stderr, "Failed to add edge from new node %u to parent %u\n",
                     new_node->id, parent_id);
         }
