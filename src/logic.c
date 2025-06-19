@@ -17,8 +17,7 @@
 
 uint16_t total_codes = 0;
 
-static void processNodePath(uint32_t old_node_index, const uint8_t* block, uint32_t block_size, uint32_t block_index,    
-    const uint8_t* sequence, uint8_t seq_len, uint8_t new_weight);
+static void processNodePath(uint8_t weight, const uint8_t* block, uint32_t block_size, uint32_t block_index, const uint8_t* sequence, uint32_t current_level);
 
 static inline uint8_t getCurrentGroup() {
     if (total_codes < getGroupThreshold(0)) {
@@ -112,55 +111,94 @@ static void processCompressPath(const uint8_t* block, uint32_t block_size, uint3
     }
 }
 
-static void processNodePath(uint32_t old_node_index, const uint8_t* block, uint32_t block_size, uint32_t block_index,    
-    const uint8_t* sequence, uint8_t seq_len, uint8_t new_weight) {
-    GraphNode *old_node = graph_get_node(old_node_index);
-    // Validations (unchanged)
-    if (!old_node || !block || block_index >= block_size || seq_len == 0) {
-        fprintf(stderr,"\n processNodePath validation failed \n");
-        return;
-    }
-    
-    uint32_t seq_start_offset = (new_weight == 0) ? block_index + 1 - seq_len : block_index;
-    if (seq_start_offset >= block_size || (seq_start_offset + seq_len) > block_size) {
-        fprintf(stderr,"\n invalid seq_start \n");
-        return;
-    }
-    
-    int32_t new_saving = calculate_savings(sequence, seq_len, NULL);
-    if (new_saving == INT_MIN) {
-        return;
-    }
-    //new_saving += old_node->saving_so_far;
-            
-    uint8_t weight = (new_weight >= SEQ_LENGTH_LIMIT) ? SEQ_LENGTH_LIMIT - 1 : new_weight;
-    
-    // CREATE NODE FIRST
-    GraphNode* new_node = create_new_node(weight, old_node->level+1);
-    if (!new_node) {
-        fprintf(stderr,"\n node allocation failed level=%d, old_node_id=%d, weight=%u\n", old_node->level+1, old_node->id, weight);
-        exit(1);
+/**
+ * Creates a new node with the given sequence (typically uncompressed) at the next level
+ * and connects it to all parent nodes of a given weight at the current level.
+ *
+ * Ensures:
+ * - Node is created only once per call.
+ * - All eligible parent nodes are connected via parent edges.
+ *
+ * @param weight          Weight of parent nodes to search for.
+ * @param block           The input block data.
+ * @param block_size      Size of the input block.
+ * @param block_index     Current index in the block being processed.
+ * @param sequence        The sequence (typically of length 1) for the new node.
+ * @param current_level   The level in the graph to look for parent nodes.
+ */
+static void processNodePath(uint8_t weight, const uint8_t *block,
+                            uint32_t block_size, uint32_t block_index,
+                            const uint8_t *sequence, uint32_t current_level) {
+    // Step 1: Get all nodes with the given weight at the current level
+    uint32_t node_count = 0;
+    const uint32_t *node_indices = get_nodes_by_weight_and_level(weight, current_level, &node_count);
+    if (node_count == 0) return;  // No eligible parents to process
+
+    // Step 2: Validate parameters
+    if (!block || block_index >= block_size) {
+        fprintf(stderr, "\nprocessNodePath: invalid input block or index\n");
         return;
     }
 
-    // SET NODE PROPERTIES
-    new_node->incoming_weight = weight;
-    //new_node->saving_so_far = new_saving;
-    new_node->compress_sequence = seq_len;
-    new_node->level = old_node->level + 1;
+    // Step 3: Determine start of the sequence (usually just one symbol)
+    uint32_t seq_start_offset = block_index;
+    if (seq_start_offset + 1 > block_size) {
+        fprintf(stderr, "\nprocessNodePath: sequence goes beyond block\n");
+        return;
+    }
+
+    // Step 4: Calculate potential savings from this sequence
+    int32_t new_saving = calculate_savings(sequence, 1, NULL);
+    if (new_saving == INT_MIN) {
+        return;  // Skip node creation if not beneficial
+    }
+
+    // Step 5: Use first parent node to determine new weight and level
+    GraphNode *first_parent = graph_get_node(node_indices[0]);
+    if (!first_parent) {
+        fprintf(stderr, "\nprocessNodePath: first parent node is null\n");
+        return;
+    }
+
+    uint8_t new_weight = first_parent->incoming_weight + 1;
+    if (new_weight >= SEQ_LENGTH_LIMIT) {
+        new_weight = SEQ_LENGTH_LIMIT - 1;
+    }
+
+    // Step 6: Create the new node once
+    GraphNode *new_node = create_new_node(new_weight, first_parent->level + 1);
+    if (!new_node) {
+        fprintf(stderr, "\nFailed to allocate new node at level %d (weight %u)\n",
+                first_parent->level + 1, new_weight);
+        exit(EXIT_FAILURE);
+    }
+
+    // Set node metadata
+    new_node->incoming_weight = new_weight;
+    new_node->compress_sequence = 1;              // Only one symbol
     new_node->compress_start_index = seq_start_offset;
-    
+    new_node->level = first_parent->level + 1;
+
 #ifdef DEBUG
     print_graph_node(new_node, block);
 #endif
-    // ADD EDGE AFTER NODE IS FULLY INITIALIZED
-    if (!graph_add_parent_edge(new_node->id, old_node_index)) {  // Use new_node->id instead of get_current_graph_node_index()
-        fprintf(stderr, "Failed to add edge from %u to %u\n", new_node->id, old_node_index);
-        return;
+
+    // Step 7: Add all parent edges from nodes of same weight at this level
+    for (uint32_t i = 0; i < node_count; i++) {
+        uint32_t parent_id = node_indices[i];
+        GraphNode *parent = graph_get_node(parent_id);
+        if (!parent) {
+            fprintf(stderr, "Warning: Null parent node at index %u\n", parent_id);
+            continue;
+        }
+
+        if (!graph_add_parent_edge(new_node->id, parent_id)) {
+            fprintf(stderr, "Failed to add edge from new node %u to parent %u\n",
+                    new_node->id, parent_id);
+        }
     }
-
-
 }
+
 
 /**
  * Create root of the graph
@@ -221,83 +259,12 @@ void processBlock(const uint8_t *block, uint32_t block_size) {
     // Create the root node
     createRoot(block, block_size);
 
+    /**
+     * Create a new level of the graph corresponding to each byte of the block. 
+     */
     for (uint32_t block_index = 1; block_index < block_size; block_index++) {
         uint32_t current_level = get_max_level();
 
-        // Initialize weight cache for this block index
-
-        int u = (current_level < SEQ_LENGTH_LIMIT) ? (int)current_level
-                                                       : SEQ_LENGTH_LIMIT - 1;
-        for (int w = 0; w <= u; w++) {
-            graph.weight_cache[w].first_node_with_weight = UINT32_MAX;
-            graph.weight_cache[w].weight = 0;
-        }
-
-        // Process all nodes at current level
-        uint8_t upper = current_level < SEQ_LENGTH_LIMIT
-                  ? (uint8_t)current_level
-                  : SEQ_LENGTH_LIMIT;
-        for (uint8_t weight = 0; weight <= upper; weight++) {
-            uint32_t node_count = 0;
-            const uint32_t *node_indices = get_nodes_by_weight_and_level(
-                weight, current_level, &node_count);
-
-            if (node_count == 0)
-                continue;
-
-            for (uint32_t i = 0; i < node_count; i++) {
-                uint32_t node_idx = node_indices[i];
-                GraphNode *old_node = graph_get_node(node_idx);
-                if (!old_node) {
-                    fprintf(stderr,
-                            "Error: Null node encountered at index %u\n",
-                            node_idx);
-                    continue;
-                }
-
-                // Check if we've already processed this weight
-                if (graph.weight_cache[weight].first_node_with_weight !=
-                        UINT32_MAX &&
-                    graph.weight_cache[weight].first_node_with_weight !=
-                        node_idx) {
-                    // Reuse children from first node with same weight
-                    GraphNode *first_node = graph_get_node(
-                        graph.weight_cache[weight].first_node_with_weight);
-                    if (!first_node) {
-                        fprintf(stderr,
-                                "Error: Null first node for weight %u\n",
-                                weight);
-                        continue;
-                    }
-
-                    // Link to existing children
-                    for (uint8_t c = 0; c < first_node->parent_count; c++) {
-                        if (!graph_add_parent_edge(node_idx,
-                                            first_node->parents[c].parent_node_id)) {
-                            fprintf(stderr,
-                                    "Failed to add reused edge from %u to %u\n",
-                                    node_idx, first_node->parents[c].parent_node_id);
-                        }
-                    }
-                    continue;
-                }
-
-                // Only set first_node_with_weight if not already set
-                if (graph.weight_cache[weight].first_node_with_weight ==
-                    UINT32_MAX) {
-                    graph.weight_cache[weight].first_node_with_weight =
-                        node_idx;
-                    graph.weight_cache[weight].weight = weight;
-                }
-
-                // Process paths only for first node with this weight
-
-                // Uncompressed path (weight increases by 1)
-                processNodePath(node_idx, block, block_size, block_index,
-                                &block[block_index], 1,
-                                old_node->incoming_weight + 1);
-            }
-        }
         // Compressed paths (various sequence lengths)
         for (uint16_t seq_len = 2;
              seq_len <= current_level + 1 && seq_len <= SEQ_LENGTH_LIMIT;
@@ -305,6 +272,20 @@ void processBlock(const uint8_t *block, uint32_t block_size) {
             const uint8_t *seq_start = &block[block_index + 1 - seq_len];
             processCompressPath(block, block_size, block_index, seq_start,
                                 seq_len, current_level);
+        }
+
+
+        // Process all nodes at current level
+        uint8_t upper = current_level < SEQ_LENGTH_LIMIT
+                  ? (uint8_t)current_level
+                  : SEQ_LENGTH_LIMIT;
+        for (uint8_t weight = 0; weight <= upper; weight++) {
+            
+
+                // Process paths only for first node with this weight
+                processNodePath(weight, block, block_size, block_index,
+                                &block[block_index], current_level);
+            
         }
     }
 #ifdef DEBUG
