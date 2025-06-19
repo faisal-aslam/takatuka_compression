@@ -4,10 +4,10 @@
 #include <stdint.h>
 #include "binseq_hashmap.h"  // For BinSeqMap
 
-#define MAX_LINK_MAPS (SEQ_LENGTH_LIMIT * SEQ_LENGTH_LIMIT)
+#define MAX_LINK_MAPS (2*SEQ_LENGTH_LIMIT * SEQ_LENGTH_LIMIT)
 
 typedef struct {
-    int node_id;        // Will be updated when reused
+    int leaf_id;        // Will be updated when reused
     BinSeqMap map;      // Statically allocated internal map
 } NodeMapEntry;
 

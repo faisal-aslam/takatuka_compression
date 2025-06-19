@@ -31,23 +31,23 @@ GraphNode* graph_get_node(uint32_t index) {
     return (index < GRAPH_MAX_NODES) ? &graph.nodes[index] : NULL;
 }
 
-// Add a directed edge from 'from' node to 'to' node
-bool graph_add_edge(uint32_t from, uint32_t to) {
+// Add a directed parent edge from 'child' node to 'parent' node
+bool graph_add_parent_edge(uint32_t child, uint32_t parent) {
     // Check for valid node indices
-    if (from >= GRAPH_MAX_NODES || to >= GRAPH_MAX_NODES) return false;
+    if (child >= GRAPH_MAX_NODES || parent >= GRAPH_MAX_NODES) return false;
 
 #ifdef DEBUG
-    printf("Adding edge: %u -> %u\n", from, to);
+    printf("Adding edge: %u -> %u\n", child, parent);
     fflush(stdout);
 #endif
 
-    GraphNode* dst = &graph.nodes[to];
+    GraphNode* child_node = &graph.nodes[child];
 
     // Check if we can add more edges (within sequence length limit)
-    if (dst->parent_count >= SEQ_LENGTH_LIMIT) return false;
+    if (child_node->parent_count >= SEQ_LENGTH_LIMIT) return false;
 
-    // Add the edge in both directions    
-    dst->parents[dst->parent_count++].parent_node_id = from;
+    // Add the link from child to parent (child --> parent)
+    child_node->parents[child_node->parent_count++].parent_node_id = parent;
     return true;
 }
 

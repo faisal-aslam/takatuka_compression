@@ -105,9 +105,8 @@ static void processCompressPath(const uint8_t* block, uint32_t block_size, uint3
             continue;
         }
         // ADD EDGE AFTER NODE IS FULLY INITIALIZED
-        if (!graph_add_edge(indexes[0], new_node->id)) {
-            fprintf(stderr, "Failed to add edge from %u to %u\n", indexes[0],
-                    new_node->id);
+        if (!graph_add_parent_edge(new_node->id, indexes[0])) {
+            fprintf(stderr, "Failed to add edge from %u to %u\n", new_node->id, indexes[0]);
             return;
         }
     }
@@ -155,8 +154,8 @@ static void processNodePath(uint32_t old_node_index, const uint8_t* block, uint3
     print_graph_node(new_node, block);
 #endif
     // ADD EDGE AFTER NODE IS FULLY INITIALIZED
-    if (!graph_add_edge(old_node_index, new_node->id)) {  // Use new_node->id instead of get_current_graph_node_index()
-        fprintf(stderr, "Failed to add edge from %u to %u\n", old_node_index, new_node->id);
+    if (!graph_add_parent_edge(new_node->id, old_node_index)) {  // Use new_node->id instead of get_current_graph_node_index()
+        fprintf(stderr, "Failed to add edge from %u to %u\n", new_node->id, old_node_index);
         return;
     }
 
@@ -273,7 +272,7 @@ void processBlock(const uint8_t *block, uint32_t block_size) {
 
                     // Link to existing children
                     for (uint8_t c = 0; c < first_node->parent_count; c++) {
-                        if (!graph_add_edge(node_idx,
+                        if (!graph_add_parent_edge(node_idx,
                                             first_node->parents[c].parent_node_id)) {
                             fprintf(stderr,
                                     "Failed to add reused edge from %u to %u\n",

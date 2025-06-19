@@ -75,11 +75,11 @@ void graphviz_render_full_graph(GraphVisualizer *viz, const uint8_t *block) {
             GraphNode *parent = graph_get_node(parent_id);
             if (!parent)
                 continue;
-
+            //From child to parent.
             fprintf(viz->dot_file,
                     "  node_%u -> node_%u [label=\"w:%u\", tailport=c, "
                     "headport=c];\n",
-                    parent_id, node->id, node->incoming_weight);
+                    node->id, parent_id, node->incoming_weight);
         }
     }
 
