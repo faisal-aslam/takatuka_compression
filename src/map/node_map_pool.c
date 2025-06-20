@@ -37,7 +37,7 @@ void node_map_pool_reset() {
 
 /*
 --------At block start:
-node_map_pool_cleanup();
+node_map_pool_reset();
 
 --------- While building new level:
 

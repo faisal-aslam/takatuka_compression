@@ -100,8 +100,10 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const 
     // Correctly get a reference to the link and update it in-place
     ParentLink* link = &child_node->parents[child_node->parent_count++];
     link->parent_node_id = parent_node->id;
-    link->map_index = create_map(parent_node, block);
-
+    link->map_index = create_map(child_node, block);
+#ifdef DEBUG
+    print_hashmap(node_map_pool_find(link->map_index));
+#endif
     return true;
 }
 

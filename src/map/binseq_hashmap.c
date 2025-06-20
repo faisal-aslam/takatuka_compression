@@ -2,6 +2,7 @@
 #include "binseq_hashmap.h"
 #include <string.h>
 #include "xxhash.h"
+#include <stdio.h>
 
 // Helper: hash a binary sequence
 static uint64_t hash_sequence(const uint8_t* sequence, uint16_t length) {
@@ -79,8 +80,8 @@ const int* binseq_map_get_frequency(const BinSeqMap* map,
 // Increment frequency if exists
 int binseq_map_increment_frequency(BinSeqMap* map,
                                    const uint8_t* key_sequence, uint16_t key_length) {
-    if (!map || map->capacity == 0 || !key_sequence || key_length == 0)
-        return 0;  // invalid input or map
+    if (!map || !key_sequence || key_length == 0)
+        return 0;  // invalid input (but allow capacity == 0 to reach put)
 
     Entry* entry = find_entry(map, key_sequence, key_length);
     if (entry) {
@@ -88,7 +89,7 @@ int binseq_map_increment_frequency(BinSeqMap* map,
         return 1;
     }
 
-    // Entry not found, insert new one with frequency = 1
+    // Entry not found, attempt to insert with frequency = 1
     return binseq_map_put(map, key_sequence, key_length, 1);
 }
 
@@ -153,4 +154,31 @@ Entry* binseq_map_fast_insert(Entry* entries, size_t capacity,
     }
 
     return NULL;
+}
+
+
+void print_hashmap(BinSeqMap *map) {
+    if (!map || map->capacity == 0) {
+        printf("Hashmap is NULL or has zero capacity.\n");
+        return;
+    }
+
+    printf("Hashmap contents (size = %zu, capacity = %zu):\n", map->size, map->capacity);
+
+    for (size_t i = 0; i < map->capacity; ++i) {
+        Entry* e = &map->entries[i];
+
+        if (!e->used)
+            continue;
+
+        printf("  [%zu] Length: %u, Frequency: %d, Sequence: ", i, e->length, e->frequency);
+        for (uint16_t j = 0; j < e->length; ++j) {
+            printf("%02X ", e->binary_sequence[j]);  // print in hex
+        }
+        printf("\n");
+    }
+
+    if (map->size == 0) {
+        printf("  (empty)\n");
+    }
 }

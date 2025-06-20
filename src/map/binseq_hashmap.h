@@ -41,4 +41,6 @@ Entry* binseq_map_fast_insert(Entry* entries, size_t capacity,
 Entry* binseq_map_fast_lookup(Entry* entries, size_t capacity,
                                             const uint8_t* key, uint16_t key_length);
 
+void print_hashmap(BinSeqMap *map);
+
 #endif

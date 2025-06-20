@@ -12,6 +12,7 @@
 #include "second_pass/prune_logic.h"
 #include "graph/graph_visualizer.h"
 #include "logic.h"
+#include "map/node_map_pool.h"
 
 
 
