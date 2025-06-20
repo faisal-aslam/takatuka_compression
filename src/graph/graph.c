@@ -3,6 +3,8 @@
 #include "graph.h"
 #include <stdio.h>
 #include <string.h>
+#include "../map/binseq_hashmap.h"
+#include "../map/node_map_pool.h"
 
 // Global graph instance initialized to zero
 Graph graph = {0};
@@ -31,6 +33,42 @@ GraphNode* graph_get_node(uint32_t index) {
     return (index < GRAPH_MAX_NODES) ? &graph.nodes[index] : NULL;
 }
 
+static inline int merge_maps(GraphNode* g_node) {
+    BinSeqMap* result = node_map_pool_get_next();
+    if (!result) return -1;
+
+    Entry* dst_entries = result->entries;
+    size_t dst_capacity = result->capacity;
+
+    for (int i = 0; i < g_node->parent_count; i++) {
+        BinSeqMap* parent_map = node_map_pool_find(g_node->parents[i].map_index);
+        if (!parent_map) continue;
+
+        Entry* src_entries = parent_map->entries;
+        size_t src_capacity = parent_map->capacity;
+
+        for (size_t j = 0; j < src_capacity; j++) {
+            Entry* src = &src_entries[j];
+            if (!src->used) continue;
+
+            Entry* dst = binseq_map_fast_lookup(dst_entries, dst_capacity,
+                                                src->binary_sequence, src->length);
+            if (dst) {
+                if (src->frequency > dst->frequency)
+                    dst->frequency = src->frequency;
+            } else {
+                binseq_map_fast_insert(dst_entries, dst_capacity,
+                                       src->binary_sequence, src->length,
+                                       src->frequency);
+                result->size++; // track insertions
+            }
+        }
+    }
+
+    return get_current_pool_index();
+}
+
+
 // Add a directed parent edge from 'child' node to 'parent' node
 bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node) {
     // Check for valid node indices
@@ -45,8 +83,10 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node) {
     if (child_node->parent_count >= SEQ_LENGTH_LIMIT) return false;
 
     // Add the link from child to parent (child --> parent)
-    child_node->parents[child_node->parent_count++].parent_node_id = parent_node->id;
-    child_node->parents[child_node->parent_count].link_id++;
+    ParentLink link = child_node->parents[child_node->parent_count++]; 
+    link.parent_node_id = parent_node->id;
+    link.map_index = merge_maps(parent_node);
+    
     return true;
 }
 

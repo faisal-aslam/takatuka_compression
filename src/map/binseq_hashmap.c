@@ -1,3 +1,4 @@
+//binseq_hashmap.c
 #include "binseq_hashmap.h"
 #include <string.h>
 #include "xxhash.h"
@@ -94,4 +95,52 @@ void binseq_map_reset(BinSeqMap* map) {
     }
 
     map->size = 0;
+}
+
+
+// Fast lookup: returns matching Entry* or NULL (no update to size)
+Entry* binseq_map_fast_lookup(Entry* entries, size_t capacity,
+                                            const uint8_t* key, uint16_t key_length) {
+    if (!entries || capacity == 0 || !key || key_length == 0) return NULL;
+
+    uint64_t hash = XXH3_64bits(key, key_length);
+    size_t index = hash % capacity;
+
+    for (size_t i = 0; i < capacity; ++i) {
+        size_t probe = (index + i) % capacity;
+        Entry* e = &entries[probe];
+
+        if (!e->used) return NULL;
+        if (e->length == key_length &&
+            memcmp(e->binary_sequence, key, key_length) == 0) {
+            return e;
+        }
+    }
+
+    return NULL;
+}
+
+// Fast insert: inserts if empty slot found, assumes key is caller-managed
+Entry* binseq_map_fast_insert(Entry* entries, size_t capacity,
+                                            const uint8_t* key, uint16_t key_length,
+                                            int frequency) {
+    if (!entries || capacity == 0 || !key || key_length == 0) return NULL;
+
+    uint64_t hash = XXH3_64bits(key, key_length);
+    size_t index = hash % capacity;
+
+    for (size_t i = 0; i < capacity; ++i) {
+        size_t probe = (index + i) % capacity;
+        Entry* e = &entries[probe];
+
+        if (!e->used) {
+            e->binary_sequence = (uint8_t*)key; // assumed managed externally
+            e->length = key_length;
+            e->frequency = frequency;
+            e->used = 1;
+            return e;
+        }
+    }
+
+    return NULL;
 }

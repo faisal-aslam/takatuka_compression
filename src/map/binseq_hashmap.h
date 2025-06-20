@@ -34,4 +34,11 @@ int binseq_map_increment_frequency(BinSeqMap* map,
 
 void binseq_map_reset(BinSeqMap* map); // Reset entries in-place (for reuse)
 
+Entry* binseq_map_fast_insert(Entry* entries, size_t capacity,
+                                            const uint8_t* key, uint16_t key_length,
+                                            int frequency);
+
+Entry* binseq_map_fast_lookup(Entry* entries, size_t capacity,
+                                            const uint8_t* key, uint16_t key_length);
+
 #endif

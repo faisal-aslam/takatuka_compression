@@ -28,7 +28,7 @@ typedef struct {
 typedef struct {    
     uint32_t parent_node_id;    
     uint32_t saving_so_far;       // Compression savings up to this node
-    uint32_t link_id;
+    uint32_t map_index;
 } ParentLink;
 
 

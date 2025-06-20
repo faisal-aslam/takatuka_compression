@@ -6,19 +6,14 @@
 
 #define MAX_LINK_MAPS (2*SEQ_LENGTH_LIMIT * SEQ_LENGTH_LIMIT)
 
-typedef struct {
-    int leaf_id;        // Will be updated when reused
-    BinSeqMap map;      // Statically allocated internal map
-} NodeMapEntry;
+// Returns a fresh BinSeqMap* for a new node
+BinSeqMap* node_map_pool_get_next();
 
-
-// Returns a fresh NodeMapEntry* for a new node
-NodeMapEntry* node_map_pool_get(int node_id);
-
-// Returns pointer to map for a given node_id
-NodeMapEntry* node_map_pool_find(int node_id);
+// Returns pointer to map for a given map_index
+BinSeqMap* node_map_pool_find(uint16_t map_index);
 
 // reset the pool without freeing (static) memory.
 void node_map_pool_reset();
 
+int get_current_pool_index();
 #endif

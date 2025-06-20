@@ -1,29 +1,35 @@
 #include "node_map_pool.h"
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-static NodeMapEntry pool[MAX_LINK_MAPS];
+static BinSeqMap pool[MAX_LINK_MAPS];
 static int current_index = 0;
 
-NodeMapEntry* node_map_pool_get(int node_id) {
+BinSeqMap* node_map_pool_get_next() {
     if (current_index >= MAX_LINK_MAPS) {
         current_index = 0; //it is circular
     }
 
-    NodeMapEntry* entry = &pool[current_index++];
-    entry->leaf_id = node_id;
+    BinSeqMap* entry = &pool[current_index++];
     return entry;
 }
 
-NodeMapEntry* node_map_pool_find(int node_id) {
-    for (int i = 0; i < current_index; i++) {
-        if (pool[i].leaf_id == node_id) return &pool[i];
+int get_current_pool_index() {
+    return current_index;
+}
+
+BinSeqMap* node_map_pool_find(uint16_t map_index) {
+    if (map_index >= MAX_LINK_MAPS) {
+        fprintf(stderr, "Invalid map_index");
+        return NULL;
     }
-    return NULL;
+    return &pool[map_index]; 
 }
 
 void node_map_pool_reset() {
     for (int i = 0; i < MAX_LINK_MAPS; i++) {
-        binseq_map_reset(&pool[i].map);  // Frees internal keys
+        binseq_map_reset(&pool[i]);  // Frees internal keys
     }
     current_index = 0;
 }
