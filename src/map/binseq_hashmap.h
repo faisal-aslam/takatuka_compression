@@ -6,6 +6,9 @@
 #include <stddef.h>
 #include "../constants.h"
 
+#define INITIAL_CAPACITY 32
+#define GROWTH_FACTOR 1.5
+
 // Entry for a binary sequence -> frequency map
 typedef struct {
     uint8_t* binary_sequence;  // Key part
@@ -40,6 +43,8 @@ Entry* binseq_map_fast_insert(Entry* entries, size_t capacity,
 
 Entry* binseq_map_fast_lookup(Entry* entries, size_t capacity,
                                             const uint8_t* key, uint16_t key_length);
+
+int binseq_map_resize(BinSeqMap* map, size_t min_new_capacity);
 
 void print_hashmap(BinSeqMap *map);
 

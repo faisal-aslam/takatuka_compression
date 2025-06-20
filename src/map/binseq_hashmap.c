@@ -77,20 +77,85 @@ const int* binseq_map_get_frequency(const BinSeqMap* map,
     return entry ? &entry->frequency : NULL;
 }
 
-// Increment frequency if exists
-int binseq_map_increment_frequency(BinSeqMap* map,
-                                   const uint8_t* key_sequence, uint16_t key_length) {
-    if (!map || !key_sequence || key_length == 0)
-        return 0;  // invalid input (but allow capacity == 0 to reach put)
 
-    Entry* entry = find_entry(map, key_sequence, key_length);
-    if (entry) {
-        entry->frequency++;
-        return 1;
+int binseq_map_resize(BinSeqMap* map, size_t min_new_capacity) {
+    if (!map) return 0;
+
+    size_t new_capacity = map->capacity == 0 ? INITIAL_CAPACITY : map->capacity;
+    
+    // Exponential growth until we reach min_new_capacity
+    while (new_capacity < min_new_capacity) {
+        new_capacity *= GROWTH_FACTOR;
     }
 
-    // Entry not found, attempt to insert with frequency = 1
-    return binseq_map_put(map, key_sequence, key_length, 1);
+    Entry* new_entries = calloc(new_capacity, sizeof(Entry));
+    if (!new_entries) return 0;
+
+    // Rehash existing entries if any
+    if (map->entries) {
+        for (size_t i = 0; i < map->capacity; ++i) {
+            Entry* old_entry = &map->entries[i];
+            if (old_entry->used) {
+                uint64_t hash = XXH3_64bits(old_entry->binary_sequence, old_entry->length);
+                size_t new_index = hash % new_capacity;
+
+                // Find empty slot in new table
+                while (new_entries[new_index].used) {
+                    new_index = (new_index + 1) % new_capacity;
+                }
+
+                new_entries[new_index] = *old_entry;
+            }
+        }
+        free(map->entries);
+    }
+
+    map->entries = new_entries;
+    map->capacity = new_capacity;
+    return 1;
+}
+
+int binseq_map_increment_frequency(BinSeqMap* map,
+                                 const uint8_t* key_sequence, uint16_t key_length) {
+    // Fast path checks
+    if (!map || !key_sequence || key_length == 0) return 0;
+
+    // Handle empty map case
+    if (map->capacity == 0 && !binseq_map_resize(map, INITIAL_CAPACITY)) {
+        return 0;
+    }
+
+    const uint64_t hash = XXH3_64bits(key_sequence, key_length);
+    size_t index = hash % map->capacity;
+    Entry* entries = map->entries;
+
+    // Single probing loop
+    for (size_t i = 0; i < map->capacity; ++i) {
+        Entry* entry = &entries[index];
+        
+        if (entry->used) {
+            // Check for existing entry
+            if (entry->length == key_length && 
+                memcmp(entry->binary_sequence, key_sequence, key_length) == 0) {
+                entry->frequency++;
+                return 1;
+            }
+        } else {
+            // Found empty slot - insert
+            entry->binary_sequence = (uint8_t*)key_sequence;
+            entry->length = key_length;
+            entry->frequency = 1;
+            entry->used = 1;
+            map->size++;
+            return 1;
+        }
+        
+        index = (index + 1) % map->capacity;
+    }
+
+    // Map is full - resize and retry
+    if (!binseq_map_resize(map, map->capacity + 1)) return 0;
+    return binseq_map_increment_frequency(map, key_sequence, key_length);
 }
 
 // Reset the map for reuse (no freeing)

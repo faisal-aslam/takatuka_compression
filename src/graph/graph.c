@@ -34,42 +34,59 @@ GraphNode* graph_get_node(uint32_t index) {
 }
 
 static int merge_maps(GraphNode* g_node) {
+    // Get a fresh map from the pool
     BinSeqMap* result = node_map_pool_get_next();
     if (!result) return -1;
+    
+    // Initialize the result map if empty
+    if (result->capacity == 0 && !binseq_map_resize(result, INITIAL_CAPACITY)) {
+        return -1;
+    }
 
-    Entry* dst_entries = result->entries;
-    size_t dst_capacity = result->capacity;
-
+    // For each parent, merge their maps into the result
     for (int i = 0; i < g_node->parent_count; i++) {
         BinSeqMap* parent_map = node_map_pool_find(g_node->parents[i].map_index);
-        if (!parent_map) {
-            continue; //map is null continue.
+        if (!parent_map || parent_map->capacity == 0) {
+            continue;
         }
 
-        Entry* src_entries = parent_map->entries;
-        size_t src_capacity = parent_map->capacity;
-
-        for (size_t j = 0; j < src_capacity; j++) {
-            Entry* src = &src_entries[j];
+        // Iterate through all entries in parent map
+        for (size_t j = 0; j < parent_map->capacity; j++) {
+            Entry* src = &parent_map->entries[j];
             if (!src->used) continue;
 
-            Entry* dst = binseq_map_fast_lookup(dst_entries, dst_capacity,
-                                                src->binary_sequence, src->length);
+            // Try to find existing entry in result map
+            Entry* dst = binseq_map_fast_lookup(result->entries, result->capacity,
+                                              src->binary_sequence, src->length);
             if (dst) {
-                if (src->frequency > dst->frequency)
+                // If found, take the maximum frequency
+                if (src->frequency > dst->frequency) {
                     dst->frequency = src->frequency;
+                }
             } else {
-                binseq_map_fast_insert(dst_entries, dst_capacity,
-                                       src->binary_sequence, src->length,
-                                       src->frequency);
-                result->size++; // track insertions
+                // If not found, insert new entry
+                if (!binseq_map_fast_insert(result->entries, result->capacity,
+                                          src->binary_sequence, src->length,
+                                          src->frequency)) {
+                    // If insertion failed, resize and retry
+                    size_t required_capacity = result->size + 1;
+                    if (!binseq_map_resize(result, required_capacity)) {
+                        continue; // Skip if resize fails
+                    }
+                    // Retry insertion after resize
+                    if (!binseq_map_fast_insert(result->entries, result->capacity,
+                                             src->binary_sequence, src->length,
+                                             src->frequency)) {
+                        continue; // Skip if still fails
+                    }
+                }
+                result->size++;
             }
         }
     }
 
-    return get_current_pool_index();
+    return get_current_pool_index() - 1; // Return index of the map we just filled
 }
-
 
 static inline int create_map(GraphNode* g_node, const uint8_t* block) {
     //step 1: merge graph of parent nodes and create new graph for this node.
