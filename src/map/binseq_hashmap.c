@@ -4,6 +4,7 @@
 #include "xxhash.h"
 #include <stdio.h>
 
+
 // Helper: hash a binary sequence
 static uint64_t hash_sequence(const uint8_t* sequence, uint16_t length) {
     if (!sequence || length == 0) return 0;
@@ -121,8 +122,9 @@ int binseq_map_increment_frequency(BinSeqMap* map,
     if (!map || !key_sequence || key_length == 0) return 0;
 
     // Handle empty map case
-    if (map->capacity == 0 && !binseq_map_resize(map, INITIAL_CAPACITY)) {
-        return 0;
+    if (map->capacity == 0) {
+        if (!binseq_map_resize(map, INITIAL_CAPACITY)) return 0;
+        // Don't recurse - just continue to insertion attempt
     }
 
     const uint64_t hash = XXH3_64bits(key_sequence, key_length);
@@ -134,7 +136,6 @@ int binseq_map_increment_frequency(BinSeqMap* map,
         Entry* entry = &entries[index];
         
         if (entry->used) {
-            // Check for existing entry
             if (entry->length == key_length && 
                 memcmp(entry->binary_sequence, key_sequence, key_length) == 0) {
                 entry->frequency++;
@@ -153,10 +154,28 @@ int binseq_map_increment_frequency(BinSeqMap* map,
         index = (index + 1) % map->capacity;
     }
 
-    // Map is full - resize and retry
-    if (!binseq_map_resize(map, map->capacity + 1)) return 0;
-    return binseq_map_increment_frequency(map, key_sequence, key_length);
+    // Map is full - resize and try again (but only once)
+    if (!binseq_map_resize(map, map->capacity * GROWTH_FACTOR)) return 0;
+    
+    // Non-recursive retry
+    uint64_t new_hash = XXH3_64bits(key_sequence, key_length);
+    size_t new_index = new_hash % map->capacity;
+    for (size_t i = 0; i < map->capacity; ++i) {
+        Entry* entry = &map->entries[new_index];
+        if (!entry->used) {
+            entry->binary_sequence = (uint8_t*)key_sequence;
+            entry->length = key_length;
+            entry->frequency = 1;
+            entry->used = 1;
+            map->size++;
+            return 1;
+        }
+        new_index = (new_index + 1) % map->capacity;
+    }
+
+    return 0; // Still no space after resize
 }
+
 
 // Reset the map for reuse (no freeing)
 void binseq_map_reset(BinSeqMap* map) {
@@ -176,25 +195,47 @@ void binseq_map_reset(BinSeqMap* map) {
 
 // Fast lookup: returns matching Entry* or NULL (no update to size)
 Entry* binseq_map_fast_lookup(Entry* entries, size_t capacity,
-                                            const uint8_t* key, uint16_t key_length) {
-    if (!entries || capacity == 0 || !key || key_length == 0) return NULL;
+                            const uint8_t* key, uint16_t key_length) {
+    if (!entries || capacity == 0 || !key || key_length == 0) 
+        return NULL;
+
+    // Fast path for single-byte sequences
+    if (key_length == 1) {
+        size_t index = key[0] % capacity;
+        Entry* e = &entries[index];
+        if (e->used && e->length == 1 && e->binary_sequence[0] == key[0])
+            return e;
+        return NULL;
+    }
 
     uint64_t hash = XXH3_64bits(key, key_length);
     size_t index = hash % capacity;
 
-    for (size_t i = 0; i < capacity; ++i) {
-        size_t probe = (index + i) % capacity;
-        Entry* e = &entries[probe];
-
+    // Unroll first few probes
+    for (int i = 0; i < 3; i++) {  // Check first 3 slots
+        Entry* e = &entries[index];
         if (!e->used) return NULL;
-        if (e->length == key_length &&
+        if (e->length == key_length && 
             memcmp(e->binary_sequence, key, key_length) == 0) {
             return e;
         }
+        index = (index + 1) % capacity;
+    }
+
+    // Fall back to regular probing
+    for (size_t i = 3; i < capacity; ++i) {
+        Entry* e = &entries[index];
+        if (!e->used) return NULL;
+        if (e->length == key_length && 
+            memcmp(e->binary_sequence, key, key_length) == 0) {
+            return e;
+        }
+        index = (index + 1) % capacity;
     }
 
     return NULL;
 }
+
 
 // Fast insert: inserts if empty slot found, assumes key is caller-managed
 Entry* binseq_map_fast_insert(Entry* entries, size_t capacity,

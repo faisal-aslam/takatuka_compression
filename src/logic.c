@@ -264,6 +264,15 @@ void processBlock(const uint8_t *block, uint32_t block_size) {
      * Create a new level of the graph corresponding to each byte of the block. 
      */
     for (uint32_t block_index = 1; block_index < block_size; block_index++) {
+
+        // Only print when percentage changes (avoid duplicate messages)
+        if (block_index % 10 == 0) {
+            // Calculate current progress percentage
+            int current_percent = (int)((double)block_index / block_size * 100);            
+            printf("\rProcessing block: %3d%% complete", current_percent);
+            fflush(stdout); // Ensure immediate output
+            
+        }
         uint32_t current_level = get_max_level();
 
         // Compressed paths (various sequence lengths)

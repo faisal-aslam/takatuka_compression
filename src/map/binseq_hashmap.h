@@ -1,13 +1,15 @@
-// Cleaned-up binseq_hashmap.h for use with statically allocated map pool
+// binseq_hashmap.h 
 #ifndef BINSEQ_HASHMAP_H
 #define BINSEQ_HASHMAP_H
 
 #include <stdint.h>
 #include <stddef.h>
 #include "../constants.h"
+#include <string.h>  
+#include "xxhash.h" 
 
 #define INITIAL_CAPACITY 32
-#define GROWTH_FACTOR 1.5
+#define GROWTH_FACTOR 2
 
 // Entry for a binary sequence -> frequency map
 typedef struct {
@@ -23,6 +25,15 @@ typedef struct BinSeqMap {
     size_t capacity;  // Capacity of the entries array
     size_t size;      // Number of used entries
 } BinSeqMap;
+
+static inline uint64_t fast_hash(const uint8_t* key, uint16_t length) {
+    if (length <= 4) {
+        uint32_t hash = 0;
+        memcpy(&hash, key, length);
+        return hash;
+    }
+    return XXH3_64bits(key, length);
+}
 
 // Map operations for static use
 int binseq_map_put(BinSeqMap* map,
