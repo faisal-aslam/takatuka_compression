@@ -10,7 +10,7 @@
 BinSeqMap* node_map_pool_get_next();
 
 // Returns pointer to map for a given map_index
-BinSeqMap* node_map_pool_find(uint16_t map_index);
+BinSeqMap* node_map_pool_find(int16_t map_index);
 
 // reset the pool without freeing (static) memory.
 void node_map_pool_reset();

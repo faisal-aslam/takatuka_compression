@@ -33,7 +33,7 @@ GraphNode* graph_get_node(uint32_t index) {
     return (index < GRAPH_MAX_NODES) ? &graph.nodes[index] : NULL;
 }
 
-static inline int merge_maps(GraphNode* g_node) {
+static int merge_maps(GraphNode* g_node) {
     BinSeqMap* result = node_map_pool_get_next();
     if (!result) return -1;
 
@@ -42,7 +42,9 @@ static inline int merge_maps(GraphNode* g_node) {
 
     for (int i = 0; i < g_node->parent_count; i++) {
         BinSeqMap* parent_map = node_map_pool_find(g_node->parents[i].map_index);
-        if (!parent_map) continue;
+        if (!parent_map) {
+            continue; //map is null continue.
+        }
 
         Entry* src_entries = parent_map->entries;
         size_t src_capacity = parent_map->capacity;
@@ -69,8 +71,21 @@ static inline int merge_maps(GraphNode* g_node) {
 }
 
 
-// Add a directed parent edge from 'child' node to 'parent' node
-bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node) {
+static inline int create_map(GraphNode* g_node, const uint8_t* block) {
+    //step 1: merge graph of parent nodes and create new graph for this node.
+    int map_index = merge_maps(g_node);
+    if (g_node->compress_sequence_length == 1) {
+        return map_index;
+    }
+    //step 2: Add current sequence in the newly created map.
+    if(binseq_map_increment_frequency(node_map_pool_find(map_index),
+                   &block[g_node->compress_start_index], g_node->compress_sequence_length)) {
+        return map_index;
+    }
+    return -1;
+}
+
+bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const uint8_t* block) {
     // Check for valid node indices
     if (!child_node || !parent_node) return false;
 
@@ -82,13 +97,14 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node) {
     // Check if we can add more edges (within sequence length limit)
     if (child_node->parent_count >= SEQ_LENGTH_LIMIT) return false;
 
-    // Add the link from child to parent (child --> parent)
-    ParentLink link = child_node->parents[child_node->parent_count++]; 
-    link.parent_node_id = parent_node->id;
-    link.map_index = merge_maps(parent_node);
-    
+    // Correctly get a reference to the link and update it in-place
+    ParentLink* link = &child_node->parents[child_node->parent_count++];
+    link->parent_node_id = parent_node->id;
+    link->map_index = create_map(parent_node, block);
+
     return true;
 }
+
 
 // Create a new node with given weight and level
 GraphNode* create_new_node(uint8_t weight, uint32_t level) {
@@ -193,7 +209,7 @@ void print_graph_node(const GraphNode *node, const uint8_t* block) {
     // Print the sequence this node represents
     printf("\nSequence: ");
     for (uint32_t i = node->compress_start_index; 
-         i < node->compress_start_index + node->compress_sequence; 
+         i < node->compress_start_index + node->compress_sequence_length; 
          i++) {
         printf("0x%x ", block[i]);
         fflush(stdout);

@@ -19,8 +19,8 @@ int get_current_pool_index() {
     return current_index;
 }
 
-BinSeqMap* node_map_pool_find(uint16_t map_index) {
-    if (map_index >= MAX_LINK_MAPS) {
+BinSeqMap* node_map_pool_find(int16_t map_index) {
+    if (map_index >= MAX_LINK_MAPS || map_index < 0) {
         fprintf(stderr, "Invalid map_index");
         return NULL;
     }

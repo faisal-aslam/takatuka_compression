@@ -47,12 +47,12 @@ void graphviz_render_full_graph(GraphVisualizer *viz, const uint8_t *block) {
             continue;
 
         char seq_label[512] = "";
-        for (uint8_t j = 0; j < node->compress_sequence; j++) {
+        for (uint8_t j = 0; j < node->compress_sequence_length; j++) {
             char byte_str[10];
             snprintf(byte_str, sizeof(byte_str), "0x%02x",
                      block[node->compress_start_index + j]);
             strcat(seq_label, byte_str);
-            if (j < node->compress_sequence - 1)
+            if (j < node->compress_sequence_length - 1)
                 strcat(seq_label, ", ");
         }
 

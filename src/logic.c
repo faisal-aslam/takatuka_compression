@@ -87,7 +87,7 @@ static void processCompressPath(const uint8_t* block, uint32_t block_size, uint3
     // SET NODE PROPERTIES
     new_node->incoming_weight = weight;
     //new_node->saving_so_far = new_saving;
-    new_node->compress_sequence = seq_len;
+    new_node->compress_sequence_length = seq_len;
     new_node->level = current_level+1;
     new_node->compress_start_index = seq_start_offset;
     
@@ -104,7 +104,7 @@ static void processCompressPath(const uint8_t* block, uint32_t block_size, uint3
             continue;
         }
         // ADD EDGE AFTER NODE IS FULLY INITIALIZED
-        if (!graph_add_parent_edge(new_node, graph_get_node(indexes[0]))) {
+        if (!graph_add_parent_edge(new_node, graph_get_node(indexes[0]), block)) {
             fprintf(stderr, "Failed to add edge from %u to %u\n", new_node->id, indexes[0]);
             return;
         }
@@ -175,7 +175,7 @@ static void processNodePath(uint8_t weight, const uint8_t *block,
 
     // Set node metadata
     new_node->incoming_weight = new_weight;
-    new_node->compress_sequence = 1;              // Only one symbol
+    new_node->compress_sequence_length = 1;              // Only one symbol
     new_node->compress_start_index = seq_start_offset;
     new_node->level = first_parent->level + 1;
 
@@ -192,7 +192,7 @@ static void processNodePath(uint8_t weight, const uint8_t *block,
             continue;
         }
 
-        if (!graph_add_parent_edge(new_node, parent)) {
+        if (!graph_add_parent_edge(new_node, parent, block)) {
             fprintf(stderr, "Failed to add edge from new node %u to parent %u\n",
                     new_node->id, parent_id);
         }
@@ -227,7 +227,7 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     
     root->incoming_weight = 1; //root weight must be 1.
     root->parent_count = 0; //root has no parents.
-    root->compress_sequence = 1; //there is nothing to compress yet at the root level.
+    root->compress_sequence_length = 1; //there is nothing to compress yet at the root level.
     root->compress_start_index = 0;
     root->level = 1; //root is at level 1
 

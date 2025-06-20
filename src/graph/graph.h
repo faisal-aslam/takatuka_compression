@@ -40,7 +40,7 @@ typedef struct {
     uint16_t level;              // Level of this node in the graph hierarchy
     uint8_t parent_count;        // Number of parent nodes    
     uint8_t incoming_weight;     // Weight/sequence length associated with this node    
-    uint8_t compress_sequence;   // Length of the sequence this node represents        
+    uint8_t compress_sequence_length;   // Length of the sequence this node represents        
 } GraphNode;
 
 
@@ -78,7 +78,7 @@ extern Graph graph;
 // Function declarations
 void graph_init(void);  // Initialize the graph structure
 GraphNode* graph_get_node(uint32_t index);  // Get node by index
-bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node);   // Add parent edge from a child to its parent.
+bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const uint8_t* block);   // Add parent edge from a child to its parent.
 GraphNode* create_new_node(uint8_t weight, uint32_t level);  // Create new node
 bool is_graph_full(void);  // Check if graph is at maximum capacity
 void print_graph_node(const GraphNode *node, const uint8_t* block);  // Print node info

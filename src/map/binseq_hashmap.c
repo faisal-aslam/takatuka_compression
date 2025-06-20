@@ -19,6 +19,9 @@ static int sequences_equal(const uint8_t* a, uint16_t a_len,
 // Helper: find entry
 static Entry* find_entry(const BinSeqMap* map,
                          const uint8_t* sequence, uint16_t length) {
+    if (!map || map->capacity == 0 || !sequence || length == 0)
+        return NULL;  // Defensive guard
+
     uint64_t hash = hash_sequence(sequence, length);
     size_t index = hash % map->capacity;
 
@@ -76,10 +79,17 @@ const int* binseq_map_get_frequency(const BinSeqMap* map,
 // Increment frequency if exists
 int binseq_map_increment_frequency(BinSeqMap* map,
                                    const uint8_t* key_sequence, uint16_t key_length) {
+    if (!map || map->capacity == 0 || !key_sequence || key_length == 0)
+        return 0;  // invalid input or map
+
     Entry* entry = find_entry(map, key_sequence, key_length);
-    if (!entry) return 0;
-    entry->frequency++;
-    return 1;
+    if (entry) {
+        entry->frequency++;
+        return 1;
+    }
+
+    // Entry not found, insert new one with frequency = 1
+    return binseq_map_put(map, key_sequence, key_length, 1);
 }
 
 // Reset the map for reuse (no freeing)
