@@ -15,7 +15,7 @@
 typedef struct {
     uint8_t* binary_sequence;  // Pointer to external memory
     uint16_t length;
-    int frequency;
+    uint32_t frequency;
     uint32_t last_updated_level;
     uint16_t next;  // For LRU and free lists
     uint16_t prev;

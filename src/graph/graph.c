@@ -103,24 +103,34 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const 
     // Check for valid node indices
     if (!child_node || !parent_node) return false;
 
-#ifdef DEBUG
-    printf("Adding edge: %u -> %u\n", child_node->id, parent_node->id);
-    fflush(stdout);
-#endif
-
     // Check if we can add more edges (within sequence length limit)
     if (child_node->parent_count >= SEQ_LENGTH_LIMIT) return false;
 
-    // Correctly get a reference to the link and update it in-place
+    // Calculate savings for this link
+    uint32_t savings = 0;
+    if (child_node->compress_sequence_length > 1) {
+        // Savings = (sequence_length - 1) * (frequency - 1)
+        const Entry* entry = binseq_map_fast_lookup(
+            node_map_pool_find(parent_node->parents[0].map_index),
+            &block[child_node->compress_start_index],
+            child_node->compress_sequence_length
+        );
+        
+        if (entry) {
+            savings = (child_node->compress_sequence_length - 1) * 
+                     (entry->frequency - 1);
+        }
+    }
+
+    uint32_t total_savings = parent_node->parents[0].saving_so_far + savings;
+    // Get a reference to the new link and update it
     ParentLink* link = &child_node->parents[child_node->parent_count++];
     link->parent_node_id = parent_node->id;
+    link->saving_so_far = total_savings;
     link->map_index = create_map(child_node, block);
-#ifdef DEBUG
-    print_hashmap(node_map_pool_find(link->map_index));
-#endif
+
     return true;
 }
-
 
 // Create a new node with given weight and level
 GraphNode* create_new_node(uint8_t weight, uint32_t level) {

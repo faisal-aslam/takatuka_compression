@@ -42,7 +42,7 @@ static inline void lru_push_front(BinSeqMap* map, uint16_t index) {
 }
 
 static inline int calculate_savings(const Entry* e) {
-    return (e->length - 1) * MAX(0, (e->frequency - 1));
+    return (e->length - 1) * (e->frequency - 1);
 }
 
 static uint16_t get_free_slot(BinSeqMap* map) {
