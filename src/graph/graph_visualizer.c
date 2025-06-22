@@ -77,9 +77,9 @@ void graphviz_render_full_graph(GraphVisualizer *viz, const uint8_t *block) {
                 continue;
             //From child to parent.
             fprintf(viz->dot_file,
-                    "  node_%u -> node_%u [label=\"w:%u\", tailport=c, "
+                    "  node_%u -> node_%u [label=\"w:%u,%u\", tailport=c, "
                     "headport=c];\n",
-                    node->id, parent_id, node->incoming_weight);
+                    node->id, parent_id, node->incoming_weight, node->parents[p].saving_so_far);
         }
     }
 

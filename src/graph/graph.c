@@ -106,6 +106,18 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const 
     // Check if we can add more edges (within sequence length limit)
     if (child_node->parent_count >= SEQ_LENGTH_LIMIT) return false;
 
+#ifdef DEBUG
+    printf("Adding edge: %u -> %u\n", child_node->id, parent_node->id);
+    fflush(stdout);
+#endif
+    if (child_node->id == 7 && parent_node->id == 5) {
+        printf("\n\n\n stop here \n\n");
+    }
+
+    // Get a reference to the new link and update it
+    ParentLink* link = &child_node->parents[child_node->parent_count++];
+    link->parent_node_id = parent_node->id;
+    link->map_index = create_map(child_node, block);
     // Calculate savings for this link
     uint32_t savings = 0;
     if (child_node->compress_sequence_length > 1) {
@@ -123,12 +135,10 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const 
     }
 
     uint32_t total_savings = parent_node->parents[0].saving_so_far + savings;
-    // Get a reference to the new link and update it
-    ParentLink* link = &child_node->parents[child_node->parent_count++];
-    link->parent_node_id = parent_node->id;
     link->saving_so_far = total_savings;
-    link->map_index = create_map(child_node, block);
-
+#ifdef DEBUG
+    print_hashmap(node_map_pool_find(link->map_index));
+#endif
     return true;
 }
 
