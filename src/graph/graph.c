@@ -3,6 +3,7 @@
 #include "graph.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 #include "../map/binseq_hashmap.h"
 #include "../map/node_map_pool.h"
 
@@ -35,53 +36,52 @@ GraphNode* graph_get_node(uint32_t index) {
 
 
 static int merge_maps(GraphNode* g_node) {
-    BinSeqMap* result = node_map_pool_get_next();
-    if (!result) return -1;
+    BinSeqMap* result = node_map_pool_get_next();    
+    if (!result || !g_node) return -1;
 
-    // Track seen sequences to avoid duplicate work
-    uint64_t seen_hashes[256] = {0};
-    size_t seen_count = 0;
+    uint32_t current_level = g_node->level;
 
-    for (int i = 0; i < g_node->parent_count; i++) {
-        BinSeqMap* parent_map = node_map_pool_find(g_node->parents[i].map_index);
-        if (!parent_map) continue;
+    binseq_map_init(result); // Initialize new map
 
-        for (size_t j = 0; j < HASH_MAP_SIZE; j++) {
-            Entry* src = &parent_map->entries[j];
-            if (!src->used) continue;
-
-            // Check if we've already processed this sequence
-            uint64_t hash = fast_hash(src->binary_sequence, src->length);
-            bool already_processed = false;
-            for (size_t k = 0; k < seen_count; k++) {
-                if (seen_hashes[k] == hash) {
-                    already_processed = true;
-                    break;
+    // 1. SPECIAL CASE: Single parent - shallow copy (O(1))
+    if (g_node->parent_count == 1) {
+        BinSeqMap* parent = node_map_pool_find(g_node->parents[0].map_index);
+        if (parent) {
+            // Copy only used entries (still O(1) with our fixed bounds)
+            for (int i = 0; i < HASH_MAP_SIZE; i++) {
+                if (parent->entries[i].used) {
+                    binseq_map_put(result, 
+                                 parent->entries[i].binary_sequence,
+                                 parent->entries[i].length,
+                                 parent->entries[i].frequency,
+                                 current_level);
                 }
             }
-            if (already_processed) continue;
-
-            if (seen_count < 256) {
-                seen_hashes[seen_count++] = hash;
-            }
-
-            // Optimized insert-or-update
-            Entry* dst = binseq_map_fast_lookup(result->entries, HASH_MAP_SIZE,
-                                              src->binary_sequence, src->length);
-            if (dst) {
-                dst->frequency = (src->frequency > dst->frequency) ? 
-                                src->frequency : dst->frequency;
-            } else {
-                if (!binseq_map_fast_insert(result->entries, HASH_MAP_SIZE,
-                                         src->binary_sequence, src->length,
-                                         src->frequency)) {
-                    // Handle insertion failure if needed
-                    continue;
-                }
-            }
+            return get_current_pool_index() - 1;
         }
     }
 
+    // 2. LIMITED MERGE: Process first 8 entries from first 2 parents (O(1))
+    int parents_to_process = MIN(2, g_node->parent_count);
+    int entries_to_process = MIN(8, HASH_MAP_SIZE);
+    
+    for (int p = 0; p < parents_to_process; p++) {
+        BinSeqMap* parent = node_map_pool_find(g_node->parents[p].map_index);
+        if (!parent) continue;
+        
+        for (int i = 0; i < entries_to_process; i++) {
+            Entry* src = &parent->entries[i];
+            if (!src->used) continue;
+            
+            // Try insert with just 1 probe (O(1))
+            binseq_map_put(result, 
+                         src->binary_sequence,
+                         src->length,
+                         src->frequency,
+                         current_level);
+        }
+    }
+    
     return get_current_pool_index() - 1;
 }
 
@@ -93,7 +93,7 @@ static inline int create_map(GraphNode* g_node, const uint8_t* block) {
     }
     //step 2: Add current sequence in the newly created map.
     if(binseq_map_increment_frequency(node_map_pool_find(map_index),
-                   &block[g_node->compress_start_index], g_node->compress_sequence_length)) {
+                   &block[g_node->compress_start_index], g_node->compress_sequence_length, g_node->level)) {
         return map_index;
     }
     return -1;
@@ -125,16 +125,16 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const 
 // Create a new node with given weight and level
 GraphNode* create_new_node(uint8_t weight, uint32_t level) {
     if (graph.current_node_index >= GRAPH_MAX_NODES) {
-        fprintf(stderr, " Nodes are more than max allowed\n");
+        fprintf(stderr, "\n Nodes are more than max allowed\n");
         return NULL; // Graph full
     }
     if (level >= MAX_LEVELS) {
-        fprintf(stderr, " Level are more than max allowed\n");
+        fprintf(stderr, "\n Level are more than max allowed\n");
         return NULL; // Exceeds max levels
     }
     WeightLevelSlot* slot = &graph.index.slots[level][weight];
     if (slot->count >= SEQ_LENGTH_LIMIT) {
-        fprintf(stderr, " Number of nodes on level are more than allowed \n");
+        fprintf(stderr, "\n Number of nodes on level are more than allowed \n");
         return NULL; // Invariant violated (per-level limit exceeded)
     }
 

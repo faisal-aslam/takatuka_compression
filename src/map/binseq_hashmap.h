@@ -7,55 +7,48 @@
 #include "../constants.h"
 #include <string.h>  
 #include "xxhash.h" 
+#include <stdio.h>
 
 #define HASH_MAP_SIZE 256  // Fixed size for all hash maps
+#define UNUSED_INDEX UINT16_MAX
 
-// Entry for a binary sequence -> frequency map
 typedef struct {
-    uint8_t* binary_sequence;  // Key part (pointer to external memory)
-    uint16_t length;           // Key part
-    int frequency;             // Value part
-    int used;
+    uint8_t* binary_sequence;  // Pointer to external memory
+    uint16_t length;
+    int frequency;
+    uint32_t last_updated_level;
+    uint16_t next;  // For LRU and free lists
+    uint16_t prev;
+    int used;       // Track if slot is occupied
 } Entry;
 
-// Map containing fixed-size entries
-typedef struct BinSeqMap {
-    Entry entries[HASH_MAP_SIZE];  // Static array of entries
-    size_t size;      // Number of used entries
+typedef struct {
+    Entry entries[HASH_MAP_SIZE];
+    uint16_t free_head;
+    uint16_t lru_head;
+    uint16_t lru_tail;
+    size_t size;
 } BinSeqMap;
 
+// Initialization
+void binseq_map_init(BinSeqMap* map);
 
-static inline uint64_t fast_hash(const uint8_t* key, uint16_t length) {
-    if (length <= 4) {
-        uint32_t hash = 0;
-        memcpy(&hash, key, length);
-        return hash;
-    }
-    return XXH3_64bits(key, length);
-}
-
-// Map operations for static use
-int binseq_map_put(BinSeqMap* map,
-                  const uint8_t* key_sequence, uint16_t key_length,
-                  int value_frequency);
-
-const int* binseq_map_get_frequency(const BinSeqMap* map,
-                                   const uint8_t* key_sequence, uint16_t key_length);
+// Core operations
+int binseq_map_put(BinSeqMap* map, const uint8_t* key_sequence,
+                  uint16_t key_length, int value_frequency,
+                  uint32_t current_level);
 
 int binseq_map_increment_frequency(BinSeqMap* map,
-                                 const uint8_t* key_sequence, uint16_t key_length);
+                                 const uint8_t* key_sequence,
+                                 uint16_t key_length,
+                                 uint32_t current_level);
 
-void binseq_map_reset(BinSeqMap* map); // Reset entries in-place (for reuse)
+const Entry* binseq_map_fast_lookup(const BinSeqMap* map,
+                                  const uint8_t* key_sequence,
+                                  uint16_t key_length);
 
-Entry* binseq_map_fast_insert(Entry* entries, size_t capacity,
-                                            const uint8_t* key, uint16_t key_length,
-                                            int frequency);
-
-Entry* binseq_map_fast_lookup(Entry* entries, size_t capacity,
-                                            const uint8_t* key, uint16_t key_length);
-
-int binseq_map_resize(BinSeqMap* map, size_t min_new_capacity);
-
-void print_hashmap(BinSeqMap *map);
+// Maintenance
+void binseq_map_reset(BinSeqMap* map);
+void print_hashmap(const BinSeqMap* map);
 
 #endif

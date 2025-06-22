@@ -1,200 +1,189 @@
-// binseq_hashmap.c
+//binseq_hashmap.c
+
 #include "binseq_hashmap.h"
 #include <string.h>
-#include "xxhash.h"
-#include <stdio.h>
-
-// Helper: hash a binary sequence
-static uint64_t hash_sequence(const uint8_t* sequence, uint16_t length) {
-    if (!sequence || length == 0) return 0;
-    return XXH3_64bits(sequence, length);
-}
-
-// Helper: compare sequences
-static int sequences_equal(const uint8_t* a, uint16_t a_len,
-                           const uint8_t* b, uint16_t b_len) {
-    if (a_len != b_len) return 0;
-    return memcmp(a, b, a_len) == 0;
-}
-
-// Helper: find entry
-static Entry* find_entry(BinSeqMap* map,
-                         const uint8_t* sequence, uint16_t length) {
-    if (!map || !sequence || length == 0)
-        return NULL;  // Defensive guard
-
-    uint64_t hash = hash_sequence(sequence, length);
-    size_t index = hash % HASH_MAP_SIZE;
-
-    for (size_t i = 0; i < HASH_MAP_SIZE; ++i) {
-        size_t try = (index + i) % HASH_MAP_SIZE;
-        Entry* entry = &map->entries[try];
-
-        if (!entry->used) return NULL;
-        if (sequences_equal(entry->binary_sequence, entry->length, sequence, length)) {
-            return entry;
-        }
+#include <limits.h>
+#include <stdbool.h>
+void binseq_map_init(BinSeqMap* map) {
+    // Initialize free list
+    for (uint16_t i = 0; i < HASH_MAP_SIZE; i++) {
+        map->entries[i].next = i + 1;
+        map->entries[i].used = 0;
     }
-    return NULL;
-}
-
-int binseq_map_put(BinSeqMap* map,
-                   const uint8_t* key_sequence, uint16_t key_length,
-                   int value_frequency) {
-    if (!map || !key_sequence || key_length == 0) return 0;
-
-    Entry* existing = find_entry(map, key_sequence, key_length);
-    if (existing) {
-        existing->frequency = value_frequency;
-        return 1;
-    }
-
-    if (map->size >= HASH_MAP_SIZE) {
-        return 0; // Map is full
-    }
-
-    uint64_t hash = hash_sequence(key_sequence, key_length);
-    size_t index = hash % HASH_MAP_SIZE;
-
-    for (size_t i = 0; i < HASH_MAP_SIZE; ++i) {
-        size_t try = (index + i) % HASH_MAP_SIZE;
-        Entry* entry = &map->entries[try];
-
-        if (!entry->used) {
-            entry->binary_sequence = (uint8_t*)key_sequence; // assume static or caller-managed
-            entry->length = key_length;
-            entry->frequency = value_frequency;
-            entry->used = 1;
-            map->size++;
-            return 1;
-        }
-    }
-
-    return 0; // no space (shouldn't happen if size < HASH_MAP_SIZE)
-}
-
-const int* binseq_map_get_frequency(const BinSeqMap* map,
-                                    const uint8_t* key_sequence, uint16_t key_length) {
-    Entry* entry = find_entry((BinSeqMap*)map, key_sequence, key_length);
-    return entry ? &entry->frequency : NULL;
-}
-
-int binseq_map_increment_frequency(BinSeqMap* map,
-                                 const uint8_t* key_sequence, uint16_t key_length) {
-    if (!map || !key_sequence || key_length == 0) return 0;
-
-    uint64_t hash = hash_sequence(key_sequence, key_length);
-    size_t index = hash % HASH_MAP_SIZE;
-
-    for (size_t i = 0; i < HASH_MAP_SIZE; ++i) {
-        Entry* entry = &map->entries[index];
-        
-        if (entry->used) {
-            if (entry->length == key_length && 
-                memcmp(entry->binary_sequence, key_sequence, key_length) == 0) {
-                entry->frequency++;
-                return 1;
-            }
-        } else {
-            // Found empty slot - insert
-            if (map->size >= HASH_MAP_SIZE) {
-                return 0; // Map is full
-            }
-            entry->binary_sequence = (uint8_t*)key_sequence;
-            entry->length = key_length;
-            entry->frequency = 1;
-            entry->used = 1;
-            map->size++;
-            return 1;
-        }
-        
-        index = (index + 1) % HASH_MAP_SIZE;
-    }
-
-    return 0; // Map is full
-}
-
-void binseq_map_reset(BinSeqMap* map) {
-    if (!map) return;
-
-    for (size_t i = 0; i < HASH_MAP_SIZE; ++i) {
-        Entry* entry = &map->entries[i];
-        entry->binary_sequence = NULL;
-        entry->length = 0;
-        entry->frequency = 0;
-        entry->used = 0;
-    }
-
+    map->entries[HASH_MAP_SIZE-1].next = UNUSED_INDEX;
+    map->free_head = 0;
+    
+    // Initialize LRU list
+    map->lru_head = UNUSED_INDEX;
+    map->lru_tail = UNUSED_INDEX;
     map->size = 0;
 }
 
-Entry* binseq_map_fast_lookup(Entry* entries, size_t capacity,
-                            const uint8_t* key, uint16_t key_length) {
-    if (!entries || capacity == 0 || !key || key_length == 0) 
-        return NULL;
+static inline void lru_remove(BinSeqMap* map, uint16_t index) {
+    Entry* e = &map->entries[index];
+    if (e->prev != UNUSED_INDEX) map->entries[e->prev].next = e->next;
+    else map->lru_head = e->next;
+    
+    if (e->next != UNUSED_INDEX) map->entries[e->next].prev = e->prev;
+    else map->lru_tail = e->prev;
+}
 
-    uint64_t hash = XXH3_64bits(key, key_length);
-    size_t index = hash % capacity;
+static inline void lru_push_front(BinSeqMap* map, uint16_t index) {
+    Entry* e = &map->entries[index];
+    e->next = map->lru_head;
+    e->prev = UNUSED_INDEX;
+    
+    if (map->lru_head != UNUSED_INDEX) 
+        map->entries[map->lru_head].prev = index;
+    else 
+        map->lru_tail = index;
+        
+    map->lru_head = index;
+}
 
-    for (size_t i = 0; i < capacity; ++i) {
-        Entry* e = &entries[index];
-        if (!e->used) return NULL;
-        if (e->length == key_length && 
-            memcmp(e->binary_sequence, key, key_length) == 0) {
+static inline int calculate_savings(const Entry* e) {
+    return (e->length - 1) * MAX(0, (e->frequency - 1));
+}
+
+static uint16_t get_free_slot(BinSeqMap* map) {
+    if (map->free_head != UNUSED_INDEX) {
+        uint16_t slot = map->free_head;
+        map->free_head = map->entries[slot].next;
+        return slot;
+    }
+    
+    // Evict LRU entry with worst savings
+    uint16_t candidate = map->lru_tail;
+    int min_savings = calculate_savings(&map->entries[candidate]);
+    
+    // Check last 3 entries for better candidates
+    uint16_t current = map->entries[candidate].prev;
+    for (int i = 0; i < 3 && current != UNUSED_INDEX; i++) {
+        int savings = calculate_savings(&map->entries[current]);
+        if (savings < min_savings) {
+            candidate = current;
+            min_savings = savings;
+        }
+        current = map->entries[current].prev;
+    }
+    
+    lru_remove(map, candidate);
+    return candidate;
+}
+
+static inline bool sequences_equal(const uint8_t* a, uint16_t a_len,
+                                 const uint8_t* b, uint16_t b_len) {
+    return a_len == b_len && memcmp(a, b, a_len) == 0;
+}
+
+int binseq_map_put(BinSeqMap* map, const uint8_t* key_sequence,
+                  uint16_t key_length, int value_frequency,
+                  uint32_t current_level) {
+    uint64_t hash = XXH3_64bits(key_sequence, key_length);
+    uint16_t index = hash % HASH_MAP_SIZE;
+    
+    // Check first 4 slots for existing entry
+    for (int i = 0; i < 4; i++) {
+        uint16_t slot = (index + i) % HASH_MAP_SIZE;
+        Entry* e = &map->entries[slot];
+        
+        if (e->used && sequences_equal(e->binary_sequence, e->length, 
+                                      key_sequence, key_length)) {
+            e->frequency = value_frequency;
+            e->last_updated_level = current_level;
+            lru_remove(map, slot);
+            lru_push_front(map, slot);
+            return 1;
+        }
+    }
+    
+    // Insert new entry
+    uint16_t slot = get_free_slot(map);
+    Entry* e = &map->entries[slot];
+    
+    e->binary_sequence = (uint8_t*)key_sequence;
+    e->length = key_length;
+    e->frequency = value_frequency;
+    e->last_updated_level = current_level;
+    e->used = 1;
+    
+    lru_push_front(map, slot);
+    map->size++;
+    return 1;
+}
+
+int binseq_map_increment_frequency(BinSeqMap* map,
+                                 const uint8_t* key_sequence,
+                                 uint16_t key_length,
+                                 uint32_t current_level) {
+    // Try fast path first
+    const Entry* existing = binseq_map_fast_lookup(map, key_sequence, key_length);
+    if (existing) {
+        // Cast away const to update - we know it's safe
+        Entry* e = (Entry*)existing;
+        e->frequency++;
+        e->last_updated_level = current_level;
+        uint16_t index = e - map->entries; // Get array index
+        lru_remove(map, index);
+        lru_push_front(map, index);
+        return 1;
+    }
+    
+    // Fall back to put
+    return binseq_map_put(map, key_sequence, key_length, 1, current_level);
+}
+
+const Entry* binseq_map_fast_lookup(const BinSeqMap* map,
+                                  const uint8_t* key_sequence,
+                                  uint16_t key_length) {
+    uint64_t hash = XXH3_64bits(key_sequence, key_length);
+    uint16_t index = hash % HASH_MAP_SIZE;
+    
+    // Check 2 slots only (constant time)
+    for (int i = 0; i < 2; i++) {
+        const Entry* e = &map->entries[(index + i) % HASH_MAP_SIZE];
+        if (e->used && sequences_equal(e->binary_sequence, e->length,
+                                      key_sequence, key_length)) {
             return e;
         }
-        index = (index + 1) % capacity;
     }
-
     return NULL;
 }
 
-Entry* binseq_map_fast_insert(Entry* entries, size_t capacity,
-                            const uint8_t* key, uint16_t key_length,
-                            int frequency) {
-    if (!entries || capacity == 0 || !key || key_length == 0) return NULL;
-
-    uint64_t hash = XXH3_64bits(key, key_length);
-    size_t index = hash % capacity;
-
-    for (size_t i = 0; i < capacity; ++i) {
-        size_t probe = (index + i) % capacity;
-        Entry* e = &entries[probe];
-
-        if (!e->used) {
-            e->binary_sequence = (uint8_t*)key;
-            e->length = key_length;
-            e->frequency = frequency;
-            e->used = 1;
-            return e;
-        }
+void binseq_map_reset(BinSeqMap* map) {
+    // Rebuild free list
+    map->free_head = 0;
+    for (uint16_t i = 0; i < HASH_MAP_SIZE; i++) {
+        map->entries[i].next = i + 1;
+        map->entries[i].used = 0;
     }
-
-    return NULL;
+    map->entries[HASH_MAP_SIZE-1].next = UNUSED_INDEX;
+    
+    // Reset LRU
+    map->lru_head = UNUSED_INDEX;
+    map->lru_tail = UNUSED_INDEX;
+    map->size = 0;
 }
 
-void print_hashmap(BinSeqMap *map) {
-    if (!map) {
-        printf("Hashmap is NULL.\n");
-        return;
+void print_hashmap(const BinSeqMap* map) {
+    printf("Hashmap (Size: %zu/%d)\n", map->size, HASH_MAP_SIZE);
+    printf("LRU Order: ");
+    
+    uint16_t current = map->lru_head;
+    while (current != UNUSED_INDEX) {
+        printf("%d->", current);
+        current = map->entries[current].next;
     }
-
-    printf("Hashmap contents (size = %zu, capacity = %d):\n", map->size, HASH_MAP_SIZE);
-
-    for (size_t i = 0; i < HASH_MAP_SIZE; ++i) {
-        Entry* e = &map->entries[i];
-
-        if (!e->used)
-            continue;
-
-        printf("  [%zu] Length: %u, Frequency: %d, Sequence: ", i, e->length, e->frequency);
-        for (uint16_t j = 0; j < e->length; ++j) {
+    printf("NULL\n");
+    
+    for (int i = 0; i < HASH_MAP_SIZE; i++) {
+        const Entry* e = &map->entries[i];
+        if (!e->used) continue;
+        
+        printf("[%d] Len:%d Freq:%d Lvl:%d Seq:",
+              i, e->length, e->frequency, e->last_updated_level);
+        for (int j = 0; j < e->length; j++)
             printf("%02X ", e->binary_sequence[j]);
-        }
         printf("\n");
-    }
-
-    if (map->size == 0) {
-        printf("  (empty)\n");
     }
 }

@@ -9,7 +9,7 @@
 
 // Graph configuration constants
 #define MAX_LEVELS BLOCK_SIZE  // Maximum number of levels in the graph
-#define GRAPH_MAX_NODES ((MAX_LEVELS)*(SEQ_LENGTH_LIMIT))    // Maximum number of nodes in the graph
+#define GRAPH_MAX_NODES ((MAX_LEVELS)*(SEQ_LENGTH_LIMIT*SEQ_LENGTH_LIMIT))    // Maximum number of nodes in the graph
 
 // Compile-time assertion macro for different C standards
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
