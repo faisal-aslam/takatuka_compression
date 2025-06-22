@@ -1,4 +1,4 @@
-// binseq_hashmap.h 
+// binseq_hashmap.h
 #ifndef BINSEQ_HASHMAP_H
 #define BINSEQ_HASHMAP_H
 
@@ -8,23 +8,22 @@
 #include <string.h>  
 #include "xxhash.h" 
 
-#define INITIAL_CAPACITY 32
-#define GROWTH_FACTOR 2
+#define HASH_MAP_SIZE 256  // Fixed size for all hash maps
 
 // Entry for a binary sequence -> frequency map
 typedef struct {
-    uint8_t* binary_sequence;  // Key part
+    uint8_t* binary_sequence;  // Key part (pointer to external memory)
     uint16_t length;           // Key part
     int frequency;             // Value part
     int used;
 } Entry;
 
-// Map containing statically allocated entries
+// Map containing fixed-size entries
 typedef struct BinSeqMap {
-    Entry* entries;   // Provided externally (from a pool)
-    size_t capacity;  // Capacity of the entries array
+    Entry entries[HASH_MAP_SIZE];  // Static array of entries
     size_t size;      // Number of used entries
 } BinSeqMap;
+
 
 static inline uint64_t fast_hash(const uint8_t* key, uint16_t length) {
     if (length <= 4) {

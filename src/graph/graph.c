@@ -38,12 +38,6 @@ static int merge_maps(GraphNode* g_node) {
     BinSeqMap* result = node_map_pool_get_next();
     if (!result) return -1;
 
-    // Initialize with estimated capacity
-    size_t est_size = g_node->parent_count * 8; // Heuristic
-    if (result->capacity < est_size && !binseq_map_resize(result, est_size)) {
-        return -1;
-    }
-
     // Track seen sequences to avoid duplicate work
     uint64_t seen_hashes[256] = {0};
     size_t seen_count = 0;
@@ -52,7 +46,7 @@ static int merge_maps(GraphNode* g_node) {
         BinSeqMap* parent_map = node_map_pool_find(g_node->parents[i].map_index);
         if (!parent_map) continue;
 
-        for (size_t j = 0; j < parent_map->capacity; j++) {
+        for (size_t j = 0; j < HASH_MAP_SIZE; j++) {
             Entry* src = &parent_map->entries[j];
             if (!src->used) continue;
 
@@ -72,13 +66,13 @@ static int merge_maps(GraphNode* g_node) {
             }
 
             // Optimized insert-or-update
-            Entry* dst = binseq_map_fast_lookup(result->entries, result->capacity,
+            Entry* dst = binseq_map_fast_lookup(result->entries, HASH_MAP_SIZE,
                                               src->binary_sequence, src->length);
             if (dst) {
                 dst->frequency = (src->frequency > dst->frequency) ? 
                                 src->frequency : dst->frequency;
             } else {
-                if (!binseq_map_fast_insert(result->entries, result->capacity,
+                if (!binseq_map_fast_insert(result->entries, HASH_MAP_SIZE,
                                          src->binary_sequence, src->length,
                                          src->frequency)) {
                     // Handle insertion failure if needed

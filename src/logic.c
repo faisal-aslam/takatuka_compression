@@ -273,6 +273,10 @@ void processBlock(const uint8_t *block, uint32_t block_size) {
             fflush(stdout); // Ensure immediate output
             
         }
+        if (block_index+1 == block_size) {
+            printf("\rProcessing block: %3d%% complete", 100);
+            fflush(stdout); // Ensure immediate output
+        }
         uint32_t current_level = get_max_level();
 
         // Compressed paths (various sequence lengths)
