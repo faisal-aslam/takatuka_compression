@@ -104,6 +104,28 @@ static inline bool sequences_equal(const uint8_t* a, uint16_t a_len,
     return a_len == b_len && memcmp(a, b, a_len) == 0;
 }
 
+static int binseq_map_insert_fresh(BinSeqMap* map, const uint8_t* key_sequence,
+                  uint16_t key_length, int value_frequency,
+                  uint32_t current_level) {
+    uint64_t hash = XXH3_64bits(key_sequence, key_length);
+    
+    uint16_t index = hash % HASH_MAP_SIZE;
+       
+    // Insert new entry
+    uint16_t slot = get_free_slot(map);
+    Entry* e = &map->entries[slot];
+    
+    e->binary_sequence = (uint8_t*)key_sequence;
+    e->length = key_length;
+    e->frequency = value_frequency;
+    e->last_updated_level = current_level;
+    e->cached_hash = hash; 
+    e->used = 1;
+    lru_push_front(map, slot);
+    map->size++;
+    return 1;
+}
+
 int binseq_map_put(BinSeqMap* map, const uint8_t* key_sequence,
                   uint16_t key_length, int value_frequency,
                   uint32_t current_level) {
@@ -142,25 +164,58 @@ int binseq_map_put(BinSeqMap* map, const uint8_t* key_sequence,
     return 1;
 }
 
+static const Entry* binseq_map_full_lookup(const BinSeqMap* map,
+                                           const uint8_t* key_sequence,
+                                           uint16_t key_length,
+                                           uint64_t hash) {
+    uint16_t index = hash % HASH_MAP_SIZE;
+
+    for (int i = 0; i < HASH_MAP_SIZE; i++) {
+        uint16_t slot = (index + i) % HASH_MAP_SIZE;
+        const Entry* e = &map->entries[slot];
+
+        if (!e->used) {
+            // First empty slot: key cannot be found beyond this point
+            return NULL;
+        }
+
+        if (e->cached_hash == hash &&
+            sequences_equal(e->binary_sequence, e->length, key_sequence, key_length)) {
+            return e;
+        }
+    }
+
+    // This should be unreachable if load factor < 1
+    return NULL;
+}
+
+
 int binseq_map_increment_frequency(BinSeqMap* map,
                                  const uint8_t* key_sequence,
                                  uint16_t key_length,
                                  uint32_t current_level) {
-    // Try fast path first
+    uint64_t hash = XXH3_64bits(key_sequence, key_length);
+
+    // Try fast path (2-slot probe)
     const Entry* existing = binseq_map_fast_lookup(map, key_sequence, key_length);
-    if (existing) {
-        // Cast away const to update - we know it's safe
+    
+    if (!existing) { //not found.
+        // Fallback to full probe
+        existing = binseq_map_full_lookup(map, key_sequence, key_length, hash);
+    }
+
+    if (existing) { //found
         Entry* e = (Entry*)existing;
         e->frequency++;
         e->last_updated_level = current_level;
-        uint16_t index = e - map->entries; // Get array index
+        uint16_t index = e - map->entries;
         lru_remove(map, index);
         lru_push_front(map, index);
         return 1;
     }
-    
-    // Fall back to put
-    return binseq_map_put(map, key_sequence, key_length, 1, current_level);
+
+    // Still not found — insert fresh
+    return binseq_map_insert_fresh(map, key_sequence, key_length, 1, current_level);
 }
 
 const Entry *binseq_map_fast_lookup(const BinSeqMap *map,

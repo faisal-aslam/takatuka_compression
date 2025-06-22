@@ -210,13 +210,13 @@ static inline void create_root(const uint8_t* block, uint32_t block_size) {
         exit(EXIT_FAILURE);
     }
 
-    // create root node and set its values
+    // create root node and set its values 
+    // root's weight=1 and level=1
     GraphNode* root = create_new_node(1, 1);
     
-    root->parent_count = 0; //root has no parents.
+    root->parent_link_count = 0; //root has no parents.
     root->compress_sequence_length = 1; //there is nothing to compress yet at the root level.
     root->compress_start_index = 0;
-
 
     #ifdef DEBUG
     printf("\nCreated new root node in pool[0][0]:\n");

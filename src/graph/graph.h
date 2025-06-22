@@ -28,7 +28,7 @@ typedef struct {
 typedef struct {    
     uint32_t parent_node_id;    
     uint32_t saving_so_far;       // Compression savings up to this node
-    uint32_t map_index;
+    int32_t map_index;
 } ParentLink;
 
 
@@ -36,9 +36,9 @@ typedef struct {
 typedef struct {
     uint32_t id;                 // Unique identifier for the node
     uint32_t compress_start_index; // Start index in the original data block    
-    ParentLink parents[SEQ_LENGTH_LIMIT];  // Array of parent node IDs
+    ParentLink parent_links[SEQ_LENGTH_LIMIT];  // Array of parent node IDs
     uint16_t level;              // Level of this node in the graph hierarchy
-    uint8_t parent_count;        // Number of parent nodes    
+    uint8_t parent_link_count;        // Number of parent nodes    
     uint8_t incoming_weight;     // Weight/sequence length associated with this node    
     uint8_t compress_sequence_length;   // Length of the sequence this node represents        
 } GraphNode;

@@ -70,8 +70,8 @@ void graphviz_render_full_graph(GraphVisualizer *viz, const uint8_t *block) {
         if (!node)
             continue;
 
-        for (uint8_t p = 0; p < node->parent_count; p++) {
-            uint32_t parent_id = node->parents[p].parent_node_id;
+        for (uint8_t p = 0; p < node->parent_link_count; p++) {
+            uint32_t parent_id = node->parent_links[p].parent_node_id;
             GraphNode *parent = graph_get_node(parent_id);
             if (!parent)
                 continue;
@@ -79,7 +79,7 @@ void graphviz_render_full_graph(GraphVisualizer *viz, const uint8_t *block) {
             fprintf(viz->dot_file,
                     "  node_%u -> node_%u [label=\"w:%u,%u\", tailport=c, "
                     "headport=c];\n",
-                    node->id, parent_id, node->incoming_weight, node->parents[p].saving_so_far);
+                    node->id, parent_id, node->incoming_weight, node->parent_links[p].saving_so_far);
         }
     }
 

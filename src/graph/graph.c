@@ -36,27 +36,27 @@ GraphNode* graph_get_node(uint32_t index) {
 }
 
 
-static int merge_maps(GraphNode* g_node) {
-    if (!g_node) return -1;
+static int merge_maps(GraphNode* parent_node) {
+    if (!parent_node) return -1;
 
     BinSeqMap* result = node_map_pool_get_next();    
     if (!result) return -1;
 
-    uint32_t current_level = g_node->level;
+    uint32_t parent_level = parent_node->level;
     binseq_map_init(result); // Fresh map
 
     // Special case: single parent → shallow copy (O(1))
-    if (g_node->parent_count == 1) {
-        BinSeqMap* parent = node_map_pool_find(g_node->parents[0].map_index);
+    if (parent_node->parent_link_count == 1) {        
+        BinSeqMap* parent = node_map_pool_find(parent_node->parent_links[0].map_index);
         if (!parent) return -1;
         *result = *parent;
         return get_current_pool_index() - 1;
     }
 
     // Optimized limited merge: merge non-empty entries from parents
-    int parents_to_process = MIN(2, g_node->parent_count);
+    int parents_to_process = MIN(16, parent_node->parent_link_count);
     for (int p = 0; p < parents_to_process; p++) {
-        BinSeqMap* parent = node_map_pool_find(g_node->parents[p].map_index);
+        BinSeqMap* parent = node_map_pool_find(parent_node->parent_links[p].map_index);
         if (!parent || parent->total_used == 0) continue;
 
         // Instead of HASH_MAP_SIZE, scan up to total_used entries (with break)
@@ -66,7 +66,7 @@ static int merge_maps(GraphNode* g_node) {
             if (!src->used) continue;
 
             // Insert into result map (avoids duplicate hashing)
-            binseq_map_put(result, src->binary_sequence, src->length, src->frequency, current_level);
+            binseq_map_put(result, src->binary_sequence, src->length, src->frequency, parent_level+1);
             entries_added++;
         }
     }
@@ -74,15 +74,15 @@ static int merge_maps(GraphNode* g_node) {
     return get_current_pool_index() - 1;
 }
 
-static inline int create_map(GraphNode* g_node, const uint8_t* block) {
+static inline int create_map(GraphNode* parent_node, GraphNode* child_node, const uint8_t* block) {
     //step 1: merge graph of parent nodes and create new graph for this node.
-    int map_index = merge_maps(g_node);
-    if (g_node->compress_sequence_length == 1) {
+    int map_index = merge_maps(parent_node);
+    if (child_node->compress_sequence_length == 1) {
         return map_index;
     }
     //step 2: Add current sequence in the newly created map.
     if(binseq_map_increment_frequency(node_map_pool_find(map_index),
-                   &block[g_node->compress_start_index], g_node->compress_sequence_length, g_node->level)) {
+                   &block[child_node->compress_start_index], child_node->compress_sequence_length, child_node->level)) {
         return map_index;
     }
     return -1;
@@ -93,26 +93,26 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const 
     if (!child_node || !parent_node) return false;
 
     // Check if we can add more edges (within sequence length limit)
-    if (child_node->parent_count >= SEQ_LENGTH_LIMIT) return false;
+    if (child_node->parent_link_count >= SEQ_LENGTH_LIMIT) return false;
 
 #ifdef DEBUG
     printf("Adding edge: %u -> %u\n", child_node->id, parent_node->id);
     fflush(stdout);
 #endif
-    if (child_node->id == 7 && parent_node->id == 5) {
+    if ((child_node->id == 7 && parent_node->id == 5) || child_node->id == 5 && parent_node->id == 1) {
         printf("\n\n\n stop here \n\n");
     }
 
     // Get a reference to the new link and update it
-    ParentLink* link = &child_node->parents[child_node->parent_count++];
+    ParentLink* link = &child_node->parent_links[child_node->parent_link_count++];
     link->parent_node_id = parent_node->id;
-    link->map_index = create_map(child_node, block);
+    link->map_index = create_map(parent_node, child_node, block);
     // Calculate savings for this link
     uint32_t savings = 0;
     if (child_node->compress_sequence_length > 1) {
         // Savings = (sequence_length - 1) * (frequency - 1)
         const Entry* entry = binseq_map_fast_lookup(
-            node_map_pool_find(parent_node->parents[0].map_index),
+            node_map_pool_find(parent_node->parent_links[0].map_index),
             &block[child_node->compress_start_index],
             child_node->compress_sequence_length
         );
@@ -123,7 +123,7 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const 
         }
     }
 
-    uint32_t total_savings = parent_node->parents[0].saving_so_far + savings;
+    uint32_t total_savings = parent_node->parent_links[0].saving_so_far + savings;
     link->saving_so_far = total_savings;
 #ifdef DEBUG
     print_hashmap(node_map_pool_find(link->map_index));
@@ -227,8 +227,8 @@ void print_graph_node(const GraphNode *node, const uint8_t* block) {
 
     // Print parent nodes
     printf("\nParents: ");
-    for (int i = 0; i < node->parent_count; i++) {
-        printf("%u ", node->parents[i].parent_node_id);
+    for (int i = 0; i < node->parent_link_count; i++) {
+        printf("%u ", node->parent_links[i].parent_node_id);
     }
 
     // Print the sequence this node represents
