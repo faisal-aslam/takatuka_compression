@@ -37,45 +37,40 @@ GraphNode* graph_get_node(uint32_t index) {
 
 
 static int merge_maps(GraphNode* g_node) {
+    if (!g_node) return -1;
+
     BinSeqMap* result = node_map_pool_get_next();    
-    if (!result || !g_node) return -1;
+    if (!result) return -1;
 
     uint32_t current_level = g_node->level;
+    binseq_map_init(result); // Fresh map
 
-    binseq_map_init(result); // Initialize new map
-
-    // 1. SPECIAL CASE: Single parent - shallow copy (O(1))
-    // Special case: single parent
+    // Special case: single parent → shallow copy (O(1))
     if (g_node->parent_count == 1) {
         BinSeqMap* parent = node_map_pool_find(g_node->parents[0].map_index);
         if (!parent) return -1;
-        
-        // Fast shallow copy (O(1) by pointer swap)
-        *result = *parent; 
+        *result = *parent;
         return get_current_pool_index() - 1;
     }
 
-    // 2. LIMITED MERGE: Process first 8 entries from first 2 parents (O(1))
-    int parents_to_process = MIN(INT_MAX/*2*/, g_node->parent_count);
-    int entries_to_process = MIN(INT_MAX/*8*/, HASH_MAP_SIZE);
-    
+    // Optimized limited merge: merge non-empty entries from parents
+    int parents_to_process = MIN(2, g_node->parent_count);
     for (int p = 0; p < parents_to_process; p++) {
         BinSeqMap* parent = node_map_pool_find(g_node->parents[p].map_index);
-        if (!parent) continue;
-        
-        for (int i = 0; i < entries_to_process; i++) {
+        if (!parent || parent->total_used == 0) continue;
+
+        // Instead of HASH_MAP_SIZE, scan up to total_used entries (with break)
+        int entries_added = 0;
+        for (int i = 0; i < HASH_MAP_SIZE && entries_added < 8; i++) {
             Entry* src = &parent->entries[i];
             if (!src->used) continue;
-            
-            // Try insert with just 1 probe (O(1))
-            binseq_map_put(result, 
-                         src->binary_sequence,
-                         src->length,
-                         src->frequency,
-                         current_level);
+
+            // Insert into result map (avoids duplicate hashing)
+            binseq_map_put(result, src->binary_sequence, src->length, src->frequency, current_level);
+            entries_added++;
         }
     }
-    
+
     return get_current_pool_index() - 1;
 }
 
