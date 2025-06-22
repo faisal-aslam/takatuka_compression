@@ -18,7 +18,7 @@
 
 uint16_t total_codes = 0;
 
-static void processNodePath(uint8_t weight, const uint8_t* block, uint32_t block_size, uint32_t block_index, const uint8_t* sequence, uint32_t current_level);
+static void process_uncompressed_path(uint8_t weight, const uint8_t* block, uint32_t block_size, uint32_t block_index, const uint8_t* sequence, uint32_t current_level);
 
 static inline uint8_t getCurrentGroup() {
     if (total_codes < getGroupThreshold(0)) {
@@ -60,36 +60,25 @@ static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_
 }
 */
 
-static void processCompressPath(const uint8_t* block, uint32_t block_size, uint32_t block_index,    
-    const uint8_t* sequence, uint8_t seq_len, uint32_t current_level) {
+static inline void process_compressed_path(const uint8_t* block, uint32_t block_size, uint32_t block_index,
+        uint8_t seq_len, uint32_t current_level) {
     
     uint32_t seq_start_offset = block_index + 1 - seq_len;
     if (seq_start_offset >= block_size || (seq_start_offset + seq_len) > block_size) {
         fprintf(stderr,"\n invalid seq_start \n");
         return;
     }
-    
-    int32_t new_saving = calculate_savings(sequence, seq_len, NULL);
-    if (new_saving == INT_MIN) {
-        return;
-    }
-    //todo new_saving += old_node->saving_so_far;
             
-    uint8_t weight = 0;
-    
     // CREATE NODE FIRST
-    GraphNode* new_node = create_new_node(weight, current_level+1);
+    GraphNode* new_node = create_new_node(0, current_level+1);
     if (!new_node) {
-        fprintf(stderr,"\n node allocation failed level=%d, weight=%u\n", current_level+1, weight);
+        fprintf(stderr,"\n node allocation failed level=%d, weight=%u\n", current_level+1, 0);
         exit(1);
         return;
     }
 
     // SET NODE PROPERTIES
-    new_node->incoming_weight = weight;
-    //new_node->saving_so_far = new_saving;
-    new_node->compress_sequence_length = seq_len;
-    new_node->level = current_level+1;
+    new_node->compress_sequence_length = seq_len;    
     new_node->compress_start_index = seq_start_offset;
     
 #ifdef DEBUG
@@ -127,7 +116,7 @@ static void processCompressPath(const uint8_t* block, uint32_t block_size, uint3
  * @param sequence        The sequence (typically of length 1) for the new node.
  * @param current_level   The level in the graph to look for parent nodes.
  */
-static void processNodePath(uint8_t weight, const uint8_t *block,
+static inline void process_uncompressed_path(uint8_t weight, const uint8_t *block,
                             uint32_t block_size, uint32_t block_index,
                             const uint8_t *sequence, uint32_t current_level) {
     // Step 1: Get all nodes with the given weight at the current level
@@ -137,14 +126,14 @@ static void processNodePath(uint8_t weight, const uint8_t *block,
 
     // Step 2: Validate parameters
     if (!block || block_index >= block_size) {
-        fprintf(stderr, "\nprocessNodePath: invalid input block or index\n");
+        fprintf(stderr, "\nprocess_uncompressed_path: invalid input block or index\n");
         return;
     }
 
     // Step 3: Determine start of the sequence (usually just one symbol)
     uint32_t seq_start_offset = block_index;
     if (seq_start_offset + 1 > block_size) {
-        fprintf(stderr, "\nprocessNodePath: sequence goes beyond block\n");
+        fprintf(stderr, "\nprocess_uncompressed_path: sequence goes beyond block\n");
         return;
     }
 
@@ -157,7 +146,7 @@ static void processNodePath(uint8_t weight, const uint8_t *block,
     // Step 5: Use first parent node to determine new weight and level
     GraphNode *first_parent = graph_get_node(node_indices[0]);
     if (!first_parent) {
-        fprintf(stderr, "\nprocessNodePath: first parent node is null\n");
+        fprintf(stderr, "\nprocess_uncompressed_path: first parent node is null\n");
         return;
     }
 
@@ -175,10 +164,8 @@ static void processNodePath(uint8_t weight, const uint8_t *block,
     }
 
     // Set node metadata
-    new_node->incoming_weight = new_weight;
     new_node->compress_sequence_length = 1;              // Only one symbol
     new_node->compress_start_index = seq_start_offset;
-    new_node->level = first_parent->level + 1;
 
 #ifdef DEBUG
     print_graph_node(new_node, block);
@@ -206,7 +193,7 @@ static void processNodePath(uint8_t weight, const uint8_t *block,
  * @block bytes of the block read from the file.
  * @block_size the size of the array block.
 */
-static inline void createRoot(const uint8_t* block, uint32_t block_size) {
+static inline void create_root(const uint8_t* block, uint32_t block_size) {
     /**
      * Return if the block is null or empty.
      * This only happens when we have reached the end of file. a
@@ -226,22 +213,10 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
     // create root node and set its values
     GraphNode* root = create_new_node(1, 1);
     
-    root->incoming_weight = 1; //root weight must be 1.
     root->parent_count = 0; //root has no parents.
     root->compress_sequence_length = 1; //there is nothing to compress yet at the root level.
     root->compress_start_index = 0;
-    root->level = 1; //root is at level 1
 
-    // Create empty map
-   /* todo root->map = binseq_map_create(3);
-    if (!root->map) {
-        fprintf(stderr, "\n Unable to create map");
-        pool->size--; // Remove the failed node from pool
-        free_tree_node_pool_manager(&pool_manager);
-        exit(EXIT_FAILURE);
-    }
-    */
-    //root->saving_so_far = calculate_savings(&block[0], 1, NULL);
 
     #ifdef DEBUG
     printf("\nCreated new root node in pool[0][0]:\n");
@@ -251,14 +226,14 @@ static inline void createRoot(const uint8_t* block, uint32_t block_size) {
 
 }
 
-void processBlock(const uint8_t *block, uint32_t block_size) {
+void process_block(const uint8_t *block, uint32_t block_size) {
     if (SEQ_LENGTH_LIMIT <= 1 || block_size == 0 || !block) {
-        fprintf(stderr, "Error: Invalid parameters in processBlock\n");
+        fprintf(stderr, "Error: Invalid parameters in process_block\n");
         return;
     }
 
     // Create the root node
-    createRoot(block, block_size);
+    create_root(block, block_size);
 
     /**
      * Create a new level of the graph corresponding to each byte of the block. 
@@ -273,19 +248,13 @@ void processBlock(const uint8_t *block, uint32_t block_size) {
             fflush(stdout); // Ensure immediate output
             
         }
-        if (block_index+1 == block_size) {
-            printf("\rProcessing block: %3d%% complete", 100);
-            fflush(stdout); // Ensure immediate output
-        }
         uint32_t current_level = get_max_level();
 
         // Compressed paths (various sequence lengths)
         for (uint16_t seq_len = 2;
              seq_len <= current_level + 1 && seq_len <= SEQ_LENGTH_LIMIT;
-             seq_len++) {
-            const uint8_t *seq_start = &block[block_index + 1 - seq_len];
-            processCompressPath(block, block_size, block_index, seq_start,
-                                seq_len, current_level);
+             seq_len++) {            
+            process_compressed_path(block, block_size, block_index, seq_len, current_level);
         }
 
 
@@ -293,15 +262,16 @@ void processBlock(const uint8_t *block, uint32_t block_size) {
         uint8_t upper = current_level < SEQ_LENGTH_LIMIT
                   ? (uint8_t)current_level
                   : SEQ_LENGTH_LIMIT;
-        for (uint8_t weight = 0; weight <= upper; weight++) {
-            
-
-                // Process paths only for first node with this weight
-                processNodePath(weight, block, block_size, block_index,
+        for (uint8_t weight = 0; weight <= upper; weight++) {          
+            // Process paths only for first node with this weight
+            process_uncompressed_path(weight, block, block_size, block_index,
                                 &block[block_index], current_level);
             
         }
     }
+    printf("\rProcessing block: %3d%% complete", 100);
+    fflush(stdout); // Ensure immediate output
+
 #ifdef DEBUG
     GraphVisualizer viz;
     graphviz_init(&viz, "compression_tree.dot", true);
