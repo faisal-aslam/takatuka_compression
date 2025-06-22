@@ -13,13 +13,13 @@
 #define UNUSED_INDEX UINT16_MAX
 
 typedef struct {
-    uint8_t* binary_sequence;  // Pointer to external memory
+    uint8_t* binary_sequence; // Pointer to external memory
     uint16_t length;
     uint32_t frequency;
     uint32_t last_updated_level;
-    uint16_t next;  // For LRU and free lists
-    uint16_t prev;
-    int used;       // Track if slot is occupied
+    int used;               // Group frequently accessed fields
+    uint16_t next, prev;    // LRU pointers
+    uint64_t cached_hash; //for better speed.
 } Entry;
 
 typedef struct {
@@ -28,6 +28,7 @@ typedef struct {
     uint16_t lru_head;
     uint16_t lru_tail;
     size_t size;
+    uint16_t total_used;  // Tracks actual used entries
 } BinSeqMap;
 
 // Initialization
