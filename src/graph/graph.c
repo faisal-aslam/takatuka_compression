@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <limits.h>
 #include "../map/binseq_hashmap.h"
 #include "../map/node_map_pool.h"
 
@@ -44,26 +45,19 @@ static int merge_maps(GraphNode* g_node) {
     binseq_map_init(result); // Initialize new map
 
     // 1. SPECIAL CASE: Single parent - shallow copy (O(1))
+    // Special case: single parent
     if (g_node->parent_count == 1) {
         BinSeqMap* parent = node_map_pool_find(g_node->parents[0].map_index);
-        if (parent) {
-            // Copy only used entries (still O(1) with our fixed bounds)
-            for (int i = 0; i < HASH_MAP_SIZE; i++) {
-                if (parent->entries[i].used) {
-                    binseq_map_put(result, 
-                                 parent->entries[i].binary_sequence,
-                                 parent->entries[i].length,
-                                 parent->entries[i].frequency,
-                                 current_level);
-                }
-            }
-            return get_current_pool_index() - 1;
-        }
+        if (!parent) return -1;
+        
+        // Fast shallow copy (O(1) by pointer swap)
+        *result = *parent; 
+        return get_current_pool_index() - 1;
     }
 
     // 2. LIMITED MERGE: Process first 8 entries from first 2 parents (O(1))
-    int parents_to_process = MIN(2, g_node->parent_count);
-    int entries_to_process = MIN(8, HASH_MAP_SIZE);
+    int parents_to_process = MIN(INT_MAX/*2*/, g_node->parent_count);
+    int entries_to_process = MIN(INT_MAX/*8*/, HASH_MAP_SIZE);
     
     for (int p = 0; p < parents_to_process; p++) {
         BinSeqMap* parent = node_map_pool_find(g_node->parents[p].map_index);
