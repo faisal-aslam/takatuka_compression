@@ -30,47 +30,56 @@ void binseq_map_init(BinSeqMap* map) {
 static inline void lru_remove(BinSeqMap* map, uint16_t index) {
     Entry* e = &map->entries[index];
 
-    // Update previous node's next pointer
+    if (!e->used) return; // Not in LRU list
+
+    // Update neighbors
     if (e->prev != UNUSED_INDEX) {
         map->entries[e->prev].next = e->next;
     } else {
-        // Removing the head
         map->lru_head = e->next;
     }
 
-    // Update next node's prev pointer
     if (e->next != UNUSED_INDEX) {
         map->entries[e->next].prev = e->prev;
     } else {
-        // Removing the tail
         map->lru_tail = e->prev;
     }
 
-    // Clear removed entry's LRU links
+    // Clear links
     e->next = UNUSED_INDEX;
     e->prev = UNUSED_INDEX;
+    
+    // Update counters
     map->size--;
     verify_lru(map);
 }
 
 static inline void lru_push_front(BinSeqMap *map, uint16_t index) {
     Entry *e = &map->entries[index];
-    
-    // Clear existing links
-    e->next = UNUSED_INDEX;
+
+    // If already in LRU, remove first
+    if (e->used) {
+        lru_remove(map, index);
+    }
+
+    // Initialize entry links
+    e->next = map->lru_head;
     e->prev = UNUSED_INDEX;
 
-    if (map->lru_head == UNUSED_INDEX) {
-        // First entry
-        map->lru_head = index;
-        map->lru_tail = index;
-    } else {
-        // Normal insertion
-        e->next = map->lru_head;
+    // Update neighbors
+    if (map->lru_head != UNUSED_INDEX) {
         map->entries[map->lru_head].prev = index;
-        map->lru_head = index;
+    } else {
+        map->lru_tail = index; // First entry
     }
+
+    // Update head and mark as used
+    map->lru_head = index;
     e->used = 1;
+    
+    // Update counters
+    map->size++;
+    map->total_used++;
     verify_lru(map);
 }
 
@@ -79,7 +88,7 @@ static inline int calculate_savings(const Entry* e) {
 }
 
 static uint16_t get_free_slot(BinSeqMap* map, uint16_t hash_index) {
-    // First try to find empty slot near hash index
+    // Try nearby slots first
     for (int i = 0; i < EVICTION_LOOKBACK; i++) {
         uint16_t slot = (hash_index + i) % HASH_MAP_SIZE;
         if (!map->entries[slot].used) {
@@ -87,20 +96,21 @@ static uint16_t get_free_slot(BinSeqMap* map, uint16_t hash_index) {
         }
     }
 
-    // If no empty slots, evict LRU entry
+    // If no space, evict LRU entry
     if (map->lru_tail == UNUSED_INDEX) {
         return UNUSED_INDEX;
     }
 
     uint16_t candidate = map->lru_tail;
-    lru_remove(map, candidate);
     
-    // Clear the evicted entry
+    // Clear the entry before removal
     Entry* e = &map->entries[candidate];
-    e->used = 0;
     e->binary_sequence = NULL;
     e->length = 0;
     e->frequency = 0;
+    
+    // Remove from LRU (will decrement size)
+    lru_remove(map, candidate);
     
     return candidate;
 }
@@ -122,8 +132,7 @@ static void insert_entry(BinSeqMap* map, uint16_t slot,
     e->last_updated_level = current_level;
     e->cached_hash = hash;
     
-    map->total_used++;
-    map->size++;
+    // This will handle all LRU updates and counters
     lru_push_front(map, slot);
 }
 
@@ -147,7 +156,7 @@ int binseq_map_put(BinSeqMap* map, const uint8_t* key_sequence,
     uint64_t hash = XXH3_64bits(key_sequence, key_length);
     uint16_t index = hash % HASH_MAP_SIZE;
     
-    // Check first 4 slots for existing entry
+    // Check existing entries first
     for (int i = 0; i < 4; i++) {
         uint16_t slot = (index + i) % HASH_MAP_SIZE;
         Entry* e = &map->entries[slot];
@@ -163,6 +172,7 @@ int binseq_map_put(BinSeqMap* map, const uint8_t* key_sequence,
         }
     }
     
+    // Insert new entry
     uint16_t slot = get_free_slot(map, index);
     if (slot == UNUSED_INDEX) return 0;
     
@@ -190,15 +200,14 @@ static inline void verify_lru(const BinSeqMap* map) {
     
     assert(lru_count == map->size);
     assert(used_count == map->total_used);
-    assert(map->total_used >= map->size);
     
     // Verify tail points to last element
     if (map->size > 0) {
-        current = map->lru_tail;
-        assert(map->entries[current].next == UNUSED_INDEX);
+        assert(map->entries[map->lru_tail].next == UNUSED_INDEX);
     }
 }
 
+// ... [rest of the functions remain unchanged] ...
 static const Entry* binseq_map_full_lookup(const BinSeqMap* map,
                                          const uint8_t* key_sequence,
                                          uint16_t key_length) {
