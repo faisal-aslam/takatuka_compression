@@ -99,7 +99,7 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const 
     printf("Adding edge: %u -> %u\n", child_node->id, parent_node->id);
     fflush(stdout);
 #endif
-    if ((child_node->id == 7 && parent_node->id == 5) || child_node->id == 5 && parent_node->id == 1) {
+    if ((child_node->id == 7 && parent_node->id == 5) /*|| (child_node->id == 5 && parent_node->id == 1)*/) {
         printf("\n\n\n stop here \n\n");
     }
 
@@ -112,7 +112,7 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const 
     if (child_node->compress_sequence_length > 1) {
         // Savings = (sequence_length - 1) * (frequency - 1)
         const Entry* entry = binseq_map_fast_lookup(
-            node_map_pool_find(parent_node->parent_links[0].map_index),
+            node_map_pool_find(link->map_index),
             &block[child_node->compress_start_index],
             child_node->compress_sequence_length
         );
