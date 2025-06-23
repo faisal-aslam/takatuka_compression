@@ -7,6 +7,7 @@ SRCS = \
     src/map/xxhash.c \
     src/map/binseq_hashmap.c \
     src/map/node_map_pool.c \
+    src/map/sequence_repository.c \
     src/graph/graph.c \
     src/second_pass/group.c \
     src/second_pass/prune_logic.c

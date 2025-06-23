@@ -8,11 +8,27 @@
 
 #define EVICTION_LOOKBACK 4
 
+SequenceRepository sequence_repo;
 static inline void verify_lru(const BinSeqMap* map);
 
-// Add this function definition at the top of the file
-static inline bool sequences_equal(const uint8_t* a, uint16_t a_len,
-                                 const uint8_t* b, uint16_t b_len) {
+// Initialize the sequence repository (call this once at program start)
+void binseq_map_global_init() {
+    seq_repo_init(&sequence_repo);
+}
+
+// Cleanup the sequence repository (call this at program end)
+void binseq_map_global_cleanup() {
+    seq_repo_cleanup(&sequence_repo);
+}
+
+static inline bool sequences_equal(uint32_t seq_id_a, uint32_t seq_id_b) {
+    if (seq_id_a == seq_id_b) return true;
+    
+    const uint8_t* a = seq_repo_get_data(&sequence_repo, seq_id_a);
+    const uint8_t* b = seq_repo_get_data(&sequence_repo, seq_id_b);
+    uint16_t a_len = seq_repo_get_length(&sequence_repo, seq_id_a);
+    uint16_t b_len = seq_repo_get_length(&sequence_repo, seq_id_b);
+    
     return a_len == b_len && memcmp(a, b, a_len) == 0;
 }
 
@@ -35,7 +51,6 @@ static inline void lru_remove(BinSeqMap* map, uint16_t index) {
 
     if (!e->used) return;
 
-    // Update neighbors
     if (e->prev != UNUSED_INDEX) {
         map->entries[e->prev].next = e->next;
     } else {
@@ -48,10 +63,8 @@ static inline void lru_remove(BinSeqMap* map, uint16_t index) {
         map->lru_tail = e->prev;
     }
 
-    // Clear links but keep used=1 (entry still exists)
     e->next = UNUSED_INDEX;
     e->prev = UNUSED_INDEX;
-
     map->size--;
     verify_lru(map);
 }
@@ -59,13 +72,11 @@ static inline void lru_remove(BinSeqMap* map, uint16_t index) {
 static inline void lru_push_front(BinSeqMap *map, uint16_t index) {
     Entry *e = &map->entries[index];
 
-    // If already in LRU, remove first
     if (e->used && (e->prev != UNUSED_INDEX || e->next != UNUSED_INDEX || 
                    map->lru_head == index || map->lru_tail == index)) {
         lru_remove(map, index);
     }
 
-    // Add to front
     e->next = map->lru_head;
     e->prev = UNUSED_INDEX;
 
@@ -77,7 +88,6 @@ static inline void lru_push_front(BinSeqMap *map, uint16_t index) {
 
     map->lru_head = index;
     
-    // Only increment total_used if this is a newly used slot
     if (!e->used) {
         map->total_used++;
         e->used = 1;
@@ -87,12 +97,11 @@ static inline void lru_push_front(BinSeqMap *map, uint16_t index) {
     verify_lru(map);
 }
 
-static inline int calculate_savings(const Entry* e) {
-    return (e->length - 1) * (e->length - 1)  * (e->frequency - 1);
+static inline int calculate_savings(uint16_t length, uint32_t frequency) {
+    return (length - 1) * (length - 1) * (frequency - 1);
 }
 
 static uint16_t get_free_slot(BinSeqMap* map, uint16_t hash_index) {
-    // Try nearby slots first
     for (int i = 0; i < EVICTION_LOOKBACK; i++) {
         uint16_t slot = (hash_index + i) % HASH_MAP_SIZE;
         if (!map->entries[slot].used) {
@@ -100,7 +109,6 @@ static uint16_t get_free_slot(BinSeqMap* map, uint16_t hash_index) {
         }
     }
 
-    // Evict if no space
     if (map->lru_tail == UNUSED_INDEX) {
         return UNUSED_INDEX;
     }
@@ -108,16 +116,12 @@ static uint16_t get_free_slot(BinSeqMap* map, uint16_t hash_index) {
     uint16_t candidate = map->lru_tail;
     Entry* e = &map->entries[candidate];
     
-    // Clear entry data but keep the slot allocated
-    e->binary_sequence = NULL;
-    e->length = 0;
+    e->sequence_id = 0;
     e->frequency = 0;
     e->cached_hash = 0;
-    e->used = 1;  // Keep the slot marked as used
+    e->used = 1;
     
-    // Remove from LRU
     lru_remove(map, candidate);
-    
     return candidate;
 }
 
@@ -127,14 +131,11 @@ static void insert_entry(BinSeqMap* map, uint16_t slot,
                        uint64_t hash) {
     Entry* e = &map->entries[slot];
     
-    // Initialize entry data
-    e->binary_sequence = (uint8_t*)key_sequence;
-    e->length = key_length;
+    e->sequence_id = seq_repo_add(&sequence_repo, key_sequence, key_length);
     e->frequency = value_frequency;
     e->last_updated_level = current_level;
     e->cached_hash = hash;
     
-    // Add to LRU (handles counters)
     lru_push_front(map, slot);
 }
 
@@ -158,23 +159,25 @@ int binseq_map_put(BinSeqMap* map, const uint8_t* key_sequence,
     uint64_t hash = XXH3_64bits(key_sequence, key_length);
     uint16_t index = hash % HASH_MAP_SIZE;
     
-    // Check existing entries first
     for (int i = 0; i < 4; i++) {
         uint16_t slot = (index + i) % HASH_MAP_SIZE;
         Entry* e = &map->entries[slot];
         
-        if (e->used && sequences_equal(e->binary_sequence, e->length, 
-                                      key_sequence, key_length)) {
-            e->frequency = value_frequency;
-            e->last_updated_level = current_level;
-            lru_remove(map, slot);
-            e->cached_hash = hash;
-            lru_push_front(map, slot);
-            return 1;
+        if (e->used && e->cached_hash == hash) {
+            const uint8_t* seq_data = seq_repo_get_data(&sequence_repo, e->sequence_id);
+            uint16_t seq_len = seq_repo_get_length(&sequence_repo, e->sequence_id);
+            
+            if (seq_len == key_length && memcmp(seq_data, key_sequence, key_length) == 0) {
+                e->frequency = value_frequency;
+                e->last_updated_level = current_level;
+                lru_remove(map, slot);
+                e->cached_hash = hash;
+                lru_push_front(map, slot);
+                return 1;
+            }
         }
     }
     
-    // Insert new entry
     uint16_t slot = get_free_slot(map, index);
     if (slot == UNUSED_INDEX) return 0;
     
@@ -186,21 +189,18 @@ int binseq_map_put(BinSeqMap* map, const uint8_t* key_sequence,
 static inline void verify_lru(const BinSeqMap* map) {
     uint16_t lru_count = 0;
     uint16_t used_count = 0;
-
-    // Count LRU entries
     uint16_t current = map->lru_head;
+    
     while (current != UNUSED_INDEX && lru_count <= HASH_MAP_SIZE) {
         assert(map->entries[current].used);
         lru_count++;
         current = map->entries[current].next;
     }
     
-    // Count all used entries
     for (int i = 0; i < HASH_MAP_SIZE; i++) {
         if (map->entries[i].used) used_count++;
     }
     
-    // More descriptive error messages
     if (lru_count != map->size) {
         fprintf(stderr, "LRU count mismatch: actual=%u, expected=%zu\n",
                 lru_count, map->size);
@@ -213,7 +213,6 @@ static inline void verify_lru(const BinSeqMap* map) {
         abort();
     }
 
-    // Verify tail points to last element
     if (map->size > 0) {
         assert(map->entries[map->lru_tail].next == UNUSED_INDEX);
     }
@@ -229,11 +228,15 @@ static const Entry* binseq_map_full_lookup(const BinSeqMap* map,
         uint16_t slot = (index + i) % HASH_MAP_SIZE;
         const Entry* e = &map->entries[slot];
 
-        if (!e->used) return NULL;
+        if (!e->used) continue;
 
-        if (e->cached_hash == hash &&
-            sequences_equal(e->binary_sequence, e->length, key_sequence, key_length)) {
-            return e;
+        if (e->cached_hash == hash) {
+            const uint8_t* seq_data = seq_repo_get_data(&sequence_repo, e->sequence_id);
+            uint16_t seq_len = seq_repo_get_length(&sequence_repo, e->sequence_id);
+            
+            if (seq_len == key_length && memcmp(seq_data, key_sequence, key_length) == 0) {
+                return e;
+            }
         }
     }
 
@@ -253,8 +256,9 @@ int binseq_map_increment_frequency(BinSeqMap* map,
         Entry* e = (Entry*)existing;
         e->frequency++;
         e->last_updated_level = current_level;
+        uint16_t seq_len = seq_repo_get_length(&sequence_repo, e->sequence_id);
+        *total_savings += calculate_savings(seq_len, e->frequency);
         uint16_t index = e - map->entries;
-        *total_savings += calculate_savings(e);
         lru_remove(map, index);
         lru_push_front(map, index);
         return 1;
@@ -272,16 +276,19 @@ const Entry *binseq_map_fast_lookup(const BinSeqMap *map,
     for (int i = 0; i < 2; i++) {
         uint16_t slot = (index + i) % HASH_MAP_SIZE;
         const Entry *e = &map->entries[slot];
-        if (e->used && e->cached_hash == hash &&
-            sequences_equal(e->binary_sequence, e->length, key_sequence, key_length)) {
-            return e;
+        if (e->used && e->cached_hash == hash) {
+            const uint8_t* seq_data = seq_repo_get_data(&sequence_repo, e->sequence_id);
+            uint16_t seq_len = seq_repo_get_length(&sequence_repo, e->sequence_id);
+            
+            if (seq_len == key_length && memcmp(seq_data, key_sequence, key_length) == 0) {
+                return e;
+            }
         }
     }
     return NULL;
 }
 
 void binseq_map_reset(BinSeqMap* map) {
-    // Rebuild free list
     map->free_head = 0;
     for (uint16_t i = 0; i < HASH_MAP_SIZE; i++) {
         map->entries[i].next = i + 1;
@@ -290,7 +297,6 @@ void binseq_map_reset(BinSeqMap* map) {
     }
     map->entries[HASH_MAP_SIZE-1].next = UNUSED_INDEX;
     
-    // Reset LRU
     map->lru_head = UNUSED_INDEX;
     map->lru_tail = UNUSED_INDEX;
     map->size = 0;
@@ -313,10 +319,12 @@ void print_hashmap(const BinSeqMap* map) {
         const Entry* e = &map->entries[i];
         if (!e->used) continue;
         
-        printf("[%d] Len:%d Freq:%d Lvl:%d Seq:",
-              i, e->length, e->frequency, e->last_updated_level);
-        for (int j = 0; j < e->length; j++)
-            printf("%02X ", e->binary_sequence[j]);
+        const uint8_t* seq_data = seq_repo_get_data(&sequence_repo, e->sequence_id);
+        uint16_t seq_len = seq_repo_get_length(&sequence_repo, e->sequence_id);
+        
+        printf("[%d] Len:%d Freq:%d Lvl:%d Seq:", i, seq_len, e->frequency, e->last_updated_level);
+        for (int j = 0; j < seq_len; j++)
+            printf("%02X ", seq_data[j]);
         printf("\n");
     }
 }

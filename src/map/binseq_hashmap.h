@@ -8,18 +8,22 @@
 #include <string.h>  
 #include "xxhash.h" 
 #include <stdio.h>
+#include "sequence_repository.h"
 
 #define HASH_MAP_SIZE 256  // Fixed size for all hash maps
 #define UNUSED_INDEX UINT16_MAX
 
+// Global repository of sequences
+extern SequenceRepository sequence_repo;
+
+// Change Entry struct to:
 typedef struct {
-    uint8_t* binary_sequence; // Pointer to external memory
-    uint16_t length;
+    uint32_t sequence_id;  // Reference to sequence repository
     uint32_t frequency;
     uint32_t last_updated_level;
-    int used;               // Group frequently accessed fields
-    uint16_t next, prev;    // LRU pointers
-    uint64_t cached_hash; //for better speed.
+    int used;
+    uint16_t next, prev;
+    uint64_t cached_hash;
 } Entry;
 
 typedef struct {

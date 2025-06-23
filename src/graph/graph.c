@@ -124,7 +124,7 @@ static int merge_maps(GraphNode* parent_node, uint32_t *parents_max_saving) {
     BinSeqMap* result = node_map_pool_get_next();    
     if (!result) return -1;
 
-    *parents_max_saving = 0; //set it to zero.
+    *parents_max_saving = 0;
     uint32_t parent_level = parent_node->level;
     binseq_map_init(result); // Fresh map
 
@@ -142,18 +142,24 @@ static int merge_maps(GraphNode* parent_node, uint32_t *parents_max_saving) {
         ParentLink parent_link = parent_node->parent_links[p];
         BinSeqMap* parent = node_map_pool_find(parent_link.map_index);
         if (!parent || parent->total_used == 0) continue;
-        /*Find the maximum savings of the parent. */
+        
+        // Track maximum parent savings
         if (parent_link.saving_so_far > *parents_max_saving) {
             *parents_max_saving = parent_link.saving_so_far; 
         }
-        // Instead of HASH_MAP_SIZE, scan up to total_used entries (with break)
+
+        // Process up to 8 entries per parent
         int entries_added = 0;
         for (int i = 0; i < HASH_MAP_SIZE && entries_added < 8; i++) {
             Entry* src = &parent->entries[i];
             if (!src->used) continue;
 
-            // Insert into result map (avoids duplicate hashing)
-            binseq_map_put(result, src->binary_sequence, src->length, src->frequency, parent_level+1);
+            // Get sequence data from repository
+            const uint8_t* seq_data = seq_repo_get_data(&sequence_repo, src->sequence_id);
+            uint16_t seq_len = seq_repo_get_length(&sequence_repo, src->sequence_id);
+            
+            // Insert into result map using repository-backed sequence
+            binseq_map_put(result, seq_data, seq_len, src->frequency, parent_level+1);
             entries_added++;
         }
     }
