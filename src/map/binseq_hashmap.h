@@ -42,7 +42,7 @@ int binseq_map_put(BinSeqMap* map, const uint8_t* key_sequence,
 int binseq_map_increment_frequency(BinSeqMap* map,
                                  const uint8_t* key_sequence,
                                  uint16_t key_length,
-                                 uint32_t current_level);
+                                 uint32_t current_level, uint32_t* total_savings);
 
 const Entry* binseq_map_fast_lookup(const BinSeqMap* map,
                                   const uint8_t* key_sequence,

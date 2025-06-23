@@ -243,7 +243,7 @@ static const Entry* binseq_map_full_lookup(const BinSeqMap* map,
 int binseq_map_increment_frequency(BinSeqMap* map,
                                  const uint8_t* key_sequence,
                                  uint16_t key_length,
-                                 uint32_t current_level) {
+                                 uint32_t current_level, uint32_t *total_savings) {
     const Entry* existing = binseq_map_fast_lookup(map, key_sequence, key_length);
     if (!existing) {
         existing = binseq_map_full_lookup(map, key_sequence, key_length);
@@ -254,6 +254,7 @@ int binseq_map_increment_frequency(BinSeqMap* map,
         e->frequency++;
         e->last_updated_level = current_level;
         uint16_t index = e - map->entries;
+        *total_savings += calculate_savings(e);
         lru_remove(map, index);
         lru_push_front(map, index);
         return 1;
