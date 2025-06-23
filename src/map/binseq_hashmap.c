@@ -207,7 +207,6 @@ static inline void verify_lru(const BinSeqMap* map) {
     }
 }
 
-// ... [rest of the functions remain unchanged] ...
 static const Entry* binseq_map_full_lookup(const BinSeqMap* map,
                                          const uint8_t* key_sequence,
                                          uint16_t key_length) {
