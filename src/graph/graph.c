@@ -52,7 +52,7 @@ void find_and_print_best_path(const uint8_t* block) {
 
     // Array to store the best path node IDs
     uint8_t best_path[max_level + 1];
-    uint32_t size = 0;
+    int size = 0;
     // Start from the tracked best node at last level
     if (!best_node_at_last_level) {
         printf("\nNo best node tracked at last level\n");
@@ -66,9 +66,13 @@ void find_and_print_best_path(const uint8_t* block) {
     while (current_node->level > 1) {
         if (skip_next == 0) {
             best_path[size++] = current_node->compress_sequence_length;
+            printf("\n node = %u, %u \n ", current_node->id, current_node->compress_sequence_length);
+            print_graph_node(current_node, block);
             skip_next = current_node->compress_sequence_length-1;
         } else {
             skip_next--;
+            printf("\n skipped node = %u, %u \n ", current_node->id, current_node->compress_sequence_length);
+            print_graph_node(current_node, block);
         }
         
         ParentLink* best_link = NULL;
@@ -114,13 +118,13 @@ GraphNode* graph_get_node(uint32_t index) {
 }
 
 
-static int merge_maps(GraphNode* parent_node, uint32_t *parents_total_saving) {
+static int merge_maps(GraphNode* parent_node, uint32_t *parents_max_saving) {
     if (!parent_node) return -1;
     
     BinSeqMap* result = node_map_pool_get_next();    
     if (!result) return -1;
 
-    *parents_total_saving = 0; //set it to zero.
+    *parents_max_saving = 0; //set it to zero.
     uint32_t parent_level = parent_node->level;
     binseq_map_init(result); // Fresh map
 
@@ -138,8 +142,10 @@ static int merge_maps(GraphNode* parent_node, uint32_t *parents_total_saving) {
         ParentLink parent_link = parent_node->parent_links[p];
         BinSeqMap* parent = node_map_pool_find(parent_link.map_index);
         if (!parent || parent->total_used == 0) continue;
-
-        *parents_total_saving += parent_link.saving_so_far; //set it to zero.
+        /*Find the maximum savings of the parent. */
+        if (parent_link.saving_so_far > *parents_max_saving) {
+            *parents_max_saving = parent_link.saving_so_far; 
+        }
         // Instead of HASH_MAP_SIZE, scan up to total_used entries (with break)
         int entries_added = 0;
         for (int i = 0; i < HASH_MAP_SIZE && entries_added < 8; i++) {
@@ -287,7 +293,7 @@ void print_graph_node(const GraphNode *node, const uint8_t* block) {
     }
     
     // Print basic node information
-    printf("\n\nGraphNode @ %p:", (void*)node);
+    printf("\nGraphNode @ %p:", (void*)node);
     printf("  id: %u", node->id);
     printf("  weight: %u", node->incoming_weight);
     printf("  level: %u", node->level);

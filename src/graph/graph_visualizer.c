@@ -4,6 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+static inline uint8_t skip_nodes(GraphNode *node) {
+    if (node->id != 0 && node->id != 2 && node->id != 4 && node->id != 10 && node->id != 18 && node->id != 22 && node->id !=37 && node->id != 21) {
+        //return 1;
+    } 
+    return 0;
+}
 void graphviz_init(GraphVisualizer *viz, const char *filename, bool overwrite) {
     if (!viz)
         return;
@@ -43,9 +49,12 @@ void graphviz_render_full_graph(GraphVisualizer *viz, const uint8_t *block) {
     // First pass: Create all nodes
     for (uint32_t i = 0; i < graph.current_node_index; i++) {
         GraphNode *node = graph_get_node(i);
+        
         if (!node)
             continue;
-
+        if (skip_nodes(node)) {
+            continue;
+        }
         char seq_label[512] = "";
         for (uint8_t j = 0; j < node->compress_sequence_length; j++) {
             char byte_str[10];
@@ -69,6 +78,9 @@ void graphviz_render_full_graph(GraphVisualizer *viz, const uint8_t *block) {
         GraphNode *node = graph_get_node(i);
         if (!node)
             continue;
+        if (skip_nodes(node)) {
+            continue;
+        }
 
         for (uint8_t p = 0; p < node->parent_link_count; p++) {
             uint32_t parent_id = node->parent_links[p].parent_node_id;
@@ -90,6 +102,9 @@ void graphviz_render_full_graph(GraphVisualizer *viz, const uint8_t *block) {
         // Find all nodes at this level
         for (uint32_t i = 0; i < graph.current_node_index; i++) {
             GraphNode *node = graph_get_node(i);
+            if (skip_nodes(node)) {
+                continue;
+            }
             if (node && node->level == level) {
                 fprintf(viz->dot_file, "node_%u; ", node->id);
             }
