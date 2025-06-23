@@ -43,8 +43,6 @@ typedef struct {
     uint8_t compress_sequence_length;   // Length of the sequence this node represents        
 } GraphNode;
 
-
-
 // Structure representing a slot for nodes with specific weight and level
 typedef struct {
     uint32_t indices[SEQ_LENGTH_LIMIT];  // Array of node indices
@@ -86,4 +84,5 @@ uint32_t get_current_graph_node_index(void);  // Get current node index
 const uint32_t* get_nodes_by_weight_and_level(uint8_t weight, uint32_t level, uint32_t* count);  // Query nodes by weight/level
 uint32_t get_max_level(void);  // Get maximum level in graph
 GraphNode* get_first_node_of_last_level(void); // returns the first node of the last level of the graph. This is use to create maps.
+void find_and_print_best_path(const uint8_t* block);
 #endif

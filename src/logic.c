@@ -279,5 +279,8 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     graphviz_render_full_graph(&viz, block);
     graphviz_finalize(&viz);
 #endif
+    //find and print the best path.
+    find_and_print_best_path(block);
+
 }
 

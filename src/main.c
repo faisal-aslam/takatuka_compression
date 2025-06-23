@@ -33,8 +33,7 @@ int main(int argc, char *argv[]) {
 
         // process of block of file at a time.
         process_block(block, bytesRead);
-
-
+        
     }
 
     free(block);

@@ -8,6 +8,10 @@
 #include "../map/binseq_hashmap.h"
 #include "../map/node_map_pool.h"
 
+static ParentLink best_link_at_last_level;
+static uint32_t best_savings_at_last_level;
+static GraphNode* best_node_at_last_level;
+
 // Global graph instance initialized to zero
 Graph graph = {0};
 
@@ -27,8 +31,82 @@ void graph_init(void) {
     // Set initial max level and mark as initialized
     graph.index.max_level = 0;
     graph.initialized = true;
+    memset(&best_link_at_last_level, 0, sizeof(best_link_at_last_level));
+    best_savings_at_last_level = 0;
+    best_node_at_last_level = NULL;
 }
 
+/**
+ * Finds and prints the best compression path through the graph.
+ * Uses pre-tracked best node at last level for O(1) start.
+ * 
+ * @param block The input data block being compressed
+ */
+void find_and_print_best_path(const uint8_t* block) {
+    uint32_t max_level = get_max_level();
+    if (max_level == 0) {
+        printf("Graph is empty\n");
+        return;
+    }
+    uint8_t skip_next;
+
+    // Array to store the best path node IDs
+    uint8_t best_path[max_level + 1];
+    uint32_t size = 0;
+    // Start from the tracked best node at last level
+    if (!best_node_at_last_level) {
+        printf("\nNo best node tracked at last level\n");
+        return;
+    }
+
+    GraphNode* current_node = best_node_at_last_level;
+    uint32_t total_savings = best_savings_at_last_level;
+
+    // Store the path from last level to root
+    while (current_node->level > 1) {
+        if (skip_next == 0) {
+            best_path[size++] = current_node->compress_sequence_length;
+            skip_next = current_node->compress_sequence_length-1;
+        } else {
+            skip_next--;
+        }
+        
+        ParentLink* best_link = NULL;
+        
+        // For last level, use our pre-tracked best link
+        if (current_node->level == max_level) {
+            best_link = &best_link_at_last_level;
+        } 
+        // For other levels, find best parent normally
+        else {
+            uint32_t max_savings = 0;
+            for (int i = 0; i < current_node->parent_link_count; i++) {
+                if (current_node->parent_links[i].saving_so_far >= max_savings) {
+                    max_savings = current_node->parent_links[i].saving_so_far;
+                    best_link = &current_node->parent_links[i];                    
+                }
+            }
+            
+            if (!best_link) {
+                printf("\n\nNo valid parents found for node %u at level %u\n", 
+                      current_node->id, current_node->level);
+                return;
+            }
+        }
+        
+        current_node = graph_get_node(best_link->parent_node_id);
+    }
+    
+    
+    // Print the best path
+    fflush(stdout);
+    printf("\n\nBest Compression Path (Total Savings: %u):\n", total_savings);
+    for (int i = 0; i < size; i++) {
+        printf("\n\nAt %d Combination %u: ", i, best_path[i]);
+        printf("\n");
+    }
+    fflush(stdout);
+}
 // Get a node by its index
 GraphNode* graph_get_node(uint32_t index) {
     // Return NULL for out-of-bounds indices, otherwise return the node
@@ -102,9 +180,6 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const 
     printf("Adding edge: %u -> %u\n", child_node->id, parent_node->id);
     fflush(stdout);
 #endif
-    if ((child_node->id == 7 && parent_node->id == 5) /*|| (child_node->id == 5 && parent_node->id == 1)*/) {
-        printf("\n\n\n stop here \n\n");
-    }
 
     // Get a reference to the new link and update it
     ParentLink* link = &child_node->parent_links[child_node->parent_link_count++];
@@ -112,6 +187,12 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const 
     uint32_t savings = 0;
     link->map_index = create_map(parent_node, child_node, block, &savings);
     link->saving_so_far = savings;
+    // Update best link tracking (only for last level)
+    if (savings > best_savings_at_last_level) {
+        best_savings_at_last_level = savings;
+        best_link_at_last_level = *link;
+        best_node_at_last_level = child_node;
+    }
 #ifdef DEBUG
     print_hashmap(node_map_pool_find(link->map_index));
 #endif
