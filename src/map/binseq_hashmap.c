@@ -10,8 +10,13 @@
 
 static inline void verify_lru(const BinSeqMap* map);
 
+// Add this function definition at the top of the file
+static inline bool sequences_equal(const uint8_t* a, uint16_t a_len,
+                                 const uint8_t* b, uint16_t b_len) {
+    return a_len == b_len && memcmp(a, b, a_len) == 0;
+}
+
 void binseq_map_init(BinSeqMap* map) {
-    // Initialize free list
     for (uint16_t i = 0; i < HASH_MAP_SIZE; i++) {
         map->entries[i].next = i + 1;
         map->entries[i].used = 0;
@@ -20,8 +25,6 @@ void binseq_map_init(BinSeqMap* map) {
     map->entries[HASH_MAP_SIZE-1].next = UNUSED_INDEX;
     map->free_head = 0;
     map->total_used = 0;
-    
-    // Initialize LRU list
     map->lru_head = UNUSED_INDEX;
     map->lru_tail = UNUSED_INDEX;
     map->size = 0;
@@ -30,7 +33,7 @@ void binseq_map_init(BinSeqMap* map) {
 static inline void lru_remove(BinSeqMap* map, uint16_t index) {
     Entry* e = &map->entries[index];
 
-    if (!e->used) return; // Not in LRU list
+    if (!e->used) return;
 
     // Update neighbors
     if (e->prev != UNUSED_INDEX) {
@@ -45,11 +48,10 @@ static inline void lru_remove(BinSeqMap* map, uint16_t index) {
         map->lru_tail = e->prev;
     }
 
-    // Clear links
+    // Clear links but keep used=1 (entry still exists)
     e->next = UNUSED_INDEX;
     e->prev = UNUSED_INDEX;
-    
-    // Update counters
+
     map->size--;
     verify_lru(map);
 }
@@ -58,28 +60,30 @@ static inline void lru_push_front(BinSeqMap *map, uint16_t index) {
     Entry *e = &map->entries[index];
 
     // If already in LRU, remove first
-    if (e->used) {
+    if (e->used && (e->prev != UNUSED_INDEX || e->next != UNUSED_INDEX || 
+                   map->lru_head == index || map->lru_tail == index)) {
         lru_remove(map, index);
     }
 
-    // Initialize entry links
+    // Add to front
     e->next = map->lru_head;
     e->prev = UNUSED_INDEX;
 
-    // Update neighbors
     if (map->lru_head != UNUSED_INDEX) {
         map->entries[map->lru_head].prev = index;
     } else {
-        map->lru_tail = index; // First entry
+        map->lru_tail = index;
     }
 
-    // Update head and mark as used
     map->lru_head = index;
-    e->used = 1;
     
-    // Update counters
+    // Only increment total_used if this is a newly used slot
+    if (!e->used) {
+        map->total_used++;
+        e->used = 1;
+    }
+    
     map->size++;
-    map->total_used++;
     verify_lru(map);
 }
 
@@ -96,28 +100,25 @@ static uint16_t get_free_slot(BinSeqMap* map, uint16_t hash_index) {
         }
     }
 
-    // If no space, evict LRU entry
+    // Evict if no space
     if (map->lru_tail == UNUSED_INDEX) {
         return UNUSED_INDEX;
     }
 
     uint16_t candidate = map->lru_tail;
-    
-    // Clear the entry before removal
     Entry* e = &map->entries[candidate];
+    
+    // Clear entry data but keep the slot allocated
     e->binary_sequence = NULL;
     e->length = 0;
     e->frequency = 0;
+    e->cached_hash = 0;
+    e->used = 1;  // Keep the slot marked as used
     
-    // Remove from LRU (will decrement size)
+    // Remove from LRU
     lru_remove(map, candidate);
     
     return candidate;
-}
-
-static inline bool sequences_equal(const uint8_t* a, uint16_t a_len,
-                                 const uint8_t* b, uint16_t b_len) {
-    return a_len == b_len && memcmp(a, b, a_len) == 0;
 }
 
 static void insert_entry(BinSeqMap* map, uint16_t slot,
@@ -126,13 +127,14 @@ static void insert_entry(BinSeqMap* map, uint16_t slot,
                        uint64_t hash) {
     Entry* e = &map->entries[slot];
     
+    // Initialize entry data
     e->binary_sequence = (uint8_t*)key_sequence;
     e->length = key_length;
     e->frequency = value_frequency;
     e->last_updated_level = current_level;
     e->cached_hash = hash;
     
-    // This will handle all LRU updates and counters
+    // Add to LRU (handles counters)
     lru_push_front(map, slot);
 }
 
@@ -184,7 +186,7 @@ int binseq_map_put(BinSeqMap* map, const uint8_t* key_sequence,
 static inline void verify_lru(const BinSeqMap* map) {
     uint16_t lru_count = 0;
     uint16_t used_count = 0;
-    
+
     // Count LRU entries
     uint16_t current = map->lru_head;
     while (current != UNUSED_INDEX && lru_count <= HASH_MAP_SIZE) {
@@ -193,14 +195,24 @@ static inline void verify_lru(const BinSeqMap* map) {
         current = map->entries[current].next;
     }
     
-    // Count used entries
+    // Count all used entries
     for (int i = 0; i < HASH_MAP_SIZE; i++) {
         if (map->entries[i].used) used_count++;
     }
     
-    assert(lru_count == map->size);
-    assert(used_count == map->total_used);
+    // More descriptive error messages
+    if (lru_count != map->size) {
+        fprintf(stderr, "LRU count mismatch: actual=%u, expected=%zu\n",
+                lru_count, map->size);
+        abort();
+    }
     
+    if (used_count != map->total_used) {
+        fprintf(stderr, "Used count mismatch: actual=%u, expected=%u\n",
+                used_count, map->total_used);
+        abort();
+    }
+
     // Verify tail points to last element
     if (map->size > 0) {
         assert(map->entries[map->lru_tail].next == UNUSED_INDEX);
