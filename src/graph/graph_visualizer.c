@@ -5,7 +5,7 @@
 #include <string.h>
 
 static inline uint8_t skip_nodes(GraphNode *node) {
-    if (node->id != 0 && node->id != 2 && node->id != 4 && node->id != 10 && node->id != 18 && node->id != 22 && node->id !=37 && node->id != 21) {
+    if (node->id != 0 && node->id != 1 && node->id != 7 && node->id != 5 && node->id !=17 && node->id !=39 && node->id != 27 && node->id !=53 && node->id !=59) {
         //return 1;
     } 
     return 0;
