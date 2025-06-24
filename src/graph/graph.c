@@ -196,7 +196,7 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const 
     ParentLink* link = &child_node->parent_links[child_node->parent_link_count++];
     link->parent_node_id = parent_node->id;
     uint32_t savings = 0;
-    link->map_index = create_map(parent_node, child_node, block, &savings);
+    //link->map_index = create_map(parent_node, child_node, block, &savings);
     link->saving_so_far = savings;
     // Update best link tracking (only for last level)
     if (savings > best_savings_at_last_level) {
@@ -205,7 +205,7 @@ bool graph_add_parent_edge(GraphNode* child_node, GraphNode* parent_node, const 
         best_node_at_last_level = child_node;
     }
 #ifdef DEBUG
-    print_hashmap(node_map_pool_find(link->map_index));
+   // print_hashmap(node_map_pool_find(link->map_index));
 #endif
     return true;
 }

@@ -84,6 +84,17 @@ static inline void process_compressed_path(const uint8_t* block, uint32_t block_
 #ifdef DEBUG
     print_graph_node(new_node, block);
 #endif
+       /* //Step 1: Skip compress_sequence_length-2 parent-nodes.
+        //Step 2: Made link to the same parent that the parent at distance compress_sequence_length-1 has.
+        GraphNode* parent_node_to_skip;
+        ParentLink* current_link = link;
+        for (int i=0; i < child_node->compress_sequence_length-2; i++){
+            //Step 1: skipping step.
+            parent_node_to_skip  =graph_get_node(current_link->parent_node_id);
+            current_link = &parent_node->parent_links[0];
+        }
+        //Step 2: Create 
+        */
     for (uint8_t parent_weight = seq_len - 1;
          parent_weight < SEQ_LENGTH_LIMIT &&
          parent_weight <= (uint8_t)current_level;
@@ -210,16 +221,19 @@ static inline void create_root(const uint8_t* block, uint32_t block_size) {
         exit(EXIT_FAILURE);
     }
 
+    //empty node is the real root but does not contain any data. It is useful
+    //for the other nodes to point.
+    GraphNode* empty = create_new_node(0, 0);
     // create root node and set its values 
     // root's weight=1 and level=1
-    GraphNode* root = create_new_node(1, 1);
+    GraphNode* root = create_new_node(1, 1);   
     
-    root->parent_link_count = 0; //root has no parents.
     root->compress_sequence_length = 1; //there is nothing to compress yet at the root level.
-    root->compress_start_index = 0;
-
+    root->compress_start_index = 0; //start of the block.
+    graph_add_parent_edge(root, empty, block);
     #ifdef DEBUG
-    printf("\nCreated new root node in pool[0][0]:\n");
+    printf("\nCreated new root and empty nodes :\n");
+    print_graph_node(empty, block);
     print_graph_node(root, block);
     #endif
   

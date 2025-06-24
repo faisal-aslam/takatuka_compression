@@ -47,9 +47,7 @@ static void resize_repository(SequenceRepository* repo) {
     for (uint32_t i = 0; i < old_capacity; i++) {
         if (old_sequences[i].data) {
             uint64_t hash = old_hashes[i];
-            const uint8_t* seq = old_sequences[i].data;
-            uint16_t len = old_sequences[i].length;
-            
+           
             // Find new position in resized table
             uint32_t new_index = hash % repo->capacity;
             while (repo->sequences[new_index].data) {
