@@ -157,7 +157,6 @@ static int merge_maps(GraphNode* parent_node, uint32_t *parents_max_saving) {
             // Get sequence data from repository
             const uint8_t* seq_data = seq_repo_get_data(&sequence_repo, src->sequence_id);
             uint16_t seq_len = seq_repo_get_length(&sequence_repo, src->sequence_id);
-            
             // Insert into result map using repository-backed sequence
             binseq_map_put(result, seq_data, seq_len, src->frequency, parent_level+1);
             entries_added++;

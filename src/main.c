@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include "logic.h"
 #include "constants.h"
-#include "./map/sequence_repository.h"
+#include "./map/binseq_hashmap.h"
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {

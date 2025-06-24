@@ -38,6 +38,8 @@ typedef struct {
 // Initialization
 void binseq_map_init(BinSeqMap* map);
 
+void binseq_map_global_init();
+
 // Core operations
 int binseq_map_put(BinSeqMap* map, const uint8_t* key_sequence,
                   uint16_t key_length, int value_frequency,
