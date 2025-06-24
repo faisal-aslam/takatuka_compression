@@ -60,57 +60,74 @@ static int updateMapValue(TreeNode *node, const uint8_t* sequence, uint16_t seq_
 }
 */
 
-static inline void process_compressed_path(const uint8_t* block, uint32_t block_size, uint32_t block_index,
-        uint8_t seq_len, uint32_t current_level) {
-    
+static inline void process_compressed_path(const uint8_t* block, uint32_t block_size,
+                                           uint32_t block_index, uint8_t seq_len,
+                                           uint32_t current_level) {
+    // Calculate the starting index of the compressed sequence in the block
     uint32_t seq_start_offset = block_index + 1 - seq_len;
+
+    // Validate that the sequence does not exceed block bounds
     if (seq_start_offset >= block_size || (seq_start_offset + seq_len) > block_size) {
-        fprintf(stderr,"\n invalid seq_start \n");
-        return;
-    }
-            
-    // CREATE NODE FIRST
-    GraphNode* new_node = create_new_node(0, current_level+1);
-    if (!new_node) {
-        fprintf(stderr,"\n node allocation failed level=%d, weight=%u\n", current_level+1, 0);
-        exit(1);
+        fprintf(stderr, "\n[Error] Invalid sequence start: index out of bounds\n");
         return;
     }
 
-    // SET NODE PROPERTIES
-    new_node->compress_sequence_length = seq_len;    
+    // Create a new graph node at the next level (current_level + 1)
+    GraphNode* new_node = create_new_node(0, current_level + 1);
+    if (!new_node) {
+        fprintf(stderr, "\n[Error] Node allocation failed at level=%u, weight=0\n", current_level + 1);
+        exit(1);
+    }
+
+    // Assign compressed sequence metadata to the new node
+    new_node->compress_sequence_length = seq_len;
     new_node->compress_start_index = seq_start_offset;
-    
+
 #ifdef DEBUG
     print_graph_node(new_node, block);
 #endif
-       /* //Step 1: Skip compress_sequence_length-2 parent-nodes.
-        //Step 2: Made link to the same parent that the parent at distance compress_sequence_length-1 has.
-        GraphNode* parent_node_to_skip;
-        ParentLink* current_link = link;
-        for (int i=0; i < child_node->compress_sequence_length-2; i++){
-            //Step 1: skipping step.
-            parent_node_to_skip  =graph_get_node(current_link->parent_node_id);
-            current_link = &parent_node->parent_links[0];
-        }
-        //Step 2: Create 
-        */
+
+    // Loop over all parent weights that could produce this compressed node
     for (uint8_t parent_weight = seq_len - 1;
-         parent_weight < SEQ_LENGTH_LIMIT &&
-         parent_weight <= (uint8_t)current_level;
+         parent_weight < SEQ_LENGTH_LIMIT && parent_weight <= (uint8_t)current_level;
          parent_weight++) {
-        uint32_t count;
-        const uint32_t *indexes = get_nodes_by_weight_and_level(parent_weight, current_level, &count);
-        if (count == 0) {
-            continue;
+        
+        uint32_t count = 0;
+        const uint32_t* indexes = get_nodes_by_weight_and_level(parent_weight, current_level, &count);
+        if (count == 0) continue;
+
+        /**
+         * Step 1: Skip (seq_len - 2) parent hops upward from the first parent
+         * Step 2: Copy all parent links from that ancestor to the new node
+         */
+
+        uint32_t skip_node_id = indexes[0];
+        GraphNode* ancestor = graph_get_node(skip_node_id);
+
+        for (int i = 0; i < seq_len - 2; i++) {
+            // Ensure there's exactly one parent to follow during upward skip
+            if (ancestor->parent_link_count != 1) {
+                fprintf(stderr, "[Error] Expected exactly one parent during skip (node ID = %u)\n", ancestor->id);
+                exit(1);
+            }
+
+            // Move one level up
+            ParentLink p_link = ancestor->parent_links[0];
+            ancestor = graph_get_node(p_link.parent_node_id);
         }
-        // ADD EDGE AFTER NODE IS FULLY INITIALIZED
-        if (!graph_add_parent_edge(new_node, graph_get_node(indexes[0]), block)) {
-            fprintf(stderr, "Failed to add edge from %u to %u\n", new_node->id, indexes[0]);
-            return;
+
+        // Add all parents of the ancestor as parents of the new node
+        for (int i = 0; i < ancestor->parent_link_count; i++) {
+            GraphNode* final_parent = graph_get_node(ancestor->parent_links[i].parent_node_id);
+            if (!graph_add_parent_edge(new_node, final_parent, block)) {
+                fprintf(stderr, "[Error] Failed to add edge from node %u to parent %u\n",
+                        new_node->id, final_parent->id);
+                return;
+            }
         }
     }
 }
+
 
 /**
  * Creates a new node with the given sequence (typically uncompressed) at the next level

@@ -66,11 +66,21 @@ void graphviz_render_full_graph(GraphVisualizer *viz, const uint8_t *block) {
         }
 
         const char *colors[] = {"#ffdddd", "#ddffdd", "#ddddff", "#ffffdd"};
-        fprintf(viz->dot_file,
-                "  node_%u [label=\"[%u]\\n%s\", "
-                "fillcolor=\"%s\"];\n",
-                node->id, node->id, seq_label,
-                colors[node->level % 4]);
+        
+        if (node->id == 0) {
+            // Special styling for root node (id = 0)
+            fprintf(viz->dot_file,
+                    "  node_%u [label=\"[%u]\\n%s\", shape=circle, "
+                    "style=filled, fillcolor=black, fontcolor=white];\n",
+                    node->id, node->id, seq_label);
+        } else {
+            fprintf(viz->dot_file,
+                    "  node_%u [label=\"[%u]\\n%s\", "
+                    "fillcolor=\"%s\"];\n",
+                    node->id, node->id, seq_label,
+                    colors[node->level % 4]);
+        }
+
     }
 
     // Second pass: Create all edges
