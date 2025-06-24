@@ -61,18 +61,18 @@ void find_and_print_best_path(const uint8_t* block) {
 
     GraphNode* current_node = best_node_at_last_level;
     uint32_t total_savings = best_savings_at_last_level;
-
+    printf("\n node path start \n");
     // Store the path from last level to root
     while (current_node->level > 1) {
         if (skip_next == 0) {
             best_path[size++] = current_node->compress_sequence_length;
-            printf("\n node = %u, %u \n ", current_node->id, current_node->compress_sequence_length);
-            print_graph_node(current_node, block);
+            printf("%u->", current_node->id);
+            //print_graph_node(current_node, block);
             skip_next = current_node->compress_sequence_length-1;
         } else {
             skip_next--;
-            printf("\n skipped node = %u, %u \n ", current_node->id, current_node->compress_sequence_length);
-            print_graph_node(current_node, block);
+            printf("%u=>", current_node->id);
+            //print_graph_node(current_node, block);
         }
         
         ParentLink* best_link = NULL;
@@ -90,18 +90,18 @@ void find_and_print_best_path(const uint8_t* block) {
                     best_link = &current_node->parent_links[i];                    
                 }
             }
-            
+  
             if (!best_link) {
                 printf("\n\nNo valid parents found for node %u at level %u\n", 
                       current_node->id, current_node->level);
                 return;
-            }
+            } 
         }
         
         current_node = graph_get_node(best_link->parent_node_id);
     }
     
-    
+    printf("\n node path ends \n");
     // Print the best path
     fflush(stdout);
     printf("\n\nBest Compression Path (Total Savings: %u):\n", total_savings);
