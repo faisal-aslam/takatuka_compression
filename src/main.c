@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include "logic.h"
 #include "constants.h"
-#include "./map/binseq_hashmap.h"
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -19,7 +18,6 @@ int main(int argc, char *argv[]) {
         perror("Failed to open file");
         return 1;
     }
-    //binseq_map_global_init();
 
     uint8_t *block = malloc(BLOCK_SIZE);
     if (!block) {
