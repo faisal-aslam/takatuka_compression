@@ -28,6 +28,7 @@ typedef struct {
 typedef struct {    
     uint32_t parent_node_id;    
     uint32_t saving_so_far;       // Compression savings up to this node
+    uint32_t link_cost;
     int32_t map_index;
 } ParentLink;
 
@@ -37,7 +38,7 @@ typedef struct {
     uint32_t id;                 // Unique identifier for the node
     uint32_t compress_start_index; // Start index in the original data block    
     ParentLink parent_links[SEQ_LENGTH_LIMIT];  // Array of parent node IDs
-    uint16_t level;              // Level of this node in the graph hierarchy
+    uint16_t level;         // Level of this node in the graph hierarchy
     uint8_t parent_link_count;        // Number of parent nodes    
     uint8_t incoming_weight;     // Weight/sequence length associated with this node    
     uint8_t compress_sequence_length;   // Length of the sequence this node represents        
@@ -84,5 +85,4 @@ uint32_t get_current_graph_node_index(void);  // Get current node index
 const uint32_t* get_nodes_by_weight_and_level(uint8_t weight, uint32_t level, uint32_t* count);  // Query nodes by weight/level
 uint32_t get_max_level(void);  // Get maximum level in graph
 GraphNode* get_first_node_of_last_level(void); // returns the first node of the last level of the graph. This is use to create maps.
-void find_and_print_best_path(const uint8_t* block);
 #endif

@@ -9,6 +9,7 @@ SRCS = \
     src/map/node_map_pool.c \
     src/map/sequence_repository.c \
     src/graph/graph.c \
+    src/graph/best_path.c \
     src/second_pass/group.c \
     src/second_pass/prune_logic.c
 

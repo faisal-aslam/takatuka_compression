@@ -13,7 +13,7 @@
 #include "graph/graph_visualizer.h"
 #include "logic.h"
 #include "map/node_map_pool.h"
-
+#include "graph/best_path.h"
 
 
 uint16_t total_codes = 0;
@@ -302,7 +302,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     }
     printf("\rProcessing block: %3d%% complete", 100);
     fflush(stdout); // Ensure immediate output
-
+    find_and_print_best_path(block);
 #ifdef DEBUG
     GraphVisualizer viz;
     graphviz_init(&viz, "compression_tree.dot", true);
@@ -310,8 +310,6 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     graphviz_render_full_graph(&viz, block);
     graphviz_finalize(&viz);
 #endif
-    //find and print the best path.
-    find_and_print_best_path(block);
 
 }
 
