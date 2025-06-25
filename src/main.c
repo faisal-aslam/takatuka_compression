@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
         perror("Failed to open file");
         return 1;
     }
-    binseq_map_global_init();
+    //binseq_map_global_init();
 
     uint8_t *block = malloc(BLOCK_SIZE);
     if (!block) {
