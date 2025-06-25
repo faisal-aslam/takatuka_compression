@@ -16,8 +16,10 @@ typedef struct {
 
 typedef struct {
     uint32_t node_id;
+    uint32_t start_of_sequence;
     ParentLink parent_link[MAX_WEIGHTS];
     uint8_t parent_count;
+    uint8_t sequence_length;    
 } GraphNode;
 
 typedef struct {
