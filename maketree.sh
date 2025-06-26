@@ -1,2 +1,2 @@
-dot -Tpng compression_tree.dot -o graph.png
-dot -Tsvg compression_tree.dot -o graph.svg
+dot -Tpng graph.dot -o graph.png
+dot -Tsvg graph.dot -o graph.svg

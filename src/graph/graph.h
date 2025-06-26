@@ -1,8 +1,11 @@
+//graph.h
+
 #ifndef NEURALNET_GRAPH_H
 #define NEURALNET_GRAPH_H
 
 #include <stdint.h>
 #include "../constants.h"
+#include <stdio.h>
 
 #define MAX_LEVELS BLOCK_SIZE
 #define MAX_WEIGHTS SEQ_LENGTH_LIMIT
@@ -32,5 +35,7 @@ uint16_t get_current_level(void);
 void add_link_to_parent(GraphNode* child_node, GraphNode* parent_node, uint8_t cost);
 GraphNode* get_graph_node(uint32_t node_id);
 void increment_graph_level();
+const Graph* get_graph(void);
+uint32_t get_graph_node_count(void);
 
 #endif

@@ -4,5 +4,6 @@ SRCS = \
     src/logic.c \
     src/decompress/decompress.c \
     src/map/xxhash.c \
+    src/graph/graph_visualizer.c \
     src/graph/graph.c
 

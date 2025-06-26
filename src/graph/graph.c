@@ -3,6 +3,7 @@
 #include "graph.h"
 #include <string.h>
 #include <assert.h>
+#include "graph_visualizer.h"
 
 static Graph graph;
 
@@ -41,4 +42,12 @@ GraphNode* get_graph_node(uint32_t node_id) {
 
 void increment_graph_level() {
     graph.current_level++;
+}
+
+const Graph* get_graph(void) {
+    return &graph; // Return const pointer to prevent modification
+}
+
+uint32_t get_graph_node_count(void) {
+    return graph.current_level * MAX_WEIGHTS;
 }
