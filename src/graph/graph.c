@@ -51,3 +51,19 @@ const Graph* get_graph(void) {
 uint32_t get_graph_node_count(void) {
     return graph.current_level * MAX_WEIGHTS;
 }
+static inline void print_node_link(GraphNode* node, ParentLink* link) {
+    printf("\t %u-->%u", node->node_id, link->parent_id);
+}
+void print_graph_node(GraphNode *node) {
+    if (!node) return; //nothing to print.
+    if (node->node_id == 0) {
+        printf("\n ROOT ");
+    } else {
+        printf("\n ");
+    }
+    printf(" node_id=%u, start_of_sequence=%u, sequence_length=%u", node->node_id, node->start_of_sequence, node->sequence_length);
+    printf(", parent_count= %u\n", node->parent_count);
+    for (int loop = 0; loop < node->parent_count; loop ++) {
+        print_node_link(node, &node->parent_link[loop]);
+    }
+}

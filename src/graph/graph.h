@@ -37,5 +37,6 @@ GraphNode* get_graph_node(uint32_t node_id);
 void increment_graph_level();
 const Graph* get_graph(void);
 uint32_t get_graph_node_count(void);
+void print_graph_node(GraphNode *node);
 
 #endif

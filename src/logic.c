@@ -61,7 +61,8 @@ static void link_node_to_parents(GraphNode* node) {
 void process_block(const uint8_t *block, uint32_t block_size) {
     init_graph();
     create_root();
-    
+    print_graph_node(get_graph_node(0));
+
     for (uint32_t block_index = 0; block_index < block_size; block_index++) {
         uint16_t level = block_index + 1;
         if (level >= MAX_LEVELS) break;
@@ -75,6 +76,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
             if (node) {
                 link_node_to_parents(node);
             }
+            print_graph_node(node);
         }
         
         increment_graph_level();
