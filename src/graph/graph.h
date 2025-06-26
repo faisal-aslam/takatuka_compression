@@ -10,7 +10,6 @@
 
 typedef struct {
     uint32_t parent_id;
-    uint8_t weight;
     uint8_t cost;
 } ParentLink;
 
@@ -23,14 +22,15 @@ typedef struct {
 } GraphNode;
 
 typedef struct {
-    GraphNode nodes[TOTAL_NODES];  // 1D array
+    GraphNode nodes[TOTAL_NODES];
     uint16_t current_level;
 } Graph;
 
 void init_graph(void);
 GraphNode* get_all_nodes_of_level(uint16_t level);
 uint16_t get_current_level(void);
-void add_link_to_parent(GraphNode* child_node, GraphNode* parent_node, uint8_t weight, uint8_t cost);
+void add_link_to_parent(GraphNode* child_node, GraphNode* parent_node, uint8_t cost);
 GraphNode* get_graph_node(uint32_t node_id);
+void increment_graph_level();
 
 #endif

@@ -1,3 +1,5 @@
+//graph.c
+
 #include "graph.h"
 #include <string.h>
 #include <assert.h>
@@ -23,17 +25,20 @@ uint16_t get_current_level(void) {
     return graph.current_level;
 }
 
-void add_link_to_parent(GraphNode* child_node, GraphNode* parent_node, uint8_t weight, uint8_t cost) {
+void add_link_to_parent(GraphNode* child_node, GraphNode* parent_node, uint8_t cost) {
     if (!child_node || !parent_node || child_node->parent_count >= MAX_WEIGHTS) 
         return;
     
     child_node->parent_link[child_node->parent_count++] = (ParentLink){
         .parent_id = parent_node->node_id,
-        .weight = weight,
         .cost = cost
     };
 }
 
 GraphNode* get_graph_node(uint32_t node_id) {
     return (node_id < TOTAL_NODES) ? &graph.nodes[node_id] : NULL;
+}
+
+void increment_graph_level() {
+    graph.current_level++;
 }
