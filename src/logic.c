@@ -35,36 +35,43 @@ static void link_node_to_parents(GraphNode* node) {
         fprintf(stderr, "Illegal level \n");
         exit(1);
     }
-    
+    uint32_t start_level_index = get_level_start_id(parent_level);
+    uint32_t end_level_index = get_level_end_id(parent_level);
     // Link to all nodes in parent level
-    for (uint8_t i = get_level_start_id(parent_level); i < get_level_end_id(parent_level); i++) {
+    for (uint32_t i = start_level_index; i < end_level_index; i++) {
         GraphNode* parent = get_graph_node(i);
         add_link_to_parent(node, parent, 1);
         
     }
 }
-
 void process_block(const uint8_t *block, uint32_t block_size) {
     init_graph();
     create_root();
+#ifdef DEBUG
     print_graph_node(get_graph_node(0));
+#endif
 
     for (uint32_t block_index = 0; block_index < block_size; block_index++) {
         increment_graph_level();
         uint16_t current_level = get_total_levels();
-        if (current_level >= MAX_LEVELS) break;
-        
+        if (current_level >= MAX_LEVELS)
+            break;
+
         uint8_t max_sequence = MIN(current_level, MAX_WEIGHTS);
-        
+
         for (uint8_t seq_len = 1; seq_len <= max_sequence; seq_len++) {
-            uint32_t start = block_index-seq_len+1;
-            GraphNode* node = create_node(start, seq_len);
-            
+            uint32_t start = block_index - seq_len + 1;
+            GraphNode *node = create_node(start, seq_len);
             if (node) {
                 link_node_to_parents(node);
             }
+#ifdef DEBUG
             print_graph_node(node);
+#endif
         }
     }
+
+#ifdef DEBUG
     visualize_graph(block);
+#endif
 }
