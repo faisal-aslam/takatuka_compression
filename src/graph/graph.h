@@ -34,12 +34,6 @@ typedef struct {
     uint32_t first_node_of_level[MAX_LEVELS];
 } Graph;
 
-// Shortest path functions
-typedef struct {
-    uint32_t node_id;
-    uint64_t seen_sequences;  // Bitmask of seen sequence IDs
-    int total_cost;
-} PathState;
 
 void init_graph(void);
 uint32_t get_level_start_id(uint16_t level);

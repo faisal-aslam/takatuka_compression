@@ -45,6 +45,27 @@ static void link_node_to_parents(GraphNode* node) {
         
     }
 }
+
+void print_shortest_path() {
+    uint32_t *path = NULL;
+    uint32_t path_length = 0;
+    int cost = find_shortest_path_to_sink(&path, &path_length);
+
+    if (cost != -1) {
+        printf("Shortest path cost: %d\n", cost);
+        printf("Path: ");
+        for (uint32_t i = 0; i < path_length; i++) {
+            printf("%u", path[i]);
+            if (i < path_length - 1)
+                printf(" -> ");
+        }
+        printf("\n");
+        free(path);
+    } else {
+        printf("No path found to sink\n");
+    }
+}
+
 void process_block(const uint8_t *block, uint32_t block_size) {
     init_graph();
     create_root();
@@ -71,7 +92,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #endif
         }
     }
-    find_shortest_path_with_sequences(0);
+    print_shortest_path();
 #ifdef DEBUG
     visualize_graph(block);
 #endif

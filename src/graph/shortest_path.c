@@ -4,13 +4,7 @@
 #include <assert.h>
 #include <limits.h>
 
-typedef struct {
-    uint32_t node_id;
-    uint64_t seen_sequences;
-    int cost;
-} StateEntry;
-
-static StateEntry* state_table = NULL;
+static PathState* state_table = NULL;
 static uint32_t state_table_size = 0;
 static uint32_t state_table_capacity = 0;
 
@@ -20,114 +14,167 @@ static inline uint64_t sequence_bitmask(uint8_t seq_id) {
 
 static void ensure_state_capacity(uint32_t required_size) {
     if (required_size <= state_table_capacity) return;
-    
+
     uint32_t new_capacity = state_table_capacity ? state_table_capacity * GROWTH_FACTOR : INITIAL_GRAPH_NODES;
     while (new_capacity < required_size) new_capacity *= GROWTH_FACTOR;
-    
-    StateEntry* new_table = realloc(state_table, new_capacity * sizeof(StateEntry));
+
+    PathState* new_table = realloc(state_table, new_capacity * sizeof(PathState));
     assert(new_table && "Failed to grow state table");
     state_table = new_table;
     state_table_capacity = new_capacity;
 }
 
-static int get_state_cost(uint32_t node_id, uint64_t seen_sequences) {
-    for (uint32_t i = 0; i < state_table_size; i++) {
-        if (state_table[i].node_id == node_id && 
-            state_table[i].seen_sequences == seen_sequences) {
-            return state_table[i].cost;
-        }
+static void free_state(PathState* state) {
+    if (state->path) {
+        free(state->path);
     }
-    return INT_MAX;
 }
 
-static void update_state(uint32_t node_id, uint64_t seen_sequences, int cost) {
+static void update_state(uint32_t node_id, uint64_t seen_sequences, 
+                         int cost, uint32_t* path, uint32_t path_length) {
     for (uint32_t i = 0; i < state_table_size; i++) {
         if (state_table[i].node_id == node_id && 
             state_table[i].seen_sequences == seen_sequences) {
             if (cost < state_table[i].cost) {
+                free_state(&state_table[i]);
                 state_table[i].cost = cost;
+                state_table[i].path_length = path_length;
+                state_table[i].path = path;
+            } else {
+                free(path);
             }
             return;
         }
     }
-    
     ensure_state_capacity(state_table_size + 1);
-    state_table[state_table_size++] = (StateEntry){
+    state_table[state_table_size++] = (PathState){
         .node_id = node_id,
         .seen_sequences = seen_sequences,
-        .cost = cost
+        .cost = cost,
+        .path = path,
+        .path_length = path_length
     };
 }
 
-int find_shortest_path_with_sequences(uint32_t target_node_id) {
+int find_shortest_path_to_sink(uint32_t** path, uint32_t* path_length) {
+    *path = NULL;
+    *path_length = 0;
+
     if (state_table) {
+        for (uint32_t i = 0; i < state_table_size; i++) {
+            free_state(&state_table[i]);
+        }
         free(state_table);
         state_table = NULL;
         state_table_size = state_table_capacity = 0;
     }
 
-    // Initialize with all leaf nodes (nodes with no parents)
-    uint32_t node_count = get_graph_node_count();
-    for (uint32_t i = 0; i < node_count; i++) {
-        GraphNode* node = get_graph_node(i);
-        if (node->parent_count == 0) {
-            uint64_t initial_seen = sequence_bitmask(node->sequence_id);
-            update_state(node->node_id, initial_seen, node->sequence_length + 1);
+    uint16_t last_level = get_total_levels();
+    uint32_t start = get_level_start_id(last_level);
+    uint32_t end = get_level_end_id(last_level);
+
+    for (uint32_t node_idx = start; node_idx < end; node_idx++) {
+        GraphNode* node = get_graph_node(node_idx);
+        if (!node) continue;
+
+        uint64_t initial_seen = 0;
+        int initial_cost = 1;
+        if (node->sequence_length > 1) {
+            initial_seen = sequence_bitmask(node->sequence_id);
+            initial_cost = node->sequence_length + 1;
         }
+
+        uint32_t* initial_path = malloc(sizeof(uint32_t));
+        initial_path[0] = node->node_id;
+
+        update_state(node->node_id, initial_seen, initial_cost, initial_path, 1);
     }
 
-    // Process nodes in reverse level order (topological sort)
-    uint16_t total_levels = get_total_levels();
-    for (int level = total_levels; level >= 0; level--) {
-        uint32_t start = get_level_start_id(level);
-        uint32_t end = get_level_end_id(level);
+    for (int level = last_level; level >= 0; level--) {
+        uint32_t current_states_count = state_table_size;
+        PathState* current_states = malloc(current_states_count * sizeof(PathState));
+        for (uint32_t i = 0; i < current_states_count; i++) {
+            current_states[i] = state_table[i];
+            current_states[i].path = malloc(state_table[i].path_length * sizeof(uint32_t));
+            memcpy(current_states[i].path, state_table[i].path, 
+                   state_table[i].path_length * sizeof(uint32_t));
+        }
 
-        for (uint32_t node_idx = start; node_idx < end; node_idx++) {
-            GraphNode* node = get_graph_node(node_idx);
+        for (uint32_t i = 0; i < current_states_count; i++) {
+            PathState* current_state = &current_states[i];
+            GraphNode* node = get_graph_node(current_state->node_id);
             if (!node) continue;
 
-            // For each state that reaches this node
-            for (uint32_t state_idx = 0; state_idx < state_table_size; state_idx++) {
-                if (state_table[state_idx].node_id != node->node_id) continue;
+            for (uint8_t p = 0; p < node->parent_count; p++) {
+                ParentLink* link = &node->parent_link[p];
+                GraphNode* parent = get_graph_node(link->parent_id);
+                if (!parent) continue;
 
-                uint64_t current_seen = state_table[state_idx].seen_sequences;
-                int current_cost = state_table[state_idx].cost;
+                uint64_t new_seen = current_state->seen_sequences;
+                int edge_cost = 1;
 
-                // Process all parents
-                for (uint8_t p = 0; p < node->parent_count; p++) {
-                    ParentLink* link = &node->parent_link[p];
-                    GraphNode* parent = get_graph_node(link->parent_id);
-                    if (!parent) continue;
-
-                    uint64_t new_seen = current_seen;
-                    int edge_cost;
-                    
-                    if (current_seen & sequence_bitmask(parent->sequence_id)) {
-                        edge_cost = 1;  // Sequence already seen
+                if (node->sequence_length > 1) {
+                    uint64_t seq_bit = sequence_bitmask(node->sequence_id);
+                    if ((current_state->seen_sequences & seq_bit) != 0) {
+                        edge_cost = 1;
                     } else {
-                        edge_cost = parent->sequence_length + 1;
-                        new_seen |= sequence_bitmask(parent->sequence_id);
-                    }
-
-                    int new_cost = current_cost + edge_cost;
-                    int existing_cost = get_state_cost(parent->node_id, new_seen);
-
-                    if (new_cost < existing_cost) {
-                        update_state(parent->node_id, new_seen, new_cost);
+                        edge_cost = node->sequence_length + 1;
+                        new_seen |= seq_bit;
                     }
                 }
+
+                uint32_t* new_path = malloc((current_state->path_length + 1) * sizeof(uint32_t));
+                new_path[0] = parent->node_id;
+                memcpy(new_path + 1, current_state->path, current_state->path_length * sizeof(uint32_t));
+
+                update_state(parent->node_id, new_seen, 
+                             current_state->cost + edge_cost, 
+                             new_path, current_state->path_length + 1);
+            }
+        }
+
+        for (uint32_t i = 0; i < current_states_count; i++) {
+            free(current_states[i].path);
+        }
+        free(current_states);
+    }
+
+    PathState* best_state = NULL;
+    int best_cost = INT_MAX;
+
+    for (uint32_t i = 0; i < state_table_size; i++) {
+        if (state_table[i].node_id == 0) {
+            if (!best_state || state_table[i].cost < best_cost) {
+                best_state = &state_table[i];
+                best_cost = state_table[i].cost;
             }
         }
     }
 
-    // Find the minimal cost to reach the target node
-    int min_cost = INT_MAX;
-    for (uint32_t i = 0; i < state_table_size; i++) {
-        if (state_table[i].node_id == target_node_id && 
-            state_table[i].cost < min_cost) {
-            min_cost = state_table[i].cost;
+    if (best_state) {
+        *path_length = best_state->path_length;
+        *path = malloc(*path_length * sizeof(uint32_t));
+        memcpy(*path, best_state->path, *path_length * sizeof(uint32_t));
+        int cost = best_state->cost;
+
+        for (uint32_t i = 0; i < state_table_size; i++) {
+            if (&state_table[i] != best_state) {
+                free_state(&state_table[i]);
+            }
         }
+        free(state_table);
+        state_table = NULL;
+        state_table_size = state_table_capacity = 0;
+
+        return cost;
     }
 
-    return (min_cost == INT_MAX) ? -1 : min_cost;
+    for (uint32_t i = 0; i < state_table_size; i++) {
+        free_state(&state_table[i]);
+    }
+    free(state_table);
+    state_table = NULL;
+    state_table_size = state_table_capacity = 0;
+
+    return -1;
 }
