@@ -56,7 +56,7 @@ static void update_state(uint32_t node_id, uint64_t seen_sequences,
     };
 }
 
-int find_shortest_path_to_sink(uint32_t** path, uint32_t* path_length) {
+int find_shortest_path_to_sink(uint32_t **path, uint32_t *path_length) {
     *path = NULL;
     *path_length = 0;
 
@@ -69,13 +69,14 @@ int find_shortest_path_to_sink(uint32_t** path, uint32_t* path_length) {
         state_table_size = state_table_capacity = 0;
     }
 
-    uint16_t last_level = get_total_levels();
+    uint16_t last_level = get_last_level_index();
     uint32_t start = get_level_start_id(last_level);
     uint32_t end = get_level_end_id(last_level);
 
     for (uint32_t node_idx = start; node_idx < end; node_idx++) {
-        GraphNode* node = get_graph_node(node_idx);
-        if (!node) continue;
+        GraphNode *node = get_graph_node(node_idx);
+        if (!node)
+            continue;
 
         uint64_t initial_seen = 0;
         int initial_cost = 1;
@@ -84,31 +85,38 @@ int find_shortest_path_to_sink(uint32_t** path, uint32_t* path_length) {
             initial_cost = node->sequence_length + 1;
         }
 
-        uint32_t* initial_path = malloc(sizeof(uint32_t));
+        uint32_t *initial_path = malloc(sizeof(uint32_t));
         initial_path[0] = node->node_id;
 
-        update_state(node->node_id, initial_seen, initial_cost, initial_path, 1);
+        update_state(node->node_id, initial_seen, initial_cost, initial_path,
+                     1);
     }
 
     for (int level = last_level; level >= 0; level--) {
         uint32_t current_states_count = state_table_size;
-        PathState* current_states = malloc(current_states_count * sizeof(PathState));
+        PathState *current_states =
+            malloc(current_states_count * sizeof(PathState));
         for (uint32_t i = 0; i < current_states_count; i++) {
             current_states[i] = state_table[i];
-            current_states[i].path = malloc(state_table[i].path_length * sizeof(uint32_t));
-            memcpy(current_states[i].path, state_table[i].path, 
+            current_states[i].path =
+                malloc(state_table[i].path_length * sizeof(uint32_t));
+            memcpy(current_states[i].path, state_table[i].path,
                    state_table[i].path_length * sizeof(uint32_t));
         }
 
         for (uint32_t i = 0; i < current_states_count; i++) {
-            PathState* current_state = &current_states[i];
-            GraphNode* node = get_graph_node(current_state->node_id);
-            if (!node) continue;
+            PathState *current_state = &current_states[i];
+            GraphNode *node = get_graph_node(current_state->node_id);
+            if (!node)
+                continue;
 
-            for (uint8_t p = 0; p < node->parent_count; p++) {
-                ParentLink* link = &node->parent_link[p];
-                GraphNode* parent = get_graph_node(link->parent_id);
-                if (!parent) continue;
+            uint16_t parent_count = get_parent_nodes_count(node);
+            GraphNode *parent_nodes = get_parent_nodes(node);
+
+            for (uint16_t p = 0; p < parent_count; p++) {
+                GraphNode *parent = &parent_nodes[p];
+                if (!parent)
+                    continue;
 
                 uint64_t new_seen = current_state->seen_sequences;
                 int edge_cost = 1;
@@ -123,23 +131,24 @@ int find_shortest_path_to_sink(uint32_t** path, uint32_t* path_length) {
                     }
                 }
 
-                uint32_t* new_path = malloc((current_state->path_length + 1) * sizeof(uint32_t));
+                uint32_t *new_path =
+                    malloc((current_state->path_length + 1) * sizeof(uint32_t));
                 new_path[0] = parent->node_id;
-                memcpy(new_path + 1, current_state->path, current_state->path_length * sizeof(uint32_t));
+                memcpy(new_path + 1, current_state->path,
+                       current_state->path_length * sizeof(uint32_t));
 
-                update_state(parent->node_id, new_seen, 
-                             current_state->cost + edge_cost, 
-                             new_path, current_state->path_length + 1);
+                update_state(parent->node_id, new_seen,
+                             current_state->cost + edge_cost, new_path,
+                             current_state->path_length + 1);
             }
         }
-
         for (uint32_t i = 0; i < current_states_count; i++) {
             free(current_states[i].path);
         }
         free(current_states);
     }
 
-    PathState* best_state = NULL;
+    PathState *best_state = NULL;
     int best_cost = INT_MAX;
 
     for (uint32_t i = 0; i < state_table_size; i++) {

@@ -3,8 +3,8 @@
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
-//#include "graph/graph_visualizer.h"
-//#include "graph/shortest_path.h"
+#include "graph/graph_visualizer.h"
+#include "graph/shortest_path.h"
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
@@ -27,7 +27,7 @@ static GraphNode* create_node(uint32_t start, uint8_t length) {
     return node;
 }
 
-/*
+
 void print_shortest_path() {
     uint32_t *path = NULL;
     uint32_t path_length = 0;
@@ -47,7 +47,7 @@ void print_shortest_path() {
         printf("No path found to sink\n");
     }
 }
-*/
+
 
 void process_block(const uint8_t *block, uint32_t block_size) {
     init_graph();
@@ -73,7 +73,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #endif
         }
     }
-    //  print_shortest_path();
+    print_shortest_path();
 #ifdef DEBUG
     visualize_graph(block);
 #endif
