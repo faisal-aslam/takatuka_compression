@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include "graph/graph_visualizer.h"
+#include "graph/shortest_path.h"
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
@@ -70,7 +71,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #endif
         }
     }
-
+    find_shortest_path_with_sequences(0);
 #ifdef DEBUG
     visualize_graph(block);
 #endif

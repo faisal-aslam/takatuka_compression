@@ -4,11 +4,13 @@
 #include <stdint.h>
 #include "../constants.h"
 #include <stdio.h>
+#include <stdbool.h>
 
 #define MAX_LEVELS BLOCK_SIZE
 #define MAX_WEIGHTS SEQ_LENGTH_LIMIT
 #define INITIAL_GRAPH_NODES 500
 #define GROWTH_FACTOR 2
+#define MAX_SEQUENCES 64  // Adjust based on your needs (64 allows bitmask in uint64_t)
 
 typedef struct {
     uint32_t parent_id;
@@ -20,7 +22,8 @@ typedef struct {
     uint32_t start_of_sequence;
     ParentLink parent_link[MAX_WEIGHTS];
     uint8_t parent_count;
-    uint8_t sequence_length; 
+    uint8_t sequence_length;
+    uint8_t sequence_id;  // Unique identifier for each sequence (0-63)
 } GraphNode;
 
 typedef struct {
@@ -30,6 +33,13 @@ typedef struct {
     uint16_t total_levels;
     uint32_t first_node_of_level[MAX_LEVELS];
 } Graph;
+
+// Shortest path functions
+typedef struct {
+    uint32_t node_id;
+    uint64_t seen_sequences;  // Bitmask of seen sequence IDs
+    int total_cost;
+} PathState;
 
 void init_graph(void);
 uint32_t get_level_start_id(uint16_t level);
