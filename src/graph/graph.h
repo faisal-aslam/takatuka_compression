@@ -23,6 +23,7 @@ typedef struct {
     uint32_t node_id;
     uint32_t offset;
     uint8_t sequence_length;
+    uint16_t node_level;
     uint32_t sequence_id;  // Unique identifier for each sequence (0-63)
 } GraphNode;
 
@@ -36,7 +37,7 @@ typedef struct {
 
 
 void init_graph(void);
-uint16_t get_parent_nodes_count(GraphNode* node);
+uint8_t get_parent_nodes_count(GraphNode* node);
 uint32_t total_nodes_at_level(uint16_t level);
 uint32_t get_level_start_id(uint16_t level);
 uint32_t get_level_end_id(uint16_t level);
@@ -46,6 +47,7 @@ GraphNode* get_next_node(void);
 void increment_graph_level(void);
 uint32_t get_graph_node_count(void);
 uint32_t get_graph_size(void);
+GraphNode* get_parent_nodes(GraphNode* node);
 void print_graph_node(GraphNode *node);
 
 #endif

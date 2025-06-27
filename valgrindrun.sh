@@ -1,2 +1,2 @@
 make clean && make debug
-valgrind --leak-check=full --track-origins=yes ./compress-debug tests/testSmall.txt >> 1.txt
+valgrind --leak-check=full --track-origins=yes ./compress-debug tests/test.bin >> 1.txt

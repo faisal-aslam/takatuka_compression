@@ -19,12 +19,6 @@ void init_graph(void) {
     memset(graph.first_node_of_level, 0, sizeof(graph.first_node_of_level));
 }
 
-static inline void init_graph_node(GraphNode* g_node) {
-    g_node->node_id = graph.size-1;
-    g_node->sequence_length = 0;
-    g_node->offset = 0;
-}
-
 GraphNode* get_next_node(void) {
     if (graph.size == graph.capacity) {
         // Reallocate memory while preserving existing nodes
@@ -36,7 +30,11 @@ GraphNode* get_next_node(void) {
     }
 
     GraphNode* g_node = &graph.nodes[graph.size++];
-    init_graph_node(g_node);
+    g_node->node_id = graph.size-1; //please never change node's id ever.
+    g_node->node_level = graph.total_levels-1; //please do not change this ever too.
+    g_node->sequence_length = 0;
+    g_node->offset = 0;
+    
     return g_node;
 }
 
@@ -64,7 +62,12 @@ uint16_t get_last_level_index(void)  {
 }
 
 static inline uint16_t get_parent_level(GraphNode* node) {
-    return get_last_level_index()-node->sequence_length; 
+    uint16_t parent_level =  node->node_level-node->sequence_length; 
+    if (parent_level == UINT16_MAX ||  parent_level > MAX_LEVELS) {
+        fprintf(stderr, "illegal parent level");
+        exit(1);
+    }
+    return parent_level;
 }
 /*void add_link_to_parent(GraphNode* child_node, GraphNode* parent_node, uint8_t cost) {
     if (!child_node || !parent_node || child_node->parent_count >= MAX_WEIGHTS) 
@@ -105,8 +108,16 @@ uint32_t total_nodes_at_level(uint16_t level) {
     return (get_level_end_id(level) - get_level_start_id(level));
 }
 
-uint16_t get_parent_nodes_count(GraphNode* node) {
-    return total_nodes_at_level(get_parent_level(node));
+uint8_t get_parent_nodes_count(GraphNode* node) {
+    if (!node || node->node_id == 0) {
+        return 0;
+    }
+    uint8_t parents_count = total_nodes_at_level(get_parent_level(node));
+    if (parents_count > SEQ_LENGTH_LIMIT) {
+        fprintf(stderr, "Illegal number of parent nodes");
+        exit(1);
+    }
+    return parents_count;
 }
 
 GraphNode* get_parent_nodes(GraphNode* node) {
@@ -130,6 +141,7 @@ void print_graph_node(GraphNode *node) {
            node->node_id, node->offset, node->sequence_length);
     printf(", parent_count = %u\n", parent_nodes_count);
     GraphNode* parent_nodes = get_parent_nodes(node);
+    if (!parent_nodes) return;
     for (int i = 0; i < parent_nodes_count; i++) {
         print_node_link(node, &parent_nodes[i]);
     }
