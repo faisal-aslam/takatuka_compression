@@ -3,8 +3,8 @@
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
-#include "graph/graph_visualizer.h"
-#include "graph/shortest_path.h"
+//#include "graph/graph_visualizer.h"
+//#include "graph/shortest_path.h"
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
@@ -21,31 +21,13 @@ static GraphNode* create_node(uint32_t start, uint8_t length) {
     GraphNode* node = get_next_node();    
     if (!node) return NULL;
     
-    node->start_of_sequence = start;
-    node->sequence_length = length;
-    node->parent_count = 0;
+    node->offset = start;
+    node->sequence_length = length; 
     
     return node;
 }
 
-static void link_node_to_parents(GraphNode* node) {
-    if (!node || node->sequence_length == 0) return;
-    
-    uint16_t parent_level = get_total_levels()-node->sequence_length;
-    if (parent_level > MAX_LEVELS) {
-        fprintf(stderr, "Illegal level \n");
-        exit(1);
-    }
-    uint32_t start_level_index = get_level_start_id(parent_level);
-    uint32_t end_level_index = get_level_end_id(parent_level);
-    // Link to all nodes in parent level
-    for (uint32_t i = start_level_index; i < end_level_index; i++) {
-        GraphNode* parent = get_graph_node(i);
-        add_link_to_parent(node, parent, 1);
-        
-    }
-}
-
+/*
 void print_shortest_path() {
     uint32_t *path = NULL;
     uint32_t path_length = 0;
@@ -65,6 +47,7 @@ void print_shortest_path() {
         printf("No path found to sink\n");
     }
 }
+*/
 
 void process_block(const uint8_t *block, uint32_t block_size) {
     init_graph();
@@ -75,7 +58,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 
     for (uint32_t block_index = 0; block_index < block_size; block_index++) {
         increment_graph_level();
-        uint16_t current_level = get_total_levels();
+        uint16_t current_level = get_last_level_index();
         if (current_level >= MAX_LEVELS)
             break;
 
@@ -84,16 +67,14 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         for (uint8_t seq_len = 1; seq_len <= max_sequence; seq_len++) {
             uint32_t start = block_index - seq_len + 1;
             GraphNode *node = create_node(start, seq_len);
-            if (node) {
-                link_node_to_parents(node);
-            }
+                        
 #ifdef DEBUG
             print_graph_node(node);
 #endif
         }
     }
-    print_shortest_path();
+  //  print_shortest_path();
 #ifdef DEBUG
-    visualize_graph(block);
+//    visualize_graph(block);
 #endif
 }
