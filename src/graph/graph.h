@@ -24,7 +24,6 @@ typedef struct {
     uint32_t offset;
     uint8_t sequence_length;
     uint16_t node_level;
-    uint32_t sequence_id;  // Unique identifier for each sequence (0-63)
 } GraphNode;
 
 typedef struct {
