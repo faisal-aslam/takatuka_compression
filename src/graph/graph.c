@@ -10,31 +10,15 @@ static inline uint16_t get_parent_level(GraphNode* node);
 
 
 void init_graph(void) {
-    graph.nodes = malloc(INITIAL_GRAPH_NODES * sizeof(GraphNode));
-    assert(graph.nodes && "Failed to allocate memory for graph nodes.");
-
-    graph.capacity = INITIAL_GRAPH_NODES;
     graph.size = 0;
     graph.total_levels = 0;    
     memset(graph.first_node_of_level, 0, sizeof(graph.first_node_of_level));
 }
 
 GraphNode* get_next_node(void) {
-    if (graph.size == graph.capacity) {
-        // Reallocate memory while preserving existing nodes
-        uint32_t new_capacity = graph.capacity * GROWTH_FACTOR;
-        GraphNode* new_nodes = realloc(graph.nodes, new_capacity * sizeof(GraphNode));
-        assert(new_nodes && "Failed to grow graph memory.");
-        graph.nodes = new_nodes;
-        graph.capacity = new_capacity;
-    }
-
     GraphNode* g_node = &graph.nodes[graph.size++];
     g_node->node_id = graph.size-1; //please never change node's id ever.
-    g_node->node_level = graph.total_levels-1; //please do not change this ever too.
-    g_node->sequence_length = 0;
-    g_node->offset = 0;
-    
+    g_node->node_level = graph.total_levels-1; //please do not change this ever too.    
     return g_node;
 }
 

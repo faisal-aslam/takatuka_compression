@@ -26,12 +26,12 @@ typedef struct {
     uint16_t node_level;
 } GraphNode;
 
-typedef struct {
-    GraphNode* nodes;
-    uint32_t capacity;
+typedef struct {    
     uint32_t size;
-    uint16_t total_levels;
     uint32_t first_node_of_level[MAX_LEVELS];
+    GraphNode nodes[125986];//these many are needed for 2000 block size.
+    uint16_t total_levels;
+
 } Graph;
 
 
