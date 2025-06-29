@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include "graph/graph_visualizer.h"
 #include "graph/shortest_path.h"
-#include "map/sequence_repository.h"
+#include "map/sequence_repository_useless.h"
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
@@ -31,7 +31,8 @@ static GraphNode* create_node(uint32_t start, uint8_t length) {
 void print_shortest_path() {
     uint32_t *path = NULL;
     uint32_t path_length = 0;
-    int cost = find_shortest_path_to_sink(&path, &path_length);
+    int cost = -1;
+    find_shortest_path_to_sink();
 
     if (cost != -1) {
         printf("Shortest path cost: %d\n", cost);
@@ -74,7 +75,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
                 uint32_t node_id = seq_repo_get_node_id(&block[start], seq_len);
                 node->isUseless = 1; // Assume useless initially
 
-                if (node_id != UINT32_MAX_VALUE) {
+                if (node_id != UINT32_MAX) {
                     GraphNode *g_node = get_graph_node(node_id);
                     if (g_node) g_node->isUseless = 0; // Mark existing node as useful
                     node->isUseless = 0;                // Mark current node as useful
@@ -92,7 +93,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #endif
         }
     }
-
+    find_shortest_path_to_sink();
 #ifdef DEBUG
     visualize_graph(block);
 #endif
