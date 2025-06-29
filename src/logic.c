@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include "graph/graph_visualizer.h"
 #include "graph/shortest_path.h"
+#include "map/sequence_repository.h"
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
@@ -48,10 +49,10 @@ void print_shortest_path() {
     }
 }
 
-
 void process_block(const uint8_t *block, uint32_t block_size) {
     init_graph();
     create_root();
+    seq_repo_init();
 #ifdef DEBUG
     print_graph_node(get_graph_node(0));
 #endif
@@ -67,13 +68,15 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         for (uint8_t seq_len = 1; seq_len <= max_sequence; seq_len++) {
             uint32_t start = block_index - seq_len + 1;
             GraphNode *node = create_node(start, seq_len);
+            seq_repo_add(start, seq_len, node->node_id);
 
 #ifdef DEBUG
             print_graph_node(node);
 #endif
         }
     }
-    print_shortest_path();
+    remove_single_sequence_nodes();
+    //print_shortest_path();
 #ifdef DEBUG
     visualize_graph(block);
 #endif

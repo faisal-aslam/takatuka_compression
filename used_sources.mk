@@ -5,6 +5,7 @@ SRCS = \
     src/decompress/decompress.c \
     src/map/xxhash.c \
     src/graph/graph_visualizer.c \
+    src/map/sequence_repository.c \
     src/graph/shortest_path.c \
     src/graph/graph.c
 

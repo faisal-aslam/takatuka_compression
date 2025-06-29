@@ -24,9 +24,10 @@
 #define MAX_GRAPH_NODES TOTAL_GRAPH_NODES(MAX_WEIGHTS, MAX_LEVELS)
 typedef struct {
     uint32_t node_id;
-    uint32_t offset;
-    uint8_t sequence_length;
+    uint32_t offset;    
     uint16_t node_level;
+    uint8_t sequence_length;
+    uint8_t isUseless;
 } GraphNode;
 
 typedef struct {    
