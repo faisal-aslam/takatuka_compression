@@ -18,7 +18,10 @@
 #define INITIAL_GRAPH_NODES 500
 #define GROWTH_FACTOR 2
 #define MAX_SEQUENCES 64  // Adjust based on your needs (64 allows bitmask in uint64_t)
+#define TOTAL_GRAPH_NODES(SEQ_LIMIT, LEVELS) \
+    (1 + ((SEQ_LIMIT) * ((SEQ_LIMIT) + 1)) / 2 + ((LEVELS) - (SEQ_LIMIT)) * (SEQ_LIMIT))
 
+#define MAX_GRAPH_NODES TOTAL_GRAPH_NODES(MAX_WEIGHTS, MAX_LEVELS)
 typedef struct {
     uint32_t node_id;
     uint32_t offset;
@@ -29,7 +32,7 @@ typedef struct {
 typedef struct {    
     uint32_t size;
     uint32_t first_node_of_level[MAX_LEVELS];
-    GraphNode nodes[125986];//these many are needed for 2000 block size.
+    GraphNode nodes[MAX_GRAPH_NODES];
     uint16_t total_levels;
 
 } Graph;
