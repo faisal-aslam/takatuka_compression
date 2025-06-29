@@ -76,6 +76,7 @@ static void print_links(FILE* output, const GraphNode* node) {
 
     for (uint16_t i = 0; i < parent_count; i++) {
         GraphNode* parent = &parent_nodes[i];
+        if (parent->isUseless) continue;
         fprintf(output, "    %u -> %u [label=\"%d\"];\n", 
                 node->node_id, parent->node_id, 1);        
     }
