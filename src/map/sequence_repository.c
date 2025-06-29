@@ -156,58 +156,65 @@ uint32_t seq_repo_get_frequency(const uint8_t* data, uint16_t length) {
     return 0;
 }
 
-void seq_repo_increase_frequency(const uint8_t* data, uint16_t length) {
-    if (!data || length == 0) return;
+uint32_t seq_repo_increase_frequency(const uint8_t* data, uint16_t length) {
+    if (!data || length == 0) return 0;
+
+    if (repo.count >= repo.capacity * LOAD_FACTOR) {
+        resize_repository();
+    }
+
     uint64_t hash = XXH3_64bits(data, length);
     uint32_t index = hash % repo.capacity;
     uint32_t start = index;
 
     do {
         if (!repo.entries[index].data) {
-            // new entry
-            if (repo.count >= repo.capacity * LOAD_FACTOR)
-                resize_repository();
-
+            // New entry
             uint8_t* copy = malloc(length);
-            if (!copy) return;
-
+            if (!copy) return 0;
             memcpy(copy, data, length);
             repo.entries[index].data = copy;
             repo.entries[index].length = length;
             repo.hash_values[index] = hash;
             repo.values[index] = 1;
             repo.count++;
-            return;
+            return 1;
         }
 
         if (repo.hash_values[index] == hash &&
             repo.entries[index].length == length &&
             memcmp(repo.entries[index].data, data, length) == 0) {
+            assert(repo.values[index] < UINT32_MAX);  // Prevent overflow
             repo.values[index]++;
-            return;
+            return repo.values[index];
         }
 
         index = (index + 1) % repo.capacity;
     } while (index != start);
+
+    return 0;  // Should not reach here
 }
 
-void seq_repo_decrease_frequency(const uint8_t* data, uint16_t length) {
-    if (!data || length == 0) return;
+uint32_t seq_repo_decrease_frequency(const uint8_t* data, uint16_t length) {
+    if (!data || length == 0) return 0;
+
     uint64_t hash = XXH3_64bits(data, length);
     uint32_t index = hash % repo.capacity;
     uint32_t start = index;
 
     do {
-        if (!repo.entries[index].data) return;
+        if (!repo.entries[index].data) return 0;
 
         if (repo.hash_values[index] == hash &&
             repo.entries[index].length == length &&
             memcmp(repo.entries[index].data, data, length) == 0) {
             if (repo.values[index] > 0)
                 repo.values[index]--;
-            return;
+            return repo.values[index];
         }
 
         index = (index + 1) % repo.capacity;
     } while (index != start);
+
+    return 0;
 }

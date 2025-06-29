@@ -28,6 +28,7 @@ static GraphNode* create_node(uint32_t start, uint8_t length) {
 }
 
 
+/*
 void print_shortest_path() {
     uint32_t *path = NULL;
     uint32_t path_length = 0;
@@ -48,7 +49,7 @@ void print_shortest_path() {
         printf("No path found to sink\n");
     }
 }
-
+*/
 void process_block(const uint8_t *block, uint32_t block_size) {
     init_graph();
     create_root();
@@ -93,7 +94,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #endif
         }
     }
-    find_shortest_path_to_sink();
+    find_shortest_path_to_sink(block);
 #ifdef DEBUG
     visualize_graph(block);
 #endif
