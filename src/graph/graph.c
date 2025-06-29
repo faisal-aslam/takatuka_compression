@@ -19,7 +19,6 @@ GraphNode* get_next_node(void) {
     GraphNode* g_node = &graph.nodes[graph.size++];
     g_node->node_id = graph.size-1; //please never change node's id ever.
     g_node->node_level = graph.total_levels-1; //please do not change this ever too.    
-    g_node->isUseless = 0;
     return g_node;
 }
 

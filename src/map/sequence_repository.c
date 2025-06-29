@@ -5,7 +5,6 @@
 #include <string.h>
 #include <assert.h>
 #include "graph/graph.h"
-
 #define INITIAL_CAPACITY 1024
 #define LOAD_FACTOR 0.75
 #define GROWTH_FACTOR 2
@@ -122,16 +121,3 @@ uint32_t seq_repo_get_node_id(const uint8_t* data, uint16_t length) {
     return UINT32_MAX_VALUE;
 }
 
-
-
-void remove_single_sequence_nodes() {
-    for (uint32_t i = 0; i < repo.capacity; i++) {
-        if (!repo.entries[i].data) continue;
-
-        uint32_t node_id = repo.node_ids[i];
-        if (node_id != UINT32_MAX_VALUE) {
-            GraphNode* g_node = get_graph_node(node_id);
-            if (g_node) g_node->isUseless = 1;
-        }
-    }
-}
