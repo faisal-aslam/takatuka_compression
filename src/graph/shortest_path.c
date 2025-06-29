@@ -50,7 +50,16 @@ static inline void add_in_data_of_path(GraphNode* node, const uint8_t* block) {
     uint32_t freq_after_inc = seq_repo_increase_frequency(&block[node->offset], node->sequence_length);
 }
 
-static inline void save_best_path() {
+static inline void remove_data_of_path(StackItem current,
+                                       const uint8_t *block) {
+    printf("pop data of %u\n", current.node_id_popped);
+    GraphNode *node = current.node_id_popped;
+    seq_repo_decrease_frequency(&block[node->offset], node->sequence_length);
+    path_state.current_path_size--;
+}
+
+
+static inline void update_best_path() {
     if (path_state.current_path_cost < path_state.best_path_cost) {
         path_state.best_path_cost = path_state.current_path_cost;
         memcpy(path_state.best_path_stack, path_state.current_path_cost,
@@ -59,7 +68,7 @@ static inline void save_best_path() {
     }
 }
 
-static inline void print_path() {
+static inline void print_current_path() {
     for (int stack_index = 0; stack_index <= path_state.current_path_size;
          stack_index++) {
         printf("%u", path_state.current_path_stack[stack_index]);
@@ -94,10 +103,7 @@ void find_shortest_path_to_sink(const uint8_t* block) {
         //This is the point where all the links of node_id_popped has been explored.
         //Thus, here we pop its data.
         if (current.node_id == UINT32_MAX) { //a special id to check node_id_popped.
-            printf("pop data of %u\n", current.node_id_popped);
-            GraphNode* node = current.node_id_popped;
-            seq_repo_decrease_frequency(&block[node->offset], node->sequence_length);
-            path_state.current_path_size --;
+            remove_data_of_path(current, block);
             continue;
         }
         GraphNode *node = get_graph_node(current.node_id);
@@ -107,8 +113,8 @@ void find_shortest_path_to_sink(const uint8_t* block) {
                
         if (node->node_id == 0) {
             printf(" saved the path with cost.\n");
-            
-            save_best_path();
+            print_current_path();
+            update_best_path();
         }
         stack[++top] = (StackItem){ .node_id = UINT32_MAX, .node_id_popped = node->node_id };
         //recording data of a node.
