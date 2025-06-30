@@ -92,8 +92,10 @@ void find_shortest_path_to_sink(const uint8_t *block) {
 
     StackItem main_stack[MAX_STACK_SIZE];
     int top = -1;
-
+    
     path_init(); // Make sure path state is initialized
+    //Also reset the frequency map. 
+    seq_repo_reset();
 
     // Start DFS from all non-useless leaf nodes
     for (uint32_t i = start; i < end; i++) {
@@ -129,6 +131,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
         }
 
         GraphNode *node = get_graph_node(current.node_id);
+        printf(" \n pop node = %u\n", node->node_id);
 
         // Add node to current path
         path_state.current_path_stack[++path_state.current_path_size] = node->node_id;
@@ -136,21 +139,21 @@ void find_shortest_path_to_sink(const uint8_t *block) {
         // Increase frequency
         uint32_t freq = seq_repo_increase_frequency(&block[node->offset], node->sequence_length);
 
-        // Compute and add cost
-        if (node->sequence_length == 1) {
-            path_state.current_path_cost += 1;
-        } else if (freq == 1) {
-            path_state.current_path_cost += (node->sequence_length + 1);
-        } else {
-            path_state.current_path_cost += 1;
-        }
-
         // If we've reached the root, evaluate and possibly update best path
         if (node->node_id == 0) {
             printf(" saved the path with cost: %d\n", path_state.current_path_cost);
             print_current_path();
             update_best_path();
             continue; // no parents to explore
+        }
+
+        // Compute and add cost (of non-root nodes.)
+        if (node->sequence_length == 1) {
+            path_state.current_path_cost += 1;
+        } else if (freq == 1) {
+            path_state.current_path_cost += (node->sequence_length + 1);
+        } else {
+            path_state.current_path_cost += 1;
         }
 
         // Add marker for backtracking

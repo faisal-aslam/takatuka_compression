@@ -7,6 +7,7 @@
 
 void seq_repo_init();
 void seq_repo_cleanup();
+void seq_repo_reset();
 
 uint32_t seq_repo_increase_frequency(const uint8_t* data, uint16_t length);
 uint32_t seq_repo_decrease_frequency(const uint8_t* data, uint16_t length);

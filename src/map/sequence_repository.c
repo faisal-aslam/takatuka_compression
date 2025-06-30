@@ -51,6 +51,20 @@ void seq_repo_cleanup() {
     memset(&repo, 0, sizeof(repo));
 }
 
+void seq_repo_reset() {
+    for (uint32_t i = 0; i < repo.capacity; i++) {
+        repo.values[i] = 0;
+        repo.hash_values[i] = 0;
+        if (repo.entries[i].data) {
+            free(repo.entries[i].data);
+            repo.entries[i].data = NULL;
+            repo.entries[i].length = 0;
+        }
+    }
+    repo.count = 0;
+}
+
+
 static void resize_repository() {
     uint32_t old_capacity = repo.capacity;
     SequenceEntry* old_entries = repo.entries;

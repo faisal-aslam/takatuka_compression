@@ -6,6 +6,7 @@
 
 void seq_repo_init();
 void seq_repo_cleanup();
+void seq_repo_reset();
 
 // Add a sequence with a given node_id. If already present and node_id differs, mark as shared.
 void seq_repo_add(const uint8_t* data, uint16_t length, uint32_t node_id);
