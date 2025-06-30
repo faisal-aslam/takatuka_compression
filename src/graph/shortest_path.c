@@ -134,7 +134,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
             // Don't push parents; root has none
             continue;
         }
-        
+
         // Increase frequency and compute added cost
         uint32_t freq = seq_repo_increase_frequency(&block[node->offset], node->sequence_length);
         int32_t added_cost = (node->sequence_length == 1)
@@ -168,9 +168,15 @@ void find_shortest_path_to_sink(const uint8_t *block) {
 
     // Final output
     printf("\nShortest path cost: %d\nPath: ", path_state.best_path_cost);
-    for (int i = path_state.best_path_size; i >= 0; i--) {
+    for (int i = path_state.best_path_size; i >= 0; i--) {     
         printf("%u%s", path_state.best_path_stack[i],
                (i > 0 ? " -> " : "\n"));
+    }
+    for (int i = path_state.best_path_size; i > 0; i--) {
+        uint32_t node_id = path_state.best_path_stack[i];
+        GraphNode* node = get_graph_node(node_id);
+        print_node_sequence(node, block);
+        printf("%s", (i > 0 ? " -> " : "\n"));
     }
 }
 

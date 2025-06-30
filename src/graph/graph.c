@@ -112,6 +112,13 @@ GraphNode* get_parent_nodes(GraphNode* node) {
     return &graph.nodes[start_index];
 }
 
+void print_node_sequence(GraphNode *node, const uint8_t* block) {
+    for (int i=0; i<node->sequence_length; i++) {
+        printf("%0x ", block[node->offset+i]);
+    }
+    printf("\n");
+}
+
 void print_graph_node(GraphNode *node) {
     if (!node) return;
 

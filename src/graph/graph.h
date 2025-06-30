@@ -52,5 +52,5 @@ uint32_t get_graph_node_count(void);
 uint32_t get_graph_size(void);
 GraphNode* get_parent_nodes(GraphNode* node);
 void print_graph_node(GraphNode *node);
-
+void print_node_sequence(GraphNode *node, const uint8_t* block);
 #endif
