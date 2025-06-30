@@ -62,12 +62,12 @@ static inline void update_best_path() {
  * Prints either the current path or the best path.
  * @param isCurrent If true, prints current path; otherwise prints best path
  */
-static inline void print_path(uint8_t isCurrent) {
+static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t* block) {
     const int32_t size = isCurrent ? path_state.current_path_size : path_state.best_path_size;
     const int32_t cost = isCurrent ? path_state.current_path_cost : path_state.best_path_cost;
     const uint32_t *stack = isCurrent ? path_state.current_path_stack : path_state.best_path_stack;
     
-    printf(" Path size=%d, cost=%d \n", size, cost);
+    printf(" Shorest path size=%d, cost=%d \n", size, cost);
     for (int32_t i = 0; i <= size; i++) {
         printf("%u", stack[i]);
         if (i < size) {
@@ -75,6 +75,16 @@ static inline void print_path(uint8_t isCurrent) {
         }
     }
     printf("\n");
+    if (shouldPrintData) {
+        for (int32_t i = 0; i < size; i++) {
+            uint32_t node_id = stack[i];
+            GraphNode *node = get_graph_node(node_id);
+            if (!node) continue;
+            printf(" -> ");
+            print_node_sequence(node, block);
+            
+        }
+    }
 }
 
 /**
@@ -183,7 +193,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
         if (current.node_id == 0) {
             printf(" saved the path with cost: %d\n", path_state.current_path_cost);
 #ifdef DEBUG
-            print_path(1);
+            print_path(1, 0, NULL);
 #endif
             update_best_path();
             continue; // Root has no parents
@@ -195,7 +205,5 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     }
 
     // Final output
-    printf("\nShortest path size=%d, cost: %d\nPath: ",
-           path_state.best_path_size, path_state.best_path_cost);
-    print_path(0);
+    print_path(0, 1, block);
 }
