@@ -19,7 +19,7 @@
  */
 #define COST(len, freq) (((len) == 1) ? 1 : (((freq) == 1) ? ((len) + 1) : 1))
 
-
+static int best_count = 0;
 typedef struct {
     uint32_t node_id;
     uint32_t node_id_popped;
@@ -50,12 +50,16 @@ static inline void path_init() {
 /**
  * Updates the best path if the current path is better.
  */
-static inline void update_best_path() {
-    if (path_state.current_path_cost < path_state.best_path_cost) {
+static inline void update_best_path() {    
+    if (path_state.current_path_cost < path_state.best_path_cost || 
+    (path_state.current_path_cost == path_state.best_path_cost && 
+        path_state.current_path_size < path_state.best_path_size)) {
         path_state.best_path_cost = path_state.current_path_cost;
         memcpy(path_state.best_path_stack, path_state.current_path_stack,
                (path_state.current_path_size + 1) * sizeof(uint32_t));
         path_state.best_path_size = path_state.current_path_size;
+        best_count++;
+        printf(" saved the path %d with cost: %d\n", best_count, path_state.current_path_cost);
     }
 }
 
@@ -110,14 +114,14 @@ static inline void backtrack_node(const uint8_t* block, uint32_t node_id) {
  * Processes a node by adding it to the current path, updating frequencies,
  * and calculating its cost contribution.
  */
-static inline void process_node(const uint8_t* block, uint32_t node_id) {
-    GraphNode *node = get_graph_node(node_id);
+static inline void process_node(const uint8_t* block, GraphNode* node) {
+    
 #ifdef DEBUG
     printf("Push node %u\n", node->node_id);
 #endif
 
     // Add node to current path
-    path_state.current_path_stack[++path_state.current_path_size] = node_id;
+    path_state.current_path_stack[++path_state.current_path_size] = node->node_id;
 
     // Update frequency and calculate cost
     uint32_t freq = 1;
@@ -126,7 +130,7 @@ static inline void process_node(const uint8_t* block, uint32_t node_id) {
     }
 
     int32_t added_cost = COST(node->sequence_length, freq);
-    if (node_id == 0) added_cost = 0;
+    if (node->node_id == 0) added_cost = 0;
     path_state.cost_stack[path_state.current_path_size] = added_cost;
     path_state.current_path_cost += added_cost;
 }
@@ -184,15 +188,15 @@ void find_shortest_path_to_sink(const uint8_t *block) {
             backtrack_node(block, current.node_id_popped);
             continue;
         }
-
-        process_node(block, current.node_id);
+        GraphNode *node = get_graph_node(current.node_id);
+        process_node(block, node);
         
         // Push backtrack marker
         main_stack[++top] = (StackItem){.node_id = UINT32_MAX, .node_id_popped = current.node_id};
 
         // If reached root node (ID 0), check and update best path
         if (current.node_id == 0) {
-            printf(" saved the path with cost: %d\n", path_state.current_path_cost);
+            
 #ifdef DEBUG
             print_path(1, 0, NULL);
 #endif
@@ -200,8 +204,13 @@ void find_shortest_path_to_sink(const uint8_t *block) {
             continue; // Root has no parents
         }
 
-        // Explore parents
-        GraphNode *node = get_graph_node(current.node_id);
+        //The following pruning is very useful for speed up.
+        //In it, we do not explore paths which are worse.
+        if (path_state.current_path_cost > path_state.best_path_cost || 
+        (path_state.current_path_cost == path_state.best_path_cost && path_state.current_path_size > path_state.best_path_size)) {
+            continue;
+        } 
+        // Explore parents 
         add_parent_nodes_to_stack(main_stack, &top, node);
     }
 

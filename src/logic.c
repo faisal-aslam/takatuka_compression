@@ -67,7 +67,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 
         uint8_t max_sequence = MIN(current_level, MAX_WEIGHTS);
 
-        // Prevent underflow: valid sequences must start within bounds
+        // Make sequences of specific sizes. 
         for (uint8_t seq_len = 1; seq_len <=  max_sequence; seq_len++) {
             uint32_t start = block_index - seq_len + 1;
             GraphNode *node = create_node(start, seq_len);
