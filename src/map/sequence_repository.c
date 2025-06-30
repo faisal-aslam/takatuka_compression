@@ -97,7 +97,7 @@ static void resize_repository() {
 }
 
 void seq_repo_add(const uint8_t* data, uint16_t length, uint32_t node_id) {
-    if (!data || length == 0) return;
+    if (!data || length == 0 || length == 1) return;
     if (repo.count >= repo.capacity * LOAD_FACTOR) {
         resize_repository();
     }
@@ -131,7 +131,7 @@ void seq_repo_add(const uint8_t* data, uint16_t length, uint32_t node_id) {
 }
 
 uint32_t seq_repo_get_node_id(const uint8_t* data, uint16_t length) {
-    if (!data || length == 0) return UINT32_MAX;
+    if (!data || length == 0 || length == 1) return UINT32_MAX;
 
     uint64_t hash = XXH3_64bits(data, length);
     uint32_t index = hash % repo.capacity;
@@ -153,7 +153,7 @@ uint32_t seq_repo_get_node_id(const uint8_t* data, uint16_t length) {
 
 // Returns the frequency for a sequence, or 0 if not found
 uint32_t seq_repo_get_frequency(const uint8_t* data, uint16_t length) {
-    if (!data || length == 0) return 0;
+    if (!data || length == 0 || length == 1) return 0;
     uint64_t hash = XXH3_64bits(data, length);
     uint32_t index = hash % repo.capacity;
     uint32_t start = index;
@@ -171,7 +171,7 @@ uint32_t seq_repo_get_frequency(const uint8_t* data, uint16_t length) {
 }
 
 uint32_t seq_repo_increase_frequency(const uint8_t* data, uint16_t length) {
-    if (!data || length == 0) return 0;
+    if (!data || length == 0 || length == 1) return 0;
 
     if (repo.count >= repo.capacity * LOAD_FACTOR) {
         resize_repository();
@@ -210,7 +210,7 @@ uint32_t seq_repo_increase_frequency(const uint8_t* data, uint16_t length) {
 }
 
 uint32_t seq_repo_decrease_frequency(const uint8_t* data, uint16_t length) {
-    if (!data || length == 0) return 0;
+    if (!data || length == 0 || length == 1) return 0;
 
     uint64_t hash = XXH3_64bits(data, length);
     uint32_t index = hash % repo.capacity;
