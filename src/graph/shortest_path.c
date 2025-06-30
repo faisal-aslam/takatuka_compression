@@ -80,55 +80,84 @@ static inline void print_current_path() {
     printf("\n");
 }
 
-void find_shortest_path_to_sink(const uint8_t* block) {
+/**
+ * Here is how it works.
+ * 1) We DFS our DAG using main_stack instead of using recursion which would have considerable slowdown.
+ * 
+ * 2) On each node "visit" that is pop from main_stack: 
+ * --- a) we increase the frequency of its sequence in the frequency_map.
+ * --- b) we put it in another stack called path_state.
+ * --- c) we also calculate the cost of the link between path_state. last node and current node. 
+ * That cost is then added in the current_path_cost of the path. Here is how the cost is calculated.
+ * ------ If node sequence length is =1 then cost of the link is 1.
+ * ------ If node sequence lenght is >1 and its sequence frequency is =1. The cost of the link is sequence length +1.
+ * ------ If node sequence lenght is >1 and its sequence frequency is >1. The cost of the link is 1.
+ * 
+ * 3) Whenver a nodes all links are fully processed which we called "done with that node". 
+ * --- a) we decrease the frequency of its sequence in the frequency_map.
+ * --- b) we remove it from path_state.
+ * --- c) we remove the cost of the link (that we just removed) from the current_path_cost.
+ * 
+ * 4) Whenever we encounter root node (whose node_id==0). We check if the current_path is better in terms of cost 
+ * then the best_path. If so then we replace best_path with the current_path.
+ * 
+ * 5) At the end of the DFS of our DAG. We print the best_path.
+ */
+void find_shortest_path_to_sink(const uint8_t *block) {
     uint16_t last_level = get_last_level_index();
     uint32_t start = get_level_start_id(last_level);
     uint32_t end = get_level_end_id(last_level);
 
     // Stack for DFS
-    StackItem stack[MAX_STACK_SIZE];
+    StackItem main_stack[MAX_STACK_SIZE];
     int top = -1;
 
     // Push all (useful) leaf nodes from last level
-    // We never push useless nodes in the stack and never check them while poping.
-    for (uint32_t i = start; i < end; i++) {        
+    // We never push useless nodes in the stack and never check them while
+    // poping.
+    for (uint32_t i = start; i < end; i++) {
         GraphNode *node = get_graph_node(i);
-        if (node && node->isUseless) continue;
-        stack[++top] = (StackItem){ .node_id = i, .node_id_popped = 0 };
+        if (node && node->isUseless)
+            continue;
+        main_stack[++top] = (StackItem){.node_id = i, .node_id_popped = 0};
     }
 
     while (top >= 0) {
-        StackItem current = stack[top--];        
+        StackItem current = main_stack[top--];
 
-        //This is the point where all the links of node_id_popped has been explored.
-        //Thus, here we pop its data.
-        if (current.node_id == UINT32_MAX) { //a special id to check node_id_popped.
+        // This is the point where all the links of node_id_popped has been
+        // explored. Thus, here we pop its data.
+        if (current.node_id ==
+            UINT32_MAX) { // a special id to check node_id_popped.
             remove_data_of_path(current, block);
             continue;
         }
         GraphNode *node = get_graph_node(current.node_id);
-        
-        path_state.current_path_stack[++path_state.current_path_size] = node->node_id;
 
-               
+        path_state.current_path_stack[++path_state.current_path_size] =
+            node->node_id;
+
         if (node->node_id == 0) {
             printf(" saved the path with cost.\n");
             print_current_path();
             update_best_path();
         }
-        stack[++top] = (StackItem){ .node_id = UINT32_MAX, .node_id_popped = node->node_id };
-        //recording data of a node.
+        main_stack[++top] =
+            (StackItem){.node_id = UINT32_MAX, .node_id_popped = node->node_id};
+        // recording data of a node.
         add_in_data_of_path(node, block);
-        
 
-        if (node->node_id == 0) continue; //root has no parents continue;
+        if (node->node_id == 0)
+            continue; // root has no parents continue;
         uint8_t parent_count = get_parent_nodes_count(node);
-        GraphNode* parents = get_parent_nodes(node);
+        GraphNode *parents = get_parent_nodes(node);
 
         for (uint8_t i = 0; i < parent_count; i++) {
-            GraphNode* parent_node = &parents[i];
-            if (parent_node->isUseless) continue;
-            stack[++top] = (StackItem){ .node_id = parent_node->node_id, .node_id_popped = 1 };        }
+            GraphNode *parent_node = &parents[i];
+            if (parent_node->isUseless)
+                continue;
+            main_stack[++top] = (StackItem){.node_id = parent_node->node_id,
+                                            .node_id_popped = 1};
+        }
     }
-
 }
