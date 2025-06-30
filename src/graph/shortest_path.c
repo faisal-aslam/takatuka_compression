@@ -12,6 +12,7 @@
 /**
  * Calculates the cost of adding a sequence to the path based on its length and frequency.
  * Cost rules:
+ * - If lenght == 0: cost = 0
  * - If length == 1: cost = 1
  * - If length > 1 and frequency == 1: cost = length + 1
  * - If length > 1 and frequency > 1: cost = 1
@@ -125,6 +126,7 @@ static inline void process_node(const uint8_t* block, uint32_t node_id) {
     }
 
     int32_t added_cost = COST(node->sequence_length, freq);
+    if (node_id == 0) added_cost = 0;
     path_state.cost_stack[path_state.current_path_size] = added_cost;
     path_state.current_path_cost += added_cost;
 }
@@ -172,7 +174,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
 
     path_init();      // Reset path state
     seq_repo_reset(); // Reset sequence frequencies (memory reused)
-    
+    compact_graph();
     initialize_leaf_nodes(main_stack, &top, last_level);
 
     while (top >= 0) {
