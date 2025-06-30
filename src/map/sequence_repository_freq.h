@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 
 void seq_repo_init();
 void seq_repo_cleanup();
