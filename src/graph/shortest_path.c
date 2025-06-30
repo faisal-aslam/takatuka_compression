@@ -14,12 +14,14 @@ typedef struct {
 
 typedef struct {
     uint32_t current_path_stack[MAX_LEVELS];
-    int32_t current_path_size;
-    int32_t current_path_cost;
+    int32_t  cost_stack[MAX_LEVELS];  // cost added by each node
+    int32_t  current_path_size;
+    int32_t  current_path_cost;
     uint32_t best_path_stack[MAX_LEVELS];
-    int32_t best_path_cost;
-    int32_t best_path_size;
+    int32_t  best_path_cost;
+    int32_t  best_path_size;
 } Path;
+
 
 
 Path path_state;
@@ -93,9 +95,8 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     StackItem main_stack[MAX_STACK_SIZE];
     int top = -1;
     
-    path_init(); // Make sure path state is initialized
-    //Also reset the frequency map. 
-    seq_repo_reset();
+    path_init(); // Reset path state
+    seq_repo_reset(); // Reset sequence frequencies (memory reused)
 
     // Start DFS from all non-useless leaf nodes
     for (uint32_t i = start; i < end; i++) {
@@ -109,64 +110,58 @@ void find_shortest_path_to_sink(const uint8_t *block) {
         StackItem current = main_stack[top--];
 
         if (current.node_id == UINT32_MAX) {
-            // Finished processing child paths of this node, now backtrack
+            // Backtrack: pop node and undo frequency and cost
             GraphNode *node = get_graph_node(current.node_id_popped);
-
-            // Compute cost to remove
             uint32_t seq_len = node->sequence_length;
-            uint32_t freq = seq_repo_get_frequency(&block[node->offset], seq_len);
 
-            if (seq_len == 1) {
-                path_state.current_path_cost -= 1;
-            } else if (freq == 1) {
-                path_state.current_path_cost -= (seq_len + 1);
-            } else {
-                path_state.current_path_cost -= 1;
-            }
-
-            // Pop from path and decrease frequency
+            path_state.current_path_cost -= path_state.cost_stack[path_state.current_path_size];
             seq_repo_decrease_frequency(&block[node->offset], seq_len);
             path_state.current_path_size--;
             continue;
         }
 
         GraphNode *node = get_graph_node(current.node_id);
-        printf(" \n pop node = %u\n", node->node_id);
+        uint32_t node_id = node->node_id;
 
-        // Add node to current path
-        path_state.current_path_stack[++path_state.current_path_size] = node->node_id;
+        // Push node to current path
+        path_state.current_path_stack[++path_state.current_path_size] = node_id;
 
-        // Increase frequency
-        uint32_t freq = seq_repo_increase_frequency(&block[node->offset], node->sequence_length);
-
-        // If we've reached the root, evaluate and possibly update best path
-        if (node->node_id == 0) {
+        // If reached root node (ID 0), check and update best path
+        if (node_id == 0) {
             printf(" saved the path with cost: %d\n", path_state.current_path_cost);
             print_current_path();
             update_best_path();
-            continue; // no parents to explore
+            // Don't push parents; root has none
+            continue;
+        }
+        
+        // Increase frequency and compute added cost
+        uint32_t freq = seq_repo_increase_frequency(&block[node->offset], node->sequence_length);
+        int32_t added_cost = (node->sequence_length == 1)
+                             ? 1
+                             : (freq == 1 ? node->sequence_length + 1 : 1);
+        path_state.cost_stack[path_state.current_path_size] = added_cost;
+        path_state.current_path_cost += added_cost;
+
+        // If path is already worse than best, backtrack immediately
+        if (path_state.current_path_cost >= path_state.best_path_cost) {
+            main_stack[++top] = (StackItem){.node_id = UINT32_MAX, .node_id_popped = node_id};
+            continue;
         }
 
-        // Compute and add cost (of non-root nodes.)
-        if (node->sequence_length == 1) {
-            path_state.current_path_cost += 1;
-        } else if (freq == 1) {
-            path_state.current_path_cost += (node->sequence_length + 1);
-        } else {
-            path_state.current_path_cost += 1;
-        }
 
-        // Add marker for backtracking
-        main_stack[++top] = (StackItem){.node_id = UINT32_MAX, .node_id_popped = node->node_id};
+        // Push backtrack marker
+        main_stack[++top] = (StackItem){.node_id = UINT32_MAX, .node_id_popped = node_id};
 
-        // Push parent nodes to explore next
+        // Explore parents
         uint8_t parent_count = get_parent_nodes_count(node);
         GraphNode *parents = get_parent_nodes(node);
         for (uint8_t i = 0; i < parent_count; i++) {
             if (!parents[i].isUseless) {
                 main_stack[++top] = (StackItem){
                     .node_id = parents[i].node_id,
-                    .node_id_popped = 1};
+                    .node_id_popped = 1
+                };
             }
         }
     }
@@ -178,3 +173,4 @@ void find_shortest_path_to_sink(const uint8_t *block) {
                (i > 0 ? " -> " : "\n"));
     }
 }
+
