@@ -94,8 +94,9 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #endif
         }
     }
-    find_shortest_path_to_sink(block);
+    compact_graph(); //compact the graph by removing useless nodes.
+    find_shortest_path_to_sink(block); //find shortest path
 #ifdef DEBUG
-    visualize_graph(block);
+    visualize_graph(block); //create graph in DOT for visualization.
 #endif
 }

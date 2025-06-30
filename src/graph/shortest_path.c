@@ -174,7 +174,6 @@ void find_shortest_path_to_sink(const uint8_t *block) {
 
     path_init();      // Reset path state
     seq_repo_reset(); // Reset sequence frequencies (memory reused)
-    compact_graph();
     initialize_leaf_nodes(main_stack, &top, last_level);
 
     while (top >= 0) {
