@@ -90,8 +90,8 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
             GraphNode *node = get_graph_node(node_id);
             if (!node) continue;            
             print_node_sequence(node, block);
-            if (i-1 >= 0) {
-                printf("->");
+            if (i != size && i != 0) {
+                printf(" -> ");
             }            
         }
         printf("\n\n");
@@ -215,8 +215,8 @@ void find_shortest_path_to_sink(const uint8_t *block) {
 
         //The following pruning is very useful for speed up.
         //In it, we do not explore paths which are worse.
-        if (path_state.current_path_cost > path_state.best_path_cost || 
-        (path_state.current_path_cost == path_state.best_path_cost && path_state.current_path_size > path_state.best_path_size)) {
+        if (path_state.current_path_cost+node->min_depth > path_state.best_path_cost || 
+        (path_state.current_path_cost+node->min_depth == path_state.best_path_cost && path_state.current_path_size+node->min_depth > path_state.best_path_size)) {
             continue;
         } 
         // Explore parents 

@@ -29,6 +29,7 @@ typedef struct {
     uint32_t offset;    
     uint32_t hash_index_cache; //for frequency hash (not for binary hash)
     uint16_t node_level;
+    uint16_t min_depth;
     uint8_t sequence_length;
     uint8_t isUseless;
 } GraphNode;
@@ -38,7 +39,7 @@ typedef struct {
     uint32_t first_node_of_level[MAX_LEVELS];    
     GraphNode nodes[MAX_GRAPH_NODES];
     uint16_t total_levels;
-
+    uint16_t level_min_depth[MAX_LEVELS]; // computed during compaction
 } Graph;
 
 extern Graph graph; //always use graph.c definiton.
