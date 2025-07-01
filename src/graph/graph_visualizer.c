@@ -78,7 +78,7 @@ static void print_links(FILE* output, const GraphNode* node) {
         GraphNode* parent = &parent_nodes[i];
         //if (parent->isUseless) continue;
         fprintf(output, "    %u -> %u [label=\"%d\"];\n", 
-                node->node_id, parent->node_id, 1);        
+                node->node_id, parent->node_id, node->min_depth);        
     }
 }
 void visualize_graph(const uint8_t* block) {    
