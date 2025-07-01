@@ -76,21 +76,22 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
     const uint32_t *stack = isCurrent ? path_state.current_path_stack : path_state.best_path_stack;
     
     printf(" Shortest path size=%d, cost=%d \n", size, cost);
-    for (int32_t i = 0; i <= size; i++) {
+    for (int32_t i = size; i >= 0; i--) {
         printf("%u", stack[i]);
-        if (i < size) {
+        if (i-1 >= 0) {
             printf("->");
         }
     }
     printf("\n\n\n");
     if (shouldPrintData) {
-        for (int32_t i = 0; i < size; i++) {
+        for (int32_t i = size; i >= 0; i--) {
             uint32_t node_id = stack[i];
             GraphNode *node = get_graph_node(node_id);
-            if (!node) continue;
-            printf("->");
+            if (!node) continue;            
             print_node_sequence(node, block);
-            
+            if (i-1 >= 0) {
+                printf("->");
+            }            
         }
         printf("\n\n");
     }
@@ -148,9 +149,9 @@ static inline void initialize_leaf_nodes(StackItem* stack, int* top, uint16_t la
 
     for (uint32_t i = start; i < end; i++) {
         GraphNode *node = get_graph_node(i);
-        if (node && !node->isUseless) {
+        if (node) {            
             stack[++(*top)] = (StackItem){.node_id = i, .node_id_popped = 0};
-        }
+        } 
     }
 }
 
@@ -162,7 +163,6 @@ static inline void add_parent_nodes_to_stack(StackItem* stack, int* top, GraphNo
     GraphNode *parents = get_parent_nodes(node);
     for (uint8_t i = 0; i < parent_count; i++) {
         GraphNode *parent = &parents[i];
-        if (parent->isUseless) continue;
         stack[++(*top)] = (StackItem){.node_id = parent->node_id, .node_id_popped = 0};
     }
 }

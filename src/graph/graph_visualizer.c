@@ -70,13 +70,13 @@ static void print_node(FILE* output, const GraphNode* node, const uint8_t *block
 static void print_links(FILE* output, const GraphNode* node) {
     //output = stdout;
     if (node->node_id == 0) return;  // Root node has no parents
-    if (node->isUseless) return;
+    //if (node->isUseless) return;
     uint16_t parent_count = get_parent_nodes_count((GraphNode*)node); // safe cast
     GraphNode* parent_nodes = get_parent_nodes((GraphNode*)node);
 
     for (uint16_t i = 0; i < parent_count; i++) {
         GraphNode* parent = &parent_nodes[i];
-        if (parent->isUseless) continue;
+        //if (parent->isUseless) continue;
         fprintf(output, "    %u -> %u [label=\"%d\"];\n", 
                 node->node_id, parent->node_id, 1);        
     }
@@ -101,10 +101,8 @@ void visualize_graph(const uint8_t* block) {
         
         for (uint32_t i = get_level_start_id(level); i < get_level_end_id(level); i++) {        
             GraphNode* node = get_graph_node(i);  
-            if (node->isUseless) continue;
+            //if (node->isUseless) continue;
             print_node(output, node, block);
-            
-            
         }
         
         fprintf(output, "    }\n\n");
@@ -113,7 +111,7 @@ void visualize_graph(const uint8_t* block) {
         fprintf(output, "    { rank=same; ");
         for (uint32_t i = get_level_start_id(level); i < get_level_end_id(level); i++) {        
             GraphNode* node = get_graph_node(i);
-            if (node->isUseless) continue;
+            //if (node->isUseless) continue;
             if (node && node->sequence_length > 0) {
                 fprintf(output, "%d; ", node->node_id);
             }

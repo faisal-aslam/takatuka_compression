@@ -12,6 +12,10 @@ void init_graph(void) {
 void verify_graph_integrity() {
     for (uint32_t i = 1; i < graph.size; i++) {
         GraphNode* node = &graph.nodes[i];
+        if (node->isUseless) {
+            fprintf(stderr, "\nStill found a useless node. There should be None. node_id=%u, node_level=%u \n\n", node->node_id, node->node_level);
+            abort();
+        }
         uint16_t parent_level = node->node_level - node->sequence_length;
         if (parent_level >= graph.total_levels) {
             fprintf(stderr, "Node %u has invalid parent level %u\n",
@@ -81,6 +85,9 @@ static inline void print_node_link(GraphNode* node, GraphNode* parent) {
 void print_node_sequence(GraphNode *node, const uint8_t* block) {
     for (int i=0; i<node->sequence_length; i++) {
         printf("%0x", block[node->offset+i]);
+        if (i+1 < node->sequence_length) {
+            printf(",");
+        }
     }
     //printf("\n");
 }
