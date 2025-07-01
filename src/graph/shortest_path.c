@@ -23,6 +23,7 @@ static int best_count = 0;
 typedef struct {
     uint32_t node_id;
     uint32_t node_id_popped;
+    uint32_t hash_index_cache;
 } StackItem;
 
 typedef struct {
@@ -106,32 +107,35 @@ static inline void backtrack_node(const uint8_t* block, uint32_t node_id) {
 #ifdef DEBUG
     printf("backtrack node %u\n", node->node_id);
 #endif
-    uint32_t seq_len = node->sequence_length;
 
     path_state.current_path_cost -= path_state.cost_stack[path_state.current_path_size];
-    if (seq_len > 1) {
-        seq_repo_decrease_frequency(&block[node->offset], seq_len);
+
+    if (node->sequence_length > 1) {
+        seq_repo_decrease_by_index(node->hash_index_cache); // ← efficient
     }
+
     path_state.current_path_size--;
 }
+
 
 /**
  * Processes a node by adding it to the current path, updating frequencies,
  * and calculating its cost contribution.
  */
 static inline void process_node(const uint8_t* block, GraphNode* node) {
-    
 #ifdef DEBUG
     printf("Push node %u\n", node->node_id);
 #endif
 
-    // Add node to current path
     path_state.current_path_stack[++path_state.current_path_size] = node->node_id;
 
-    // Update frequency and calculate cost
     uint32_t freq = 1;
     if (node->sequence_length > 1) {
-        freq = seq_repo_increase_frequency(&block[node->offset], node->sequence_length);
+        freq = seq_repo_increase_frequency_cached(
+            &block[node->offset],
+            node->sequence_length,
+            &node->hash_index_cache  
+        );
     }
 
     int32_t added_cost = COST(node->sequence_length, freq);
@@ -139,6 +143,7 @@ static inline void process_node(const uint8_t* block, GraphNode* node) {
     path_state.cost_stack[path_state.current_path_size] = added_cost;
     path_state.current_path_cost += added_cost;
 }
+
 
 /**
  * Initializes the DFS stack with all valid leaf nodes.

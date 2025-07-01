@@ -27,6 +27,7 @@
 typedef struct {
     uint32_t node_id;
     uint32_t offset;    
+    uint32_t hash_index_cache; //for frequency hash (not for binary hash)
     uint16_t node_level;
     uint8_t sequence_length;
     uint8_t isUseless;
@@ -34,7 +35,7 @@ typedef struct {
 
 typedef struct {    
     uint32_t size;
-    uint32_t first_node_of_level[MAX_LEVELS];
+    uint32_t first_node_of_level[MAX_LEVELS];    
     GraphNode nodes[MAX_GRAPH_NODES];
     uint16_t total_levels;
 
@@ -67,7 +68,8 @@ static inline void reset_graph(void) {
 static inline GraphNode* get_next_node(void) {
     GraphNode* g_node = &graph.nodes[graph.size++];
     g_node->node_id = graph.size-1; //please never change node's id ever.
-    g_node->node_level = graph.total_levels-1; //please do not change this ever too.    
+    g_node->node_level = graph.total_levels-1; //please do not change this ever too.  
+    g_node->hash_index_cache = UINT32_MAX;  
     return g_node;
 }
 
