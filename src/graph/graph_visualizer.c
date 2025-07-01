@@ -62,6 +62,7 @@ static void print_node(FILE* output, const GraphNode* node, const uint8_t *block
 
     fprintf(output, "    %d [label=\"%d\\n", node->node_id, node->node_id);
     print_node_content(output, node, block);
+    fprintf(output, "\n d=%u", node->min_depth);
     fprintf(output, "\", shape=box, style=filled, fillcolor=\"%s\", fontcolor=\"%s\"];\n", 
             fillcolor, fontcolor);
 }
@@ -77,8 +78,9 @@ static void print_links(FILE* output, const GraphNode* node) {
     for (uint16_t i = 0; i < parent_count; i++) {
         GraphNode* parent = &parent_nodes[i];
         //if (parent->isUseless) continue;
-        fprintf(output, "    %u -> %u [label=\"%d\"];\n", 
-                node->node_id, parent->node_id, node->min_depth);        
+        fprintf(output, " %u -> %u ;\n", 
+                node->node_id, parent->node_id);
+        break;// only create one link as all links points to the node of this level.
     }
 }
 void visualize_graph(const uint8_t* block) {    

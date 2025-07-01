@@ -198,6 +198,19 @@ void find_shortest_path_to_sink(const uint8_t *block) {
             continue;
         }
         GraphNode *node = get_graph_node(current.node_id);
+
+        // The following pruning is very useful for speed up.
+        // In it, we do not explore paths which are worse.
+        // Early pruning before frequency cost and stack updates
+        if (path_state.current_path_cost + node->min_depth > path_state.best_path_cost ||
+            (path_state.current_path_cost + node->min_depth ==  path_state.best_path_cost &&
+             path_state.current_path_size + node->min_depth >  path_state.best_path_size)) {
+#ifdef DEBUG
+                printf("Prune longer path\n");
+#endif                
+            continue;
+        }
+
         process_node(block, node);
         
         // Push backtrack marker
@@ -213,12 +226,6 @@ void find_shortest_path_to_sink(const uint8_t *block) {
             continue; // Root has no parents
         }
 
-        //The following pruning is very useful for speed up.
-        //In it, we do not explore paths which are worse.
-        if (path_state.current_path_cost+node->min_depth > path_state.best_path_cost || 
-        (path_state.current_path_cost+node->min_depth == path_state.best_path_cost && path_state.current_path_size+node->min_depth > path_state.best_path_size)) {
-            continue;
-        } 
         // Explore parents 
         add_parent_nodes_to_stack(main_stack, &top, node);
     }
