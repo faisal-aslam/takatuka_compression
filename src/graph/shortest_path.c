@@ -60,6 +60,9 @@ static inline void update_best_path() {
         path_state.best_path_size = path_state.current_path_size;
         best_count++;
         printf(" saved the path %d with cost: %d\n", best_count, path_state.current_path_cost);
+        if (best_count == 34) {
+            printf("\n stop here \n");
+        }
     }
 }
 
@@ -72,23 +75,24 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
     const int32_t cost = isCurrent ? path_state.current_path_cost : path_state.best_path_cost;
     const uint32_t *stack = isCurrent ? path_state.current_path_stack : path_state.best_path_stack;
     
-    printf(" Shorest path size=%d, cost=%d \n", size, cost);
+    printf(" Shortest path size=%d, cost=%d \n", size, cost);
     for (int32_t i = 0; i <= size; i++) {
         printf("%u", stack[i]);
         if (i < size) {
-            printf(" -> ");
+            printf("->");
         }
     }
-    printf("\n");
+    printf("\n\n\n");
     if (shouldPrintData) {
         for (int32_t i = 0; i < size; i++) {
             uint32_t node_id = stack[i];
             GraphNode *node = get_graph_node(node_id);
             if (!node) continue;
-            printf(" -> ");
+            printf("->");
             print_node_sequence(node, block);
             
         }
+        printf("\n\n");
     }
 }
 

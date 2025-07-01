@@ -67,7 +67,7 @@ void compact_graph(void) {
     }
 
     graph.size = write_idx;
-    printf("\n\n graph size = %u", graph.size);
+    printf("\n\n graph size = %u\n", graph.size);
     // Optional verification
     #ifdef DEBUG
     verify_graph_integrity();
@@ -80,9 +80,9 @@ static inline void print_node_link(GraphNode* node, GraphNode* parent) {
 
 void print_node_sequence(GraphNode *node, const uint8_t* block) {
     for (int i=0; i<node->sequence_length; i++) {
-        printf("%0x ", block[node->offset+i]);
+        printf("%0x", block[node->offset+i]);
     }
-    printf("\n");
+    //printf("\n");
 }
 
 void print_graph_node(GraphNode *node) {
