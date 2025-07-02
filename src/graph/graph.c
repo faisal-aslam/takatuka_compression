@@ -137,6 +137,7 @@ void print_node_sequence(GraphNode *node, const uint8_t* block) {
         if (i+1 < node->sequence_length) {
             printf(",");
         }
+        
     }
     //printf("\n");
 }
@@ -157,6 +158,7 @@ void print_graph_node(GraphNode *node) {
     if (!parent_nodes) return;
     for (int i = 0; i < parent_nodes_count; i++) {
         print_node_link(node, &parent_nodes[i]);
+        break;// just print one link per node as other belings to the same level.
     }
 
 }

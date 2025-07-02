@@ -76,7 +76,9 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
     
     printf("\nShortest path size=%d, cost=%d \n", size, cost);
     for (int32_t i = size; i >= 0; i--) {
-        printf("%u", stack[i]);
+        uint32_t node_id = stack[i];
+        GraphNode *node = get_graph_node(node_id);
+        printf("(%u,%u)", stack[i], node->node_level);
         if (i-1 >= 0) {
             printf("->");
         }
@@ -199,6 +201,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     uint16_t last_level = get_last_level_index();
     int back_track_count = 0;
     int best_count = 0;
+    int push_count = 0;
     path_init();      // Reset path state
     seq_repo_reset(); // Reset sequence frequencies (memory reused)
     initialize_leaf_nodes(main_stack, &top, last_level);
@@ -226,7 +229,8 @@ void find_shortest_path_to_sink(const uint8_t *block) {
         }
 
         process_node(block, node);
-        
+        push_count++;
+
         // Push backtrack marker
         main_stack[++top] = (StackItem){.node_id = UINT32_MAX, .node_id_popped = current.node_id};
 
@@ -246,7 +250,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
         // Explore parents 
         add_parent_nodes_to_stack(main_stack, &top, node);
     }
-    printf("\nbest_count=%d, prune_count=%d, back_track_count=%d\n", best_count, prune_count, back_track_count);
+    printf("\nbest_count=%d, prune_count=%d, back_track_count=%d, push_count=%u\n", best_count, prune_count, back_track_count, push_count);
     // Final output
     print_path(0, 1, block);
 }

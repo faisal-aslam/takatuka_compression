@@ -62,7 +62,7 @@ static void print_node(FILE* output, const GraphNode* node, const uint8_t *block
 
     fprintf(output, "    %d [label=\"%d\\n", node->node_id, node->node_id);
     print_node_content(output, node, block);
-    fprintf(output, "\n d=%u", node->min_depth);
+    fprintf(output, "\n d=%u,l=%u", node->min_depth, node->node_level);
     fprintf(output, "\", shape=box, style=filled, fillcolor=\"%s\", fontcolor=\"%s\"];\n", 
             fillcolor, fontcolor);
 }
@@ -71,15 +71,18 @@ static void print_node(FILE* output, const GraphNode* node, const uint8_t *block
 static void print_links(FILE* output, const GraphNode* node) {
     //output = stdout;
     if (node->node_id == 0) return;  // Root node has no parents
-    //if (node->isUseless) return;
+
     uint16_t parent_count = get_parent_nodes_count((GraphNode*)node); // safe cast
     GraphNode* parent_nodes = get_parent_nodes((GraphNode*)node);
 
     for (uint16_t i = 0; i < parent_count; i++) {
-        GraphNode* parent = &parent_nodes[i];
-        //if (parent->isUseless) continue;
+        GraphNode* parent = &parent_nodes[i];   
+        if (node->node_id == 1933) {
+            printf(" stop here\n");
+        }    
         fprintf(output, " %u -> %u ;\n", 
                 node->node_id, parent->node_id);
+        
         break;// only create one link as all links points to the node of this level.
     }
 }
@@ -102,11 +105,11 @@ void visualize_graph(const uint8_t* block) {
         fprintf(output, "        style=invis;\n");
         
         for (uint32_t i = get_level_start_id(level); i < get_level_end_id(level); i++) {        
-            GraphNode* node = get_graph_node(i);  
-            //if (node->isUseless) continue;
-            print_node(output, node, block);
+            GraphNode* node = get_graph_node(i);              
+            print_node(output, node, block);            
         }
         
+        if (level % 20 == 0) fflush(output);
         fprintf(output, "    }\n\n");
         
         // Create rank for this level
@@ -129,7 +132,10 @@ void visualize_graph(const uint8_t* block) {
                 print_links(output, node);
             }
         }
+        if (i%1000 == 0) fflush(output);
     }
 
     fprintf(output, "}\n");
+    fflush(output);
+    
 }
