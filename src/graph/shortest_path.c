@@ -7,7 +7,7 @@
 #include <stdio.h>
 
 #define MAX_STACK_SIZE MAX_LEVELS
-
+int prune_count =0;
 
 /**
  * Calculates the cost of adding a sequence to the path based on its length and frequency.
@@ -19,7 +19,7 @@
  */
 #define COST(len, freq) (((len) == 1) ? 1 : (((freq) == 1) ? ((len) + 1) : 1))
 
-static int best_count = 0;
+
 typedef struct {
     uint32_t node_id;
     uint32_t node_id_popped;
@@ -51,7 +51,7 @@ static inline void path_init() {
 /**
  * Updates the best path if the current path is better.
  */
-static inline void update_best_path() {    
+static inline uint8_t update_best_path() {    
     if (path_state.current_path_cost < path_state.best_path_cost || 
     (path_state.current_path_cost == path_state.best_path_cost && 
         path_state.current_path_size < path_state.best_path_size)) {
@@ -59,12 +59,10 @@ static inline void update_best_path() {
         memcpy(path_state.best_path_stack, path_state.current_path_stack,
                (path_state.current_path_size + 1) * sizeof(uint32_t));
         path_state.best_path_size = path_state.current_path_size;
-        best_count++;
-        printf(" saved the path %d with cost: %d\n", best_count, path_state.current_path_cost);
-        if (best_count == 34) {
-            printf("\n stop here \n");
-        }
+        return 1;
+        
     }
+    return 0;
 }
 
 /**
@@ -76,7 +74,7 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
     const int32_t cost = isCurrent ? path_state.current_path_cost : path_state.best_path_cost;
     const uint32_t *stack = isCurrent ? path_state.current_path_stack : path_state.best_path_stack;
     
-    printf(" Shortest path size=%d, cost=%d \n", size, cost);
+    printf("\nShortest path size=%d, cost=%d \n", size, cost);
     for (int32_t i = size; i >= 0; i--) {
         printf("%u", stack[i]);
         if (i-1 >= 0) {
@@ -160,6 +158,16 @@ static inline void initialize_leaf_nodes(StackItem* stack, int* top, uint16_t la
     }
 }
 
+static inline uint8_t should_prune(GraphNode *node) {
+    if (path_state.current_path_cost + node->min_depth > path_state.best_path_cost ||
+        (path_state.current_path_cost + node->min_depth == path_state.best_path_cost &&
+         path_state.current_path_size + node->min_depth > path_state.best_path_size)) {
+            prune_count++;
+            return 1;
+    }
+    return 0;
+}
+
 /**
  * Adds all valid parent nodes to the DFS stack for exploration.
  */
@@ -167,8 +175,13 @@ static inline void add_parent_nodes_to_stack(StackItem* stack, int* top, GraphNo
     uint8_t parent_count = get_parent_nodes_count(node);
     GraphNode *parents = get_parent_nodes(node);
     for (uint8_t i = 0; i < parent_count; i++) {
-        GraphNode *parent = &parents[i];
-        stack[++(*top)] = (StackItem){.node_id = parent->node_id, .node_id_popped = 0};
+        if(!should_prune(&parents[i])) {
+            stack[++(*top)] = (StackItem){.node_id = parents[i].node_id, .node_id_popped = 0};
+        } 
+#ifdef DEBUG
+        if(should_prune(&parents[i])) printf("Prune parent node_id=%d\n", parents[i].node_id);
+#endif        
+
     }
 }
 
@@ -184,7 +197,8 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     StackItem main_stack[MAX_STACK_SIZE];
     int top = -1;
     uint16_t last_level = get_last_level_index();
-
+    int back_track_count = 0;
+    int best_count = 0;
     path_init();      // Reset path state
     seq_repo_reset(); // Reset sequence frequencies (memory reused)
     initialize_leaf_nodes(main_stack, &top, last_level);
@@ -195,6 +209,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
         if (current.node_id == UINT32_MAX) {
             // Backtrack marker encountered
             backtrack_node(block, current.node_id_popped);
+            back_track_count++;
             continue;
         }
         GraphNode *node = get_graph_node(current.node_id);
@@ -202,12 +217,11 @@ void find_shortest_path_to_sink(const uint8_t *block) {
         // The following pruning is very useful for speed up.
         // In it, we do not explore paths which are worse.
         // Early pruning before frequency cost and stack updates
-        if (path_state.current_path_cost + node->min_depth > path_state.best_path_cost ||
-            (path_state.current_path_cost + node->min_depth ==  path_state.best_path_cost &&
-             path_state.current_path_size + node->min_depth >  path_state.best_path_size)) {
+        if (should_prune(node)) {
 #ifdef DEBUG
-                printf("Prune longer path\n");
-#endif                
+                printf("Prune longer path node_id=%u\n", node->node_id);
+#endif               
+            
             continue;
         }
 
@@ -222,14 +236,17 @@ void find_shortest_path_to_sink(const uint8_t *block) {
 #ifdef DEBUG
             print_path(1, 0, NULL);
 #endif
-            update_best_path();
+            if(update_best_path()) {
+                best_count++;
+                printf("Saved the path %d with cost: %d\n", best_count, path_state.current_path_cost);
+            }
             continue; // Root has no parents
         }
 
         // Explore parents 
         add_parent_nodes_to_stack(main_stack, &top, node);
     }
-
+    printf("\nbest_count=%d, prune_count=%d, back_track_count=%d\n", best_count, prune_count, back_track_count);
     // Final output
     print_path(0, 1, block);
 }

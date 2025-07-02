@@ -27,29 +27,6 @@ static GraphNode* create_node(uint32_t start, uint8_t length) {
     return node;
 }
 
-
-/*
-void print_shortest_path() {
-    uint32_t *path = NULL;
-    uint32_t path_length = 0;
-    int cost = -1;
-    find_shortest_path_to_sink();
-
-    if (cost != -1) {
-        printf("Shortest path cost: %d\n", cost);
-        printf("Path: ");
-        for (uint32_t i = 0; i < path_length; i++) {
-            printf("%u", path[i]);
-            if (i < path_length - 1)
-                printf(" -> ");
-        }
-        printf("\n");
-        free(path);
-    } else {
-        printf("No path found to sink\n");
-    }
-}
-*/
 void process_block(const uint8_t *block, uint32_t block_size) {
     init_graph();
     create_root();
