@@ -90,11 +90,12 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
             uint32_t node_id = stack[i];
             GraphNode *node = get_graph_node(node_id);
             if (!node) continue;            
+            printf(" -> %u| ", node->hash_index_cache);            
             print_node_sequence(node, block);
-            if (i != size && i != 0) {
-                printf("\n -> ");
+            printf("\n");
+            if (i%20 == 0) {
                 fflush(stdout);
-            }            
+            }
         }
         printf("\n\n");
     }
