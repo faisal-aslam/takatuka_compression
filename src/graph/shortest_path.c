@@ -8,6 +8,7 @@
 
 #define MAX_STACK_SIZE MAX_LEVELS
 int prune_count =0;
+#define MAX_PUSH_COUNT 100000
 
 /**
  * Calculates the cost of adding a sequence to the path based on its length and frequency.
@@ -199,14 +200,17 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     StackItem main_stack[MAX_STACK_SIZE];
     int top = -1;
     uint16_t last_level = get_last_level_index();
-    int back_track_count = 0;
-    int best_count = 0;
-    int push_count = 0;
+    uint32_t back_track_count = 0;
+    uint32_t best_count = 0;
+    uint32_t push_count = 0;
     path_init();      // Reset path state
     seq_repo_reset(); // Reset sequence frequencies (memory reused)
     initialize_leaf_nodes(main_stack, &top, last_level);
 
     while (top >= 0) {
+        if (push_count > MAX_PUSH_COUNT && best_count >= 1) {
+            break; // I do not like that but it is here for the time being.
+        }
         StackItem current = main_stack[top--];
 
         if (current.node_id == UINT32_MAX) {
@@ -243,6 +247,10 @@ void find_shortest_path_to_sink(const uint8_t *block) {
             if(update_best_path()) {
                 best_count++;
                 printf("Saved the path %d with cost: %d\n", best_count, path_state.current_path_cost);
+                printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count, back_track_count, push_count);
+                push_count = 0;
+                back_track_count = 0;
+                prune_count = 0;
             }
             continue; // Root has no parents
         }
@@ -250,7 +258,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
         // Explore parents 
         add_parent_nodes_to_stack(main_stack, &top, node);
     }
-    printf("\nbest_count=%d, prune_count=%d, back_track_count=%d, push_count=%u\n", best_count, prune_count, back_track_count, push_count);
+    printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count, back_track_count, push_count);
     // Final output
     print_path(0, 1, block);
 }
