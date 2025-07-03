@@ -8,7 +8,7 @@
 
 #define MAX_STACK_SIZE MAX_LEVELS
 int prune_count =0;
-#define MAX_PUSH_COUNT 100000
+#define MAX_PUSH_COUNT BLOCK_SIZE*10
 
 /**
  * Calculates the cost of adding a sequence to the path based on its length and frequency.
@@ -18,7 +18,7 @@ int prune_count =0;
  * - If length > 1 and frequency == 1: cost = length + 1
  * - If length > 1 and frequency > 1: cost = 1
  */
-#define COST(len, freq) (((len) == 1) ? 1 : (((freq) == 1) ? ((len) + 1) : 1))
+#define COST(len, freq) (((len) == 1) ? 9 : (((freq) == 1) ? ((len*8) + len) : 8))
 
 
 typedef struct {
@@ -31,9 +31,9 @@ typedef struct {
     uint32_t current_path_stack[MAX_LEVELS];
     int32_t cost_stack[MAX_LEVELS]; // cost added by each node
     int32_t current_path_size;
-    int32_t current_path_cost;
+    double current_path_cost;
     uint32_t best_path_stack[MAX_LEVELS];
-    int32_t best_path_cost;
+    double best_path_cost;
     int32_t best_path_size;
 } Path;
 
@@ -72,10 +72,10 @@ static inline uint8_t update_best_path() {
  */
 static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t* block) {
     const int32_t size = isCurrent ? path_state.current_path_size : path_state.best_path_size;
-    const int32_t cost = isCurrent ? path_state.current_path_cost : path_state.best_path_cost;
+    const double cost = isCurrent ? path_state.current_path_cost : path_state.best_path_cost;
     const uint32_t *stack = isCurrent ? path_state.current_path_stack : path_state.best_path_stack;
     
-    printf("\nShortest path size=%d, cost=%d \n", size, cost);
+    printf("\nShortest path size=%d, cost=%lf \n", size, cost);    
     for (int32_t i = size; i >= 0; i--) {
         uint32_t node_id = stack[i];
         GraphNode *node = get_graph_node(node_id);
@@ -92,7 +92,8 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
             if (!node) continue;            
             print_node_sequence(node, block);
             if (i != size && i != 0) {
-                printf(" -> ");
+                printf("\n -> ");
+                fflush(stdout);
             }            
         }
         printf("\n\n");
@@ -139,7 +140,7 @@ static inline void process_node(const uint8_t* block, GraphNode* node) {
         );
     }
 
-    int32_t added_cost = COST(node->sequence_length, freq);
+    double added_cost = COST(node->sequence_length, freq);
     if (node->node_id == 0) added_cost = 0;
     path_state.cost_stack[path_state.current_path_size] = added_cost;
     path_state.current_path_cost += added_cost;
@@ -149,11 +150,11 @@ static inline void process_node(const uint8_t* block, GraphNode* node) {
 /**
  * Initializes the DFS stack with all valid leaf nodes.
  */
-static inline void initialize_leaf_nodes(StackItem* stack, int* top, uint16_t last_level) {
+static inline void initialize_leaf_nodes(StackItem* stack, int* top, uint16_t last_level, uint32_t first_node_start) {
     uint32_t start = get_level_start_id(last_level);
     uint32_t end = get_level_end_id(last_level);
-
-    for (uint32_t i = start; i < end; i++) {
+    if (start+first_node_start > end) return;
+    for (uint32_t i = start+first_node_start; i < end; i++) {
         GraphNode *node = get_graph_node(i);
         if (node) {            
             stack[++(*top)] = (StackItem){.node_id = i, .node_id_popped = 0};
@@ -203,13 +204,19 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     uint32_t back_track_count = 0;
     uint32_t best_count = 0;
     uint32_t push_count = 0;
+    uint32_t node_of_last_level_served = 0;
     path_init();      // Reset path state
     seq_repo_reset(); // Reset sequence frequencies (memory reused)
-    initialize_leaf_nodes(main_stack, &top, last_level);
+    initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
         if (push_count > MAX_PUSH_COUNT && best_count >= 1) {
-            break; // I do not like that but it is here for the time being.
+            seq_repo_reset(); // Reset sequence frequencies (memory reused)
+            initialize_leaf_nodes(main_stack, &top, last_level, node_of_last_level_served);
+            top = -1;
+        }
+        if (top ==-1) {
+            node_of_last_level_served++;
         }
         StackItem current = main_stack[top--];
 
@@ -246,7 +253,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
 #endif
             if(update_best_path()) {
                 best_count++;
-                printf("Saved the path %d with cost: %d\n", best_count, path_state.current_path_cost);
+                printf("Saved the path %d with cost: %lf\n", best_count, path_state.current_path_cost);
                 printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count, back_track_count, push_count);
                 push_count = 0;
                 back_track_count = 0;
