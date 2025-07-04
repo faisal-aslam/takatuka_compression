@@ -3,7 +3,7 @@
 #define SHORTEST_PATH_H
 #include <stdint.h>
 #include "graph.h"
-#include "map/sequence_repository_freq.h"
+#include "../map/sequence_repository_freq.h"
 #include <limits.h>
 #include <stdio.h>
 

@@ -172,17 +172,23 @@ static inline uint8_t should_prune(GraphNode *node) {
 /**
  * Adds all valid parent nodes to the DFS stack for exploration.
  */
-static inline void add_parent_nodes_to_stack(StackItem* stack, int* top, GraphNode* node) {
+static inline void add_parent_nodes_to_stack(StackItem *stack, int *top,
+                                             GraphNode *node,
+                                             const uint8_t *block) {
     uint8_t parent_count = get_parent_nodes_count(node);
     GraphNode *parents = get_parent_nodes(node);
     for (uint8_t i = 0; i < parent_count; i++) {
-        if(!should_prune(&parents[i])) {
-            stack[++(*top)] = (StackItem){.node_id = parents[i].node_id, .node_id_popped = 0};
-        } 
+        if (should_prune(&parents[i]) ||
+            (node->sequence_length > 1 && 
+                seq_repo_get_frequency(&exist_repo[parents[i].node_level],
+                                    &block[node->offset], node->sequence_length) == 0)) {
 #ifdef DEBUG
-        if(should_prune(&parents[i])) printf("Prune parent node_id=%d\n", parents[i].node_id);
-#endif        
-
+            printf("Prune parent node_id=%d\n", parents[i].node_id);
+#endif
+            continue;
+        }
+        stack[++(*top)] =
+            (StackItem){.node_id = parents[i].node_id, .node_id_popped = 0};
     }
 }
 
@@ -275,7 +281,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
         }
 
         // Explore parents 
-        add_parent_nodes_to_stack(main_stack, &top, node);
+        add_parent_nodes_to_stack(main_stack, &top, node, block);
     }
     printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count, back_track_count, push_count);
     // Final output

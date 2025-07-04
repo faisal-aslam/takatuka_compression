@@ -16,10 +16,12 @@
 #include "graph_visualizer.h"
 #include <stdio.h>
 #include <stdbool.h>
-#include "map/sequence_repository.h"
+#include "../map/sequence_repository_freq.h"
 
 #define MAX_LEVELS BLOCK_SIZE
 #define MAX_WEIGHTS SEQ_LENGTH_LIMIT
+
+extern SequenceRepository exist_repo[MAX_LEVELS];
 
 #define TOTAL_GRAPH_NODES(SEQ_LIMIT, LEVELS) \
     (1 + ((SEQ_LIMIT) * ((SEQ_LIMIT) + 1)) / 2 + ((LEVELS) - (SEQ_LIMIT)) * (SEQ_LIMIT))
@@ -149,8 +151,6 @@ static inline GraphNode* get_parent_nodes(GraphNode* node) {
     uint32_t start_index =get_level_start_id (parent_level);
     return &graph.nodes[start_index];
 }
-
-
 
 
 #endif

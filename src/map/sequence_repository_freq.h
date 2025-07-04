@@ -14,5 +14,6 @@ uint32_t seq_repo_increase_frequency_cached(SequenceRepository *repo, const uint
 // Fast path: uses cached index (O(1))
 uint32_t seq_repo_decrease_by_index(SequenceRepository *repo, uint32_t index);
 
+uint32_t seq_repo_increase_frequency(SequenceRepository *repo, const uint8_t* data, uint16_t len);
 
 #endif

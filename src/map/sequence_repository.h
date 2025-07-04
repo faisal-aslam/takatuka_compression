@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <stdio.h>
 #include "graph/graph.h"
 
 #define INITIAL_CAPACITY 1024

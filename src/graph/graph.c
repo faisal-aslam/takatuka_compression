@@ -116,14 +116,14 @@ void compact_graph(const uint8_t* block) {
         SequenceRepository *dst = &exist_repo[current_level];
         for (uint32_t j = 0; j < src->capacity; j++) {
             if (src->is_used[j]) {
-                seq_repo_add(dst, src->entries[j].data,  src->entries[j].length, 1);
+                seq_repo_increase_frequency(dst, src->entries[j].data,  src->entries[j].length);
             }
         }        
         
         if (new_node->sequence_length > 1) {
             // Add current node's sequence to the current level's exist_repo
-            seq_repo_add(&exist_repo[current_level], &block[new_node->offset],
-                        new_node->sequence_length, 1);
+            seq_repo_increase_frequency(&exist_repo[current_level], &block[new_node->offset],
+                        new_node->sequence_length);
         }        
 
         // Compute min_depth if not the root node
