@@ -89,7 +89,8 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
             uint32_t node_id = stack[i];
             GraphNode *node = get_graph_node(node_id);
             if (!node) continue;            
-            printf(" -> %u| ", node->hash_index_cache);            
+            //printf(" -> %u| ", node->hash_index_cache);
+            printf(" -> %u| ", hash_index_cache[node->node_id]);            
             print_node_sequence(node, block);
             printf("\n");
             if (i%20 == 0) {
@@ -113,7 +114,7 @@ static inline void backtrack_node(uint32_t node_id) {
     path_state.current_path_cost -= path_state.cost_stack[path_state.current_path_size];
 
     if (node->sequence_length > 1) {
-        seq_repo_decrease_by_index(&useless_repo, node->hash_index_cache); // ← efficient
+        seq_repo_decrease_by_index(&useless_repo, node->node_id); // ← efficient
     }
 
     path_state.current_path_size--;
@@ -134,7 +135,7 @@ static inline void process_node(const uint8_t* block, GraphNode* node) {
     uint32_t freq = 1;
     if (node->sequence_length > 1) {
         freq = seq_repo_increase_frequency_cached(&useless_repo, &block[node->offset],
-            node->sequence_length, &node->hash_index_cache );
+            node->sequence_length, node->node_id );
     }
 
     double added_cost = COST(node->sequence_length, freq);

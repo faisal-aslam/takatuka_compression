@@ -1,7 +1,9 @@
 
 #include "sequence_repository_useless.h"
 #include "sequence_repository_freq.h"
+#include "../constants.h"
 
+uint32_t hash_index_cache[MAX_GRAPH_NODES]; //for frequency hash (not for binary hash)
 void seq_repo_init(SequenceRepository *repo, uint32_t inital_capcity) {
     printf("\n creating map of capacity=%u\n", inital_capcity);
     if (inital_capcity == 0 || inital_capcity > INITIAL_CAPACITY) {
@@ -32,9 +34,8 @@ void seq_repo_reset(SequenceRepository *repo) {
     memset(repo->is_used, 0, sizeof(uint8_t) * repo->capacity);
     repo->count = 0;
 
-    for (uint32_t i = 0; i < get_graph_size(); i++) {
-        GraphNode* node = get_graph_node(i);
-        if (node) node->hash_index_cache = UINT32_MAX;
+    for (uint32_t i = 0; i < MAX_GRAPH_NODES; i++) {
+        hash_index_cache[i] = UINT32_MAX;
     }
 }
 
@@ -77,10 +78,10 @@ static void resize_repository(SequenceRepository *repo) {
     free(old_values);
     free(old_is_used);
 
-    for (uint32_t i = 0; i < get_graph_size(); i++) {
-        GraphNode* node = get_graph_node(i);
-        if (node) node->hash_index_cache = UINT32_MAX;
+    for (uint32_t i = 0; i < MAX_GRAPH_NODES; i++) {       
+        hash_index_cache[i] = UINT32_MAX;
     }
+
 }
 
 void seq_repo_add(SequenceRepository *repo, const uint8_t* data, uint16_t length, uint32_t node_id) {
@@ -167,11 +168,47 @@ uint32_t seq_repo_increase_frequency(SequenceRepository *repo, const uint8_t* da
 
 uint32_t seq_repo_get_frequency(SequenceRepository *repo, const uint8_t* data, uint16_t length) {
     if (!data || length <= 1) return 0;
-    if (repo->count >= repo->capacity * LOAD_FACTOR) resize_repository(repo);
+
+    uint64_t hash = XXH3_64bits(data, length);
+    uint32_t index = hash % repo->capacity;
+    uint32_t start = index;
+
+    do {
+        if (!repo->is_used[index]) {
+            // Not found
+            return 0;
+        }
+
+        if (repo->hash_values[index] == hash &&
+            repo->entries[index].length == length &&
+            memcmp(repo->entries[index].data, data, length) == 0) {
+            return repo->values[index]; // Found
+        }
+
+        index = (index + 1) % repo->capacity;
+    } while (index != start);
+
+    return 0; // Not found after full loop
+}
+
+uint32_t seq_repo_increase_frequency_cached(SequenceRepository *repo, const uint8_t* data, uint16_t length, uint32_t node_id) {
+    uint32_t index = hash_index_cache[node_id];
+    if (!data || length <= 1) return 0;
+    if (repo->count >= repo->capacity * LOAD_FACTOR) {
+        resize_repository(repo);        
+    }
+    //fast using index.
+    if (index < repo->capacity && repo->is_used[index]) {
+        SequenceEntry* e = &repo->entries[index];
+        if (e->length == length && e->data == data) {
+            assert(repo->values[index] < UINT32_MAX);
+            return ++repo->values[index];
+        }
+    }
 
     uint64_t hash = XXH3_64bits(data, length);
     uint32_t start = hash % repo->capacity;
-    uint32_t index = start;
+    index = start;
 
     do {
         if (!repo->is_used[index]) {
@@ -180,6 +217,7 @@ uint32_t seq_repo_get_frequency(SequenceRepository *repo, const uint8_t* data, u
             repo->hash_values[index] = hash;
             repo->values[index] = 1;
             repo->is_used[index] = 1;
+            hash_index_cache[node_id] = index; //save index the first time.
             repo->count++;
             return 1;
         }
@@ -187,6 +225,7 @@ uint32_t seq_repo_get_frequency(SequenceRepository *repo, const uint8_t* data, u
             repo->entries[index].length == length &&
             memcmp(repo->entries[index].data, data, length) == 0) {
             assert(repo->values[index] < UINT32_MAX);
+            hash_index_cache[node_id] = index; //save index
             return ++repo->values[index];
         }
         index = (index + 1) % repo->capacity;
@@ -195,48 +234,8 @@ uint32_t seq_repo_get_frequency(SequenceRepository *repo, const uint8_t* data, u
     return 0;
 }
 
-uint32_t seq_repo_increase_frequency_cached(SequenceRepository *repo, const uint8_t* data, uint16_t length, uint32_t* index) {
-    if (!data || length <= 1 || !index) return 0;
-    if (repo->count >= repo->capacity * LOAD_FACTOR) {
-        resize_repository(repo);
-        *index = UINT32_MAX;
-    }
-
-    if (*index < repo->capacity && repo->is_used[*index]) {
-        SequenceEntry* e = &repo->entries[*index];
-        if (e->length == length && e->data == data) {
-            assert(repo->values[*index] < UINT32_MAX);
-            return ++repo->values[*index];
-        }
-    }
-
-    uint64_t hash = XXH3_64bits(data, length);
-    uint32_t start = hash % repo->capacity;
-    *index = start;
-
-    do {
-        if (!repo->is_used[*index]) {
-            repo->entries[*index].data = data;
-            repo->entries[*index].length = length;
-            repo->hash_values[*index] = hash;
-            repo->values[*index] = 1;
-            repo->is_used[*index] = 1;
-            repo->count++;
-            return 1;
-        }
-        if (repo->hash_values[*index] == hash &&
-            repo->entries[*index].length == length &&
-            memcmp(repo->entries[*index].data, data, length) == 0) {
-            assert(repo->values[*index] < UINT32_MAX);
-            return ++repo->values[*index];
-        }
-        *index = (*index + 1) % repo->capacity;
-    } while (*index != start);
-
-    return 0;
-}
-
-uint32_t seq_repo_decrease_by_index(SequenceRepository *repo, uint32_t index) {
+uint32_t seq_repo_decrease_by_index(SequenceRepository *repo, uint32_t node_id) {
+    uint32_t index = hash_index_cache[node_id]; //get the saved index by node_id.
     if (index >= repo->capacity || !repo->is_used[index]) return 0;
     if (repo->values[index] > 0)
         repo->values[index]--;

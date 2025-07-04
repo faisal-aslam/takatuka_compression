@@ -1,5 +1,5 @@
 #include "graph.h"
-#include "../map/sequence_repository_useless.h"
+
 #define PER_LEVEL_GRAPH_NODES(SEQ_LIMIT, LEVEL) \
     (((LEVEL) <= (SEQ_LIMIT)) ? ((LEVEL) * ((LEVEL) + 1)) / 2 \
                               : ((SEQ_LIMIT) * ((SEQ_LIMIT) + 1)) / 2 + ((LEVEL) - (SEQ_LIMIT)) * (SEQ_LIMIT))

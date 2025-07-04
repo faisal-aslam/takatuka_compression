@@ -6,7 +6,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdio.h>
-#include "graph/graph.h"
+#include "../constants.h"
 
 #define INITIAL_CAPACITY 1024
 #define LOAD_FACTOR 0.75
@@ -25,6 +25,8 @@ typedef struct {
     uint32_t capacity;
     uint32_t count;
 } SequenceRepository;
+
+extern uint32_t hash_index_cache[MAX_GRAPH_NODES]; //for frequency hash (not for binary hash)
 
 void seq_repo_print_all(SequenceRepository *repo);
 void seq_repo_init(SequenceRepository *repo, uint32_t inital_capcity);

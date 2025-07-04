@@ -23,14 +23,10 @@
 
 extern SequenceRepository exist_repo[MAX_LEVELS];
 
-#define TOTAL_GRAPH_NODES(SEQ_LIMIT, LEVELS) \
-    (1 + ((SEQ_LIMIT) * ((SEQ_LIMIT) + 1)) / 2 + ((LEVELS) - (SEQ_LIMIT)) * (SEQ_LIMIT))
 
-#define MAX_GRAPH_NODES TOTAL_GRAPH_NODES(MAX_WEIGHTS, MAX_LEVELS)
 typedef struct {
     uint32_t node_id;
     uint32_t offset;    
-    uint32_t hash_index_cache; //for frequency hash (not for binary hash)
     uint16_t node_level;
     uint16_t min_depth;
     uint8_t sequence_length;
@@ -73,7 +69,6 @@ static inline GraphNode* get_next_node(void) {
     GraphNode* g_node = &graph.nodes[graph.size++];
     g_node->node_id = graph.size-1; //please never change node's id ever.
     g_node->node_level = graph.total_levels-1; //please do not change this ever too.  
-    g_node->hash_index_cache = UINT32_MAX;  
     return g_node;
 }
 
