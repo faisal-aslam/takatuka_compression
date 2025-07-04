@@ -136,6 +136,7 @@ static inline void process_node(const uint8_t* block, GraphNode* node) {
     if (node->sequence_length > 1) {
         freq = seq_repo_increase_frequency_cached(&useless_repo, &block[node->offset],
             node->sequence_length, node->node_id );
+        //printf("\n node_id=%u, freq=%d \n", node->node_id, freq);
     }
 
     double added_cost = COST(node->sequence_length, freq);
@@ -178,15 +179,18 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top,
                                              const uint8_t *block) {
     uint8_t parent_count = get_parent_nodes_count(node);
     GraphNode *parents = get_parent_nodes(node);
-    for (uint8_t i = 0; i < parent_count; i++) {
-        if (should_prune(&parents[i]) ||
-            (node->sequence_length > 1 && 
-                seq_repo_get_frequency(&exist_repo[parents[i].node_level],
-                                    &block[node->offset], node->sequence_length) == 0)) {
+    for (uint8_t i = 0; i < parent_count; i++) {        
+        if (parents[i].node_id != 0) {
+            if (should_prune(&parents[i]) ||
+                (node->sequence_length > 1 &&
+                 seq_repo_get_frequency(&exist_repo[parents[i].node_level],
+                                        &block[node->offset],
+                                        node->sequence_length) == 0)) {
 #ifdef DEBUG
-            printf("Prune parent node_id=%d\n", parents[i].node_id);
+                printf("Prune parent node_id=%d\n", parents[i].node_id);
 #endif
-            continue;
+                continue;
+            }
         }
         stack[++(*top)] =
             (StackItem){.node_id = parents[i].node_id, .node_id_popped = 0};
@@ -215,7 +219,7 @@ static inline uint8_t start_fresh_from_another_leaf(int *top, StackItem *main_st
  * each node using COST Macro.
  */
 void find_shortest_path_to_sink(const uint8_t *block) {
-    long stack_size = MIN(total_input_size, BLOCK_SIZE);
+    long stack_size = MIN(total_input_size+1, BLOCK_SIZE);//note: there is one extra level with no data. Count it!
     long max_push = 100*stack_size;
     StackItem main_stack[stack_size];
     int top = -1;
@@ -229,10 +233,10 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
-        if (push_count > max_push && best_count >= 1 
+        /*if (push_count > max_push && best_count >= 1 
             && !start_fresh_from_another_leaf(&top, main_stack, last_level, node_of_last_level_served, &push_count)) {
             break;            
-        }
+        }*/
         StackItem current = main_stack[top--];
 
         if (current.node_id == UINT32_MAX) {

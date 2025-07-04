@@ -83,8 +83,8 @@ void compact_graph(const uint8_t* block) {
             // Record compacted start of the current level
             graph.first_node_of_level[current_level] = level_start;
 #ifdef DEBUG
-        //printf("Level %u sequences:\n", current_level);
-        //seq_repo_print_all(&exist_repo[current_level]);
+        printf("Level %u sequences:\n", current_level);
+        seq_repo_print_all(&exist_repo[current_level]);
 
 #endif                        
             current_level++;
