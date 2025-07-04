@@ -30,6 +30,7 @@ typedef struct {
     int32_t cost_stack[MAX_LEVELS]; // cost added by each node
     int32_t current_path_size;
     double current_path_cost;
+    int32_t single_freq_sequence_count;
     uint32_t best_path_stack[MAX_LEVELS];
     double best_path_cost;
     int32_t best_path_size;
@@ -43,6 +44,7 @@ Path path_state;
 static inline void path_init() {
     path_state.current_path_size = -1;    
     path_state.current_path_cost = 0;
+    path_state.single_freq_sequence_count = 0;
     path_state.best_path_size = -1;
     path_state.best_path_cost = INT32_MAX;
 }
@@ -188,6 +190,19 @@ static inline void add_parent_nodes_to_stack(StackItem* stack, int* top, GraphNo
     }
 }
 
+static inline uint8_t start_fresh_from_another_leaf(int *top, StackItem *main_stack, uint16_t last_level, 
+    uint32_t node_of_last_level_served, uint32_t* push_count ) {
+    *top = -1; // stack is empty again. Start fresh.
+    initialize_leaf_nodes(main_stack, top, last_level, node_of_last_level_served); // start again from the next leaf.
+    if (*top == -1)
+        return 0; // all last level nodes has been served.
+    *push_count = 0;
+    path_state.current_path_size = -1; // remove current path but keep the best path.
+    path_state.current_path_cost = 0;
+    path_state.single_freq_sequence_count = 0;
+    return 1;
+}
+
 /**
  * Performs a DFS-based traversal (using a manual stack to avoid recursion)
  * to find the shortest-cost path from any leaf node to the root node (node_id
@@ -211,13 +226,9 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
-        if (push_count > max_push && best_count >= 1) {
-            top = -1; // stack is empty again. Start fresh.
-            initialize_leaf_nodes(main_stack, &top, last_level, node_of_last_level_served); //start again from the next leaf.
-            if (top == -1) break; // all last level nodes has been served.
-            push_count = 0;            
-            path_state.current_path_size = -1; //remove current path but keep the best path.    
-            path_state.current_path_cost = 0;            
+        if (push_count > max_push && best_count >= 1 
+            && !start_fresh_from_another_leaf(&top, main_stack, last_level, node_of_last_level_served, &push_count)) {
+            break;            
         }
         StackItem current = main_stack[top--];
 
@@ -228,8 +239,9 @@ void find_shortest_path_to_sink(const uint8_t *block) {
             continue;
         }
         GraphNode *node = get_graph_node(current.node_id);
-        if (node->node_id >= get_level_start_id(last_level)) {
+        if (node->node_id >= get_level_start_id(last_level)) { //encountered a leaf node.
              node_of_last_level_served++;
+             path_state.single_freq_sequence_count = 0; //reset.
         }
 
         // The following pruning is very useful for speed up.
