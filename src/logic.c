@@ -32,7 +32,7 @@ static GraphNode* create_node(uint32_t start, uint8_t length) {
 void process_block(const uint8_t *block, uint32_t block_size) {
     init_graph();
     create_root();
-    seq_repo_init(&useless_repo);
+    seq_repo_init(&useless_repo, INITIAL_CAPACITY);
 
 #ifdef DEBUG
     print_graph_node(get_graph_node(0));
@@ -73,7 +73,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #endif
         }
     }
-    compact_graph(); //compact the graph by removing useless nodes.
+    compact_graph(block); //compact the graph by removing useless nodes.
 #ifdef DEBUG
     visualize_graph(block); //create graph in DOT for visualization.
 #endif    

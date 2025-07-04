@@ -25,4 +25,9 @@ typedef struct {
     uint32_t count;
 } SequenceRepository;
 
+void seq_repo_print_all(SequenceRepository *repo);
+void seq_repo_init(SequenceRepository *repo, uint32_t inital_capcity);
+void seq_repo_cleanup(SequenceRepository *repo);
+void seq_repo_reset(SequenceRepository *repo);
+
 #endif

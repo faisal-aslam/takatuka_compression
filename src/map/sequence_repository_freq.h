@@ -6,10 +6,6 @@
 #include <string.h>
 #include "sequence_repository.h"
 
-void seq_repo_init(SequenceRepository *repo);
-void seq_repo_cleanup(SequenceRepository *repo);
-void seq_repo_reset(SequenceRepository *repo);
-
 uint32_t seq_repo_get_frequency(SequenceRepository *repo, const uint8_t* data, uint16_t length);
 
 // Returns new frequency, and optionally outputs index

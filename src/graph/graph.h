@@ -16,6 +16,7 @@
 #include "graph_visualizer.h"
 #include <stdio.h>
 #include <stdbool.h>
+#include "map/sequence_repository.h"
 
 #define MAX_LEVELS BLOCK_SIZE
 #define MAX_WEIGHTS SEQ_LENGTH_LIMIT
@@ -59,7 +60,7 @@ static inline uint16_t get_parent_level(GraphNode* node);
 static inline void reset_graph(void);
 void print_graph_node(GraphNode *node);
 void print_node_sequence(GraphNode *node, const uint8_t* block);
-void compact_graph(void);
+void compact_graph(const uint8_t* block);
 
 static inline void reset_graph(void) {
     graph.size = 0;

@@ -1,6 +1,16 @@
 #include "graph.h"
+#include "../map/sequence_repository_useless.h"
+#define PER_LEVEL_GRAPH_NODES(SEQ_LIMIT, LEVEL) \
+    (((LEVEL) <= (SEQ_LIMIT)) ? ((LEVEL) * ((LEVEL) + 1)) / 2 \
+                              : ((SEQ_LIMIT) * ((SEQ_LIMIT) + 1)) / 2 + ((LEVEL) - (SEQ_LIMIT)) * (SEQ_LIMIT))
+
 
 Graph graph; // Actual single definition
+
+/**
+ * Tracks if a sequence exist at a level i its ancestors.
+ */ 
+SequenceRepository exist_repo[MAX_LEVELS];
 
 void init_graph(void) {
     graph.size = 0;
@@ -51,10 +61,11 @@ void verify_graph_integrity() {
  * Side effects:
  * - Modifies `graph.nodes`, `graph.size`, `graph.first_node_of_level`, and sets `min_depth` for each node.
  */
-void compact_graph(void) {
+void compact_graph(const uint8_t* block) {
     assert(graph.size == 0 || (graph.nodes[0].node_id == 0 && !graph.nodes[0].isUseless));
 
     uint32_t write_idx = 0;
+    //we start from level 0 or sink and go towards source nodes.
     uint32_t current_level = 0;
     uint32_t level_start = 0;
 #ifdef DEBUG
@@ -71,9 +82,17 @@ void compact_graph(void) {
 
             // Record compacted start of the current level
             graph.first_node_of_level[current_level] = level_start;
+#ifdef DEBUG
+        //printf("Level %u sequences:\n", current_level);
+        //seq_repo_print_all(&exist_repo[current_level]);
 
+#endif                        
             current_level++;
             level_start = write_idx;
+
+            //First we initialize the new map.
+            seq_repo_init(&exist_repo[current_level], PER_LEVEL_GRAPH_NODES(SEQ_LENGTH_LIMIT, current_level));
+
         }
 
         GraphNode* node = &graph.nodes[read_idx];
@@ -83,11 +102,29 @@ void compact_graph(void) {
 
         // Compact node to new position
         if (write_idx != read_idx) {
-            graph.nodes[write_idx] = *node;
+            graph.nodes[write_idx] = *node;            
         }
 
         GraphNode* new_node = &graph.nodes[write_idx];
         new_node->node_id = write_idx;
+        // Here we create map that contain sequence of new_node union with
+        // sequences of its parent_level.        
+        uint16_t parent_level = new_node->node_level - new_node->sequence_length;     
+        
+        // Merge parent level’s exist_repo into current level
+        SequenceRepository *src = &exist_repo[parent_level];
+        SequenceRepository *dst = &exist_repo[current_level];
+        for (uint32_t j = 0; j < src->capacity; j++) {
+            if (src->is_used[j]) {
+                seq_repo_add(dst, src->entries[j].data,  src->entries[j].length, 1);
+            }
+        }        
+        
+        if (new_node->sequence_length > 1) {
+            // Add current node's sequence to the current level's exist_repo
+            seq_repo_add(&exist_repo[current_level], &block[new_node->offset],
+                        new_node->sequence_length, 1);
+        }        
 
         // Compute min_depth if not the root node
         if (write_idx != 0) {

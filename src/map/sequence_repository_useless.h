@@ -5,10 +5,6 @@
 #include <stddef.h>
 #include "sequence_repository.h"
 
-void seq_repo_init(SequenceRepository *repo);
-void seq_repo_cleanup(SequenceRepository *repo);
-void seq_repo_reset(SequenceRepository *repo);
-
 // Add a sequence with a given node_id. If already present and node_id differs, mark as shared.
 void seq_repo_add(SequenceRepository *repo, const uint8_t* data, uint16_t length, uint32_t node_id);
 
