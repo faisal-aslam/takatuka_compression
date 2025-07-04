@@ -76,16 +76,14 @@ static void print_links(FILE* output, const GraphNode* node) {
     GraphNode* parent_nodes = get_parent_nodes((GraphNode*)node);
 
     for (uint16_t i = 0; i < parent_count; i++) {
-        GraphNode* parent = &parent_nodes[i];   
-        if (node->node_id == 1933) {
-            printf(" stop here\n");
-        }    
+        GraphNode* parent = &parent_nodes[i];    
         fprintf(output, " %u -> %u ;\n", 
                 node->node_id, parent->node_id);
         
         break;// only create one link as all links points to the node of this level.
     }
 }
+
 void visualize_graph(const uint8_t* block) {    
      FILE* output = fopen("./graph.dot","w");  //or stdout
     if (!output) return;

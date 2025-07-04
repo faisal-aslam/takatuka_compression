@@ -6,9 +6,7 @@
 #include <limits.h>
 #include <stdio.h>
 
-#define MAX_STACK_SIZE MAX_LEVELS
 int prune_count =0;
-#define MAX_PUSH_COUNT BLOCK_SIZE*10
 
 /**
  * Calculates the cost of adding a sequence to the path based on its length and frequency.
@@ -43,9 +41,9 @@ Path path_state;
  * Initializes the path state for a new search.
  */
 static inline void path_init() {
-    path_state.current_path_size = -1;
-    path_state.best_path_size = -1;
+    path_state.current_path_size = -1;    
     path_state.current_path_cost = 0;
+    path_state.best_path_size = -1;
     path_state.best_path_cost = INT32_MAX;
 }
 
@@ -154,7 +152,7 @@ static inline void process_node(const uint8_t* block, GraphNode* node) {
 static inline void initialize_leaf_nodes(StackItem* stack, int* top, uint16_t last_level, uint32_t first_node_start) {
     uint32_t start = get_level_start_id(last_level);
     uint32_t end = get_level_end_id(last_level);
-    if (start+first_node_start > end) return;
+    if (start+first_node_start >= end) return;
     for (uint32_t i = start+first_node_start; i < end; i++) {
         GraphNode *node = get_graph_node(i);
         if (node) {            
@@ -199,7 +197,9 @@ static inline void add_parent_nodes_to_stack(StackItem* stack, int* top, GraphNo
  * each node using COST Macro.
  */
 void find_shortest_path_to_sink(const uint8_t *block) {
-    StackItem main_stack[MAX_STACK_SIZE];
+    long stack_size = MIN(total_input_size, BLOCK_SIZE);
+    long max_push = 100*stack_size;
+    StackItem main_stack[stack_size];
     int top = -1;
     uint16_t last_level = get_last_level_index();
     uint32_t back_track_count = 0;
@@ -211,13 +211,13 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
-        if (push_count > MAX_PUSH_COUNT && best_count >= 1) {
-            seq_repo_reset(); // Reset sequence frequencies (memory reused)
-            initialize_leaf_nodes(main_stack, &top, last_level, node_of_last_level_served);
-            top = -1;
-        }
-        if (top ==-1) {
-            node_of_last_level_served++;
+        if (push_count > max_push && best_count >= 1) {
+            top = -1; // stack is empty again. Start fresh.
+            initialize_leaf_nodes(main_stack, &top, last_level, node_of_last_level_served); //start again from the next leaf.
+            if (top == -1) break; // all last level nodes has been served.
+            push_count = 0;            
+            path_state.current_path_size = -1; //remove current path but keep the best path.    
+            path_state.current_path_cost = 0;            
         }
         StackItem current = main_stack[top--];
 
@@ -228,6 +228,9 @@ void find_shortest_path_to_sink(const uint8_t *block) {
             continue;
         }
         GraphNode *node = get_graph_node(current.node_id);
+        if (node->node_id >= get_level_start_id(last_level)) {
+             node_of_last_level_served++;
+        }
 
         // The following pruning is very useful for speed up.
         // In it, we do not explore paths which are worse.

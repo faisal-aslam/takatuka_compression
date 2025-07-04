@@ -57,7 +57,9 @@ void compact_graph(void) {
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
     uint32_t level_start = 0;
-
+#ifdef DEBUG
+    printf("\n\nTotal nodes before compaction =%u\n", graph.size);
+#endif 
     // Initialize root node's min depth
     graph.nodes[0].min_depth = 0;
     graph.level_min_depth[0] = 0;
@@ -123,6 +125,7 @@ void compact_graph(void) {
     graph.size = write_idx;
 
     #ifdef DEBUG
+    printf("Total nodes after compaction =%u\n", graph.size);
     verify_graph_integrity();
     #endif
 }

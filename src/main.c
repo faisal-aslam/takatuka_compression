@@ -7,6 +7,7 @@
 #include "constants.h"
 
 #include <sys/stat.h>  // for file size
+long total_input_size;
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -23,7 +24,7 @@ int main(int argc, char *argv[]) {
 
     // Get file size
     fseek(file, 0L, SEEK_END);
-    long total_size = ftell(file);
+    total_input_size = ftell(file);
     rewind(file);
 
     // Allocate block
@@ -47,7 +48,7 @@ int main(int argc, char *argv[]) {
         total_processed += bytesRead;
 
         // Compute and print progress
-        int percent = (int)(((double)total_processed / total_size) * 100.0);
+        int percent = (int)(((double)total_processed / total_input_size) * 100.0);
         if (percent != last_percent) {
             printf("\rTotal Progress: %3d%%", percent);
             fflush(stdout);
