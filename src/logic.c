@@ -7,6 +7,8 @@
 #include "graph/shortest_path.h"
 #include "map/sequence_repository_useless.h"
 
+
+
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 
@@ -30,7 +32,7 @@ static GraphNode* create_node(uint32_t start, uint8_t length) {
 void process_block(const uint8_t *block, uint32_t block_size) {
     init_graph();
     create_root();
-    seq_repo_init();
+    seq_repo_init(&useless_repo);
 
 #ifdef DEBUG
     print_graph_node(get_graph_node(0));
@@ -50,7 +52,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
             GraphNode *node = create_node(start, seq_len);
 
             if (seq_len > 1) {
-                uint32_t node_id = seq_repo_get_node_id(&block[start], seq_len);
+                uint32_t node_id = seq_repo_get_node_id(&useless_repo, &block[start], seq_len);
                 node->isUseless = 1; // Assume useless initially
 
                 if (node_id != UINT32_MAX) {
@@ -58,7 +60,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
                     if (g_node) g_node->isUseless = 0; // Mark existing node as useful
                     node->isUseless = 0;                // Mark current node as useful
                 } else {
-                    seq_repo_add(&block[start], seq_len, node->node_id);
+                    seq_repo_add(&useless_repo, &block[start], seq_len, node->node_id);
                     // Still marked useless until repeated
                 }
             } else {

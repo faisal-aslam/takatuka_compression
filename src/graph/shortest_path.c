@@ -1,12 +1,10 @@
 // shortest_path.c
 
 #include "shortest_path.h"
-#include "graph.h"
-#include "map/sequence_repository_freq.h"
-#include <limits.h>
-#include <stdio.h>
+
 
 int prune_count =0;
+SequenceRepository useless_repo;
 
 /**
  * Calculates the cost of adding a sequence to the path based on its length and frequency.
@@ -17,6 +15,7 @@ int prune_count =0;
  * - If length > 1 and frequency > 1: cost = 1
  */
 #define COST(len, freq) (((len) == 1) ? 9 : (((freq) == 1) ? ((len*8) + len) : 8))
+//#define COST(len, freq) (((len) == 1) ? 1 : (((freq) == 1) ? ((len) + 1) : 1))
 
 
 typedef struct {
@@ -105,7 +104,7 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
  * Handles backtracking by removing the node from current path,
  * decreasing its frequency if needed, and updating costs.
  */
-static inline void backtrack_node(const uint8_t* block, uint32_t node_id) {
+static inline void backtrack_node(uint32_t node_id) {
     GraphNode *node = get_graph_node(node_id);
 #ifdef DEBUG
     printf("backtrack node %u\n", node->node_id);
@@ -114,7 +113,7 @@ static inline void backtrack_node(const uint8_t* block, uint32_t node_id) {
     path_state.current_path_cost -= path_state.cost_stack[path_state.current_path_size];
 
     if (node->sequence_length > 1) {
-        seq_repo_decrease_by_index(node->hash_index_cache); // ← efficient
+        seq_repo_decrease_by_index(&useless_repo, node->hash_index_cache); // ← efficient
     }
 
     path_state.current_path_size--;
@@ -134,11 +133,8 @@ static inline void process_node(const uint8_t* block, GraphNode* node) {
 
     uint32_t freq = 1;
     if (node->sequence_length > 1) {
-        freq = seq_repo_increase_frequency_cached(
-            &block[node->offset],
-            node->sequence_length,
-            &node->hash_index_cache  
-        );
+        freq = seq_repo_increase_frequency_cached(&useless_repo, &block[node->offset],
+            node->sequence_length, &node->hash_index_cache );
     }
 
     double added_cost = COST(node->sequence_length, freq);
@@ -222,7 +218,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     uint32_t push_count = 0;
     uint32_t node_of_last_level_served = 0;
     path_init();      // Reset path state
-    seq_repo_reset(); // Reset sequence frequencies (memory reused)
+    seq_repo_reset(&useless_repo); // Reset sequence frequencies (memory reused)
     initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
@@ -234,7 +230,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
 
         if (current.node_id == UINT32_MAX) {
             // Backtrack marker encountered
-            backtrack_node(block, current.node_id_popped);
+            backtrack_node(current.node_id_popped);
             back_track_count++;
             continue;
         }
