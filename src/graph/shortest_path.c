@@ -75,7 +75,7 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
     const double cost = isCurrent ? path_state.current_path_cost : path_state.best_path_cost;
     const uint32_t *stack = isCurrent ? path_state.current_path_stack : path_state.best_path_stack;
     
-    printf("\nShortest path size=%d, cost=%lf \n", size, cost);    
+    printf("\nShortest path size=%d, cost=%lf \n", size, cost/8);    
     for (int32_t i = size; i >= 0; i--) {
         uint32_t node_id = stack[i];
         GraphNode *node = get_graph_node(node_id);
@@ -257,10 +257,10 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
-        if (push_count > max_push && best_count >= 1 
+        /*if (push_count > max_push && best_count >= 1 
             && !start_fresh_from_another_leaf(&top, main_stack, last_level, node_of_last_level_served, &push_count)) {
             break;            
-        }
+        }*/
         StackItem current = main_stack[top--];
 
         if (current.node_id == UINT32_MAX) {

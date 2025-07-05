@@ -5,22 +5,21 @@
 #include <stdbool.h>
 
 static const char* LEVEL_COLORS[] = {
-    "#000000",  // Level 0 - Root (black)
-
-    "#FFCDD2",  // Level 1 - Light Red / Rose
-    "#F8BBD0",  // Level 2 - Light Pink
-    "#E1BEE7",  // Level 3 - Light Purple
-    "#D1C4E9",  // Level 4 - Soft Lavender
-    "#C5CAE9",  // Level 5 - Light Indigo
-    "#BBDEFB",  // Level 6 - Light Sky Blue
-    "#B2EBF2",  // Level 7 - Aqua / Cyan
-    "#B2DFDB",  // Level 8 - Light Teal
-    "#C8E6C9",  // Level 9 - Light Green
-    "#DCEDC8",  // Level 10 - Pale Lime
-    "#FFF9C4",  // Level 11 - Light Yellow
-    "#FFE0B2",  // Level 12 - Light Orange
-    "#FFCCBC",  // Level 13 - Soft Salmon
-    "#D7CCC8"   // Level 14 - Soft Brown
+    "#CBA6F7",  // 
+    "#FFCDD2",  // Light Red
+    "#F8BBD0",  // Pink
+    "#E1BEE7",  // Light Purple
+    "#D1C4E9",  // Lavender
+    "#C5CAE9",  // Light Indigo
+    "#BBDEFB",  // Sky Blue
+    "#B2EBF2",  // Aqua / Cyan
+    "#B2DFDB",  // Teal
+    "#C8E6C9",  // Light Green
+    "#DCEDC8",  // Lime
+    "#FFF9C4",  // Light Yellow
+    "#FFE0B2",  // Light Orange
+    "#FFCCBC",  // Light Salmon
+    "#D7CCC8"   // Soft Brown
 };
 
 static void print_node_content(FILE* output, const GraphNode* node, const uint8_t* block) {
@@ -36,11 +35,14 @@ static void print_node_content(FILE* output, const GraphNode* node, const uint8_
 }
 
 static const char* get_node_color(uint16_t level) {
-    if (level >= sizeof(LEVEL_COLORS)/sizeof(LEVEL_COLORS[0])) {
-        return "white"; // Default if we exceed palette
+    if (level == 0) {
+        return "#000000";
     }
-    return LEVEL_COLORS[level];
+    size_t num_colors = sizeof(LEVEL_COLORS) / sizeof(LEVEL_COLORS[0]);
+    return LEVEL_COLORS[level % num_colors];
 }
+
+
 
 static void print_node(FILE* output, const GraphNode* node, const uint8_t *block) {
     // Determine level of node by scanning level starts
