@@ -173,7 +173,7 @@ static inline void print_node_link(GraphNode* node, GraphNode* parent) {
 
 void print_node_sequence(GraphNode *node, const uint8_t* block) {
     for (int i=0; i<node->sequence_length; i++) {
-        printf("%0x", block[node->offset+i]);
+        printf("%c", block[node->offset+i]);
         if (i+1 < node->sequence_length) {
             printf(",");
         }

@@ -179,15 +179,30 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top,
                                              const uint8_t *block) {
     uint8_t parent_count = get_parent_nodes_count(node);
     GraphNode *parents = get_parent_nodes(node);
-    for (uint8_t i = 0; i < parent_count; i++) {        
-        if (parents[i].node_id != 0) {
+    for (uint8_t i = 0; i < parent_count; i++) {  
+        if (parents[i].node_id == 127) {
+            print_graph_node(node);
+            print_graph_node(&parents[i]);
+            uint8_t freq= seq_repo_get_frequency(&useless_repo,
+                                        &block[node->offset],
+                                        node->sequence_length);
+            freq = seq_repo_get_frequency(&exist_repo[parents[i].node_level],
+                                        &block[node->offset],
+                                        node->sequence_length);
+            seq_repo_print_all(&exist_repo[get_parent_level(&parents[i])]);
+            printf("\n\n");
+            seq_repo_print_all(&useless_repo);                          
+        }      
+        if (parents[i].node_id != 0) { //this is incorrect. We have to check all uneless of freq 1 .... Todo tomorrow.
             if (should_prune(&parents[i]) ||
-                (node->sequence_length > 1 &&
+                (node->sequence_length > 1 && seq_repo_get_frequency(&useless_repo,
+                                        &block[node->offset],
+                                        node->sequence_length) == 1 &&
                  seq_repo_get_frequency(&exist_repo[parents[i].node_level],
                                         &block[node->offset],
                                         node->sequence_length) == 0)) {
 #ifdef DEBUG
-                printf("Prune parent node_id=%d\n", parents[i].node_id);
+                printf("Prune parent node_id=%d, shouldPrune=%u, \n", parents[i].node_id, should_prune(&parents[i]));
 #endif
                 continue;
             }
@@ -229,7 +244,8 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     uint32_t push_count = 0;
     uint32_t node_of_last_level_served = 0;
     path_init();      // Reset path state
-    seq_repo_reset(&useless_repo); // Reset sequence frequencies (memory reused)
+    seq_repo_cleanup(&useless_repo);
+    seq_repo_init(&useless_repo, stack_size);    
     initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
@@ -246,6 +262,9 @@ void find_shortest_path_to_sink(const uint8_t *block) {
             continue;
         }
         GraphNode *node = get_graph_node(current.node_id);
+        if (node->node_id == 127) {
+            printf(" stop here \n");
+        }
         if (node->node_id >= get_level_start_id(last_level)) { //encountered a leaf node.
              node_of_last_level_served++;
              path_state.single_freq_sequence_count = 0; //reset.
@@ -272,7 +291,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
         if (current.node_id == 0) {
             
 #ifdef DEBUG
-            print_path(1, 0, NULL);
+            print_path(1, 1, block);
 #endif
             if(update_best_path()) {
                 best_count++;
