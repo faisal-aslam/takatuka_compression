@@ -35,6 +35,114 @@ void verify_graph_integrity() {
     }
 }
 
+static void create_level_graphs_of_useful_nodes(const uint8_t* block) {
+    assert(graph.size == 0 || (graph.nodes[0].node_id == 0 && !graph.nodes[0].isUseless));
+
+    uint32_t write_idx = 0;
+    //we start from level 0 or sink and go towards source nodes.
+    uint32_t current_level = 0;
+    uint32_t level_start = 0;
+#ifdef DEBUG
+    printf("\n\nTotal nodes before compaction =%u\n", graph.size);
+#endif 
+    // Initialize root node's min depth
+    graph.nodes[0].min_depth = 0;
+    graph.level_min_depth[0] = 0;
+
+    seq_repo_init(&exist_repo[0], 1);//initalize root level's map which will contain nothing but needed to avoid errors.
+
+    for (uint32_t read_idx = 0; read_idx < graph.size; read_idx++) {
+        // Detect level transition
+        if (current_level + 1 < graph.total_levels &&
+            read_idx >= graph.first_node_of_level[current_level + 1]) {
+
+            // Record compacted start of the current level
+            graph.first_node_of_level[current_level] = level_start;
+#ifdef DEBUG
+        printf("Level %u sequences:\n", current_level);
+        seq_repo_print_all(&exist_repo[current_level]);
+
+#endif                        
+            current_level++;
+            if (current_level == 5) {
+                printf("\n Stop here \n");
+            }
+            level_start = write_idx;
+
+            //First we initialize the new map.
+            seq_repo_init(&exist_repo[current_level], PER_LEVEL_GRAPH_NODES(SEQ_LENGTH_LIMIT, current_level));
+
+        }
+
+        GraphNode* node = &graph.nodes[read_idx];
+        if (node->isUseless) { //ignore if a node is useless.
+            continue;
+        }
+
+        uint16_t parent_level = node->node_level - node->sequence_length;     
+        
+        // Merge parent level’s exist_repo into current level
+        SequenceRepository *src = &exist_repo[parent_level];
+        SequenceRepository *dst = &exist_repo[current_level];
+        for (uint32_t j = 0; j < src->capacity; j++) {
+            if (src->is_used[j]) {
+                seq_repo_increase_frequency(dst, src->entries[j].data,  src->entries[j].length);
+            }
+        }        
+        
+        if (node->sequence_length > 1) {
+            // Add current node's sequence to the current level's exist_repo
+            seq_repo_increase_frequency(&exist_repo[current_level], &block[node->offset],
+                        node->sequence_length);
+        }
+        write_idx++;
+
+    }
+#ifdef DEBUG
+    printf("Level %u sequences:\n", current_level);
+    seq_repo_print_all(&exist_repo[current_level]);
+    printf("Done with creating level graphs of useful nodes.\n", graph.size);
+#endif                        
+
+}
+
+static void mark_node_useless_with_seq_neither_in_child_nor_parent_levels(const uint8_t* block) {
+    for (uint32_t i = 1; i < graph.size; i++) { // start from 1 to skip root
+        GraphNode* node = &graph.nodes[i];
+
+        if (node->isUseless) continue;
+        if (node->sequence_length <= 1) continue; // no need to mark small sequences
+
+        uint16_t level = node->node_level;
+        uint16_t parent_level = level - node->sequence_length;
+        
+        printf("\nAt node=%u\n", node->node_id);
+        const uint8_t *seq = &block[node->offset];
+        uint8_t len = node->sequence_length;
+
+        // Check if the sequence exists in parent level        
+        bool found_in_parent = (seq_repo_get_frequency(&exist_repo[parent_level], seq, len) > 0);
+        if (found_in_parent) continue;
+
+        uint8_t freq_in_dummy_parents = seq_repo_get_frequency(&exist_repo[level], seq, len);
+        // Check if it exists in child with frequency greater than 1 (as it would count node sequence too)
+        bool found_in_child = false;
+        uint16_t leave_level = get_last_level_index();
+        uint8_t freq_at_leave = seq_repo_get_frequency(&exist_repo[leave_level], seq, len);
+        if (freq_at_leave > freq_in_dummy_parents) {
+            found_in_child = true;        
+        }
+        
+
+        if (!found_in_child) {
+            node->isUseless = true;
+#ifdef DEBUG
+            printf("Marked node_id=%u as USELESS (seq not in parent or any child levels)\n", node->node_id);
+#endif
+        }
+    }
+}
+
 /**
  * compact_graph:
  *
@@ -62,7 +170,10 @@ void verify_graph_integrity() {
  * - Modifies `graph.nodes`, `graph.size`, `graph.first_node_of_level`, and sets `min_depth` for each node.
  */
 void compact_graph(const uint8_t* block) {
-    assert(graph.size == 0 || (graph.nodes[0].node_id == 0 && !graph.nodes[0].isUseless));
+    assert(graph.size == 0 || (graph.nodes[0].node_id == 0 && !graph.nodes[0].isUseless));    
+    
+    create_level_graphs_of_useful_nodes(block);
+    mark_node_useless_with_seq_neither_in_child_nor_parent_levels(block);
 
     uint32_t write_idx = 0;
     //we start from level 0 or sink and go towards source nodes.

@@ -30,7 +30,7 @@ static void print_node_content(FILE* output, const GraphNode* node, const uint8_
 
     for (uint8_t i = 0; i < node->sequence_length; i++) {
         if (i > 0) fprintf(output, ",");
-        fprintf(output, "%0x", block[node->offset + i]);
+        fprintf(output, "%c", block[node->offset + i]);
     }
 }
 
