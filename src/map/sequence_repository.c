@@ -4,8 +4,7 @@
 #include "../constants.h"
 
 uint32_t hash_index_cache[MAX_GRAPH_NODES]; //for frequency hash (not for binary hash)
-void seq_repo_init(SequenceRepository *repo, uint32_t inital_capcity) {
-    printf("\n creating map of capacity=%u\n", inital_capcity);
+void seq_repo_init(SequenceRepository *repo, uint32_t inital_capcity) {    
     if (inital_capcity == 0 || inital_capcity > INITIAL_CAPACITY) {
         repo->capacity = INITIAL_CAPACITY;
     } else {

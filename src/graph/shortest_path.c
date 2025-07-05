@@ -257,10 +257,10 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
-        /*if (push_count > max_push && best_count >= 1 
+        if (push_count > max_push && best_count >= 1 
             && !start_fresh_from_another_leaf(&top, main_stack, last_level, node_of_last_level_served, &push_count)) {
             break;            
-        }*/
+        }
         StackItem current = main_stack[top--];
 
         if (current.node_id == UINT32_MAX) {
@@ -270,9 +270,6 @@ void find_shortest_path_to_sink(const uint8_t *block) {
             continue;
         }
         GraphNode *node = get_graph_node(current.node_id);
-        if (node->node_id == 127) {
-            printf(" stop here \n");
-        }
         if (node->node_id >= get_level_start_id(last_level)) { //encountered a leaf node.
              node_of_last_level_served++;
              path_state.single_freq_sequence_count = 0; //reset.
@@ -303,7 +300,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
 #endif
             if(update_best_path()) {
                 best_count++;
-                printf("Saved the path %d with cost: %lf\n", best_count, path_state.current_path_cost);
+                printf("Saved the path %d with cost: %lf\n", best_count, path_state.current_path_cost/8);
                 printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count, back_track_count, push_count);
                 push_count = 0;
                 back_track_count = 0;
