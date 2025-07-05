@@ -1,10 +1,11 @@
 // shortest_path.c
 
 #include "shortest_path.h"
+#include "../map/seq_freq_map.h"
 
 
 int prune_count =0;
-SequenceRepository useless_repo;
+SeqFreqMap map;
 
 /**
  * Calculates the cost of adding a sequence to the path based on its length and frequency.
@@ -90,7 +91,7 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
             GraphNode *node = get_graph_node(node_id);
             if (!node) continue;            
             //printf(" -> %u| ", node->hash_index_cache);
-            printf(" -> %u| ", hash_index_cache[node->node_id]);            
+            printf(" -> ");
             print_node_sequence(node, block);
             printf("\n");
             if (i%20 == 0) {
@@ -105,7 +106,7 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
  * Handles backtracking by removing the node from current path,
  * decreasing its frequency if needed, and updating costs.
  */
-static inline void backtrack_node(uint32_t node_id) {
+static inline void backtrack_node(uint32_t node_id, const uint8_t* block) {
     GraphNode *node = get_graph_node(node_id);
 #ifdef DEBUG
     printf("backtrack node %u\n", node->node_id);
@@ -114,7 +115,7 @@ static inline void backtrack_node(uint32_t node_id) {
     path_state.current_path_cost -= path_state.cost_stack[path_state.current_path_size];
 
     if (node->sequence_length > 1) {
-        seq_repo_decrease_by_index(&useless_repo, node->node_id); // ← efficient
+        seq_freq_decrement(&map, &block[node->offset], node->sequence_length, node->node_id);        
     }
 
     path_state.current_path_size--;
@@ -134,8 +135,7 @@ static inline void process_node(const uint8_t* block, GraphNode* node) {
 
     uint32_t freq = 1;
     if (node->sequence_length > 1) {
-        freq = seq_repo_increase_frequency_cached(&useless_repo, &block[node->offset],
-            node->sequence_length, node->node_id );
+        freq = seq_freq_increment(&map, &block[node->offset], node->sequence_length, node->node_id);
         //printf("\n node_id=%u, freq=%d \n", node->node_id, freq);
     }
 
@@ -179,38 +179,47 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top,
                                              const uint8_t *block) {
     uint8_t parent_count = get_parent_nodes_count(node);
     GraphNode *parents = get_parent_nodes(node);
-    for (uint8_t i = 0; i < parent_count; i++) {  
-        if (parents[i].node_id == 127) {
-            print_graph_node(node);
-            print_graph_node(&parents[i]);
-            uint8_t freq= seq_repo_get_frequency(&useless_repo,
-                                        &block[node->offset],
-                                        node->sequence_length);
-            freq = seq_repo_get_frequency(&exist_repo[parents[i].node_level],
-                                        &block[node->offset],
-                                        node->sequence_length);
-            seq_repo_print_all(&exist_repo[get_parent_level(&parents[i])]);
-            printf("\n\n");
-            seq_repo_print_all(&useless_repo);                          
-        }      
-        if (parents[i].node_id != 0) { //this is incorrect. We have to check all uneless of freq 1 .... Todo tomorrow.
-            if (should_prune(&parents[i]) ||
-                (node->sequence_length > 1 && seq_repo_get_frequency(&useless_repo,
-                                        &block[node->offset],
-                                        node->sequence_length) == 1 &&
-                 seq_repo_get_frequency(&exist_repo[parents[i].node_level],
-                                        &block[node->offset],
-                                        node->sequence_length) == 0)) {
+
+    for (uint8_t i = 0; i < parent_count; i++) {
+        GraphNode *parent = &parents[i];
+        uint32_t parent_level = parent->node_level;
+
+        if (should_prune(parent)) {
 #ifdef DEBUG
-                printf("Prune parent node_id=%d, shouldPrune=%u, \n", parents[i].node_id, should_prune(&parents[i]));
+            printf("Prune by cost: parent node_id=%u\n", parent->node_id);
 #endif
-                continue;
+            continue;
+        }
+
+        // Check all freq=1 sequences in current map
+        uint8_t should_prune_due_to_missing_seq = 0;
+
+        for (uint32_t j = 0; j < map.freq1_count; j++) {
+            uint32_t idx = map.freq1_indices[j];
+            const uint8_t *seq = map.entries[idx].sequence;
+            uint8_t len = map.entries[idx].length;
+
+            if (parent->node_id == 0 || seq_repo_get_frequency(&exist_repo[parent_level], seq, len) == 0) {
+                should_prune_due_to_missing_seq = 1;
+#ifdef DEBUG
+                printf("Prune parent_id=%u: missing freq=1 sequence of len=%u\n", parent->node_id, len);
+#endif
+                break;
             }
         }
-        stack[++(*top)] =
-            (StackItem){.node_id = parents[i].node_id, .node_id_popped = 0};
+
+        if (should_prune_due_to_missing_seq) {
+            continue;
+        }
+
+        // Passed all pruning checks, push to stack
+        stack[++(*top)] = (StackItem){
+            .node_id = parent->node_id,
+            .node_id_popped = 0
+        };
     }
 }
+
 
 static inline uint8_t start_fresh_from_another_leaf(int *top, StackItem *main_stack, uint16_t last_level, 
     uint32_t node_of_last_level_served, uint32_t* push_count ) {
@@ -244,8 +253,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     uint32_t push_count = 0;
     uint32_t node_of_last_level_served = 0;
     path_init();      // Reset path state
-    seq_repo_cleanup(&useless_repo);
-    seq_repo_init(&useless_repo, stack_size);    
+    init_seq_freq_map(&map, stack_size, stack_size);  
     initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
@@ -257,7 +265,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
 
         if (current.node_id == UINT32_MAX) {
             // Backtrack marker encountered
-            backtrack_node(current.node_id_popped);
+            backtrack_node(current.node_id_popped, block);
             back_track_count++;
             continue;
         }

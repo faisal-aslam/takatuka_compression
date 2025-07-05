@@ -28,7 +28,7 @@ typedef struct {
 void init_seq_freq_map(SeqFreqMap *map, uint32_t capacity, uint32_t hash_cache_size);
 void free_seq_freq_map(SeqFreqMap *map);
 
-void seq_freq_increment(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index);
+uint32_t seq_freq_increment(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index);
 void seq_freq_decrement(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index);
 uint32_t seq_freq_get(const SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index);
 void list_freq_1_sequences(const SeqFreqMap *map, void (*callback)(const uint8_t *seq, uint8_t len));

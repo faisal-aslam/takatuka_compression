@@ -7,7 +7,7 @@
 #include "graph/shortest_path.h"
 #include "map/sequence_repository_useless.h"
 
-
+SequenceRepository useless_repo;
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))

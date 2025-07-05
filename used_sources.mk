@@ -6,6 +6,7 @@ SRCS = \
     src/map/xxhash.c \
     src/graph/graph_visualizer.c \
     src/map/sequence_repository.c \
+    src/map/seq_freq_map.c \
     src/graph/shortest_path.c \
     src/graph/graph.c
 
