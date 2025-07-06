@@ -189,135 +189,127 @@ static void mark_nodes_useless(const uint8_t* block) {
     }
 }
 
-/**
- * compact_graph:
- *
- * This function performs two critical tasks in a single O(n) pass over the graph:
- *
- * (1) Compaction:
- *     - Removes all nodes marked as `isUseless`.
- *     - Maintains topological ordering based on level indices.
- *     - Updates `first_node_of_level` to reflect the new compacted layout.
- *
- * (2) Minimum Depth Calculation:
- *     - Computes the minimum depth (`min_depth`) of each node from the root node (node_id = 0).
- *     - Root node is at depth 0.
- *     - All parent nodes of any node lie in the same level, determined by:
- *           parent_level = node_level - sequence_length
- *     - Because of level-based topological ordering, we can track each level’s minimum depth while compacting.
- *     - This allows us to assign a node’s depth in constant time:
- *           min_depth(node) = 1 + level_min_depth[parent_level]
- *
- * Prerequisites:
- * - `graph` must be fully constructed with all nodes.
- * - All `isUseless` flags must be correctly set.
- *
- * Side effects:
- * - Modifies `graph.nodes`, `graph.size`, `graph.first_node_of_level`, and sets `min_depth` for each node.
- */
 void compact_graph(const uint8_t* block) {
     assert(graph.size == 0 || (graph.nodes[0].node_id == 0 && !graph.nodes[0].isUseless));    
     
+    // Step 1: Analyze nodes and mark useless ones
     record_level_wize_nodes(block);
     mark_nodes_useless(block);
 
     uint32_t write_idx = 0;
-    //we start from level 0 or sink and go towards source nodes.
-    uint32_t current_level = 0;
     uint32_t level_start = 0;
+    uint32_t current_level = 0;
+    
 #ifdef DEBUG
     printf("\n\nTotal nodes before compaction =%u\n", graph.size);
-#endif 
-    // Initialize root node's min depth
+#endif
+
+    // Initialize root node
     graph.nodes[0].min_depth = 0;
     graph.level_min_depth[0] = 0;
 
+    // Initialize first level's repository
+    seq_repo_init(&exist_repo[0], PER_LEVEL_GRAPH_NODES(SEQ_LENGTH_LIMIT, 0));
+
     for (uint32_t read_idx = 0; read_idx < graph.size; read_idx++) {
+        GraphNode* node = &graph.nodes[read_idx];
+        if (node->node_level == 5) {
+            printf("\nStop here\n");
+        }
         // Detect level transition
-        if (current_level + 1 < graph.total_levels &&
-            read_idx >= graph.first_node_of_level[current_level + 1]) {
-            // Record compacted start of the current level
+        if (node->node_level != current_level) {
+            // Save the previous level's boundary
             graph.first_node_of_level[current_level] = level_start;
-            current_level++;
+            
+            // Update to new level
+            current_level = node->node_level;
             level_start = write_idx;
-            //First we initialize the new map.
-            seq_repo_init(&exist_repo[current_level], PER_LEVEL_GRAPH_NODES(SEQ_LENGTH_LIMIT, current_level));
+            
+            // Initialize new level's repository
+            seq_repo_init(&exist_repo[current_level], 
+                         PER_LEVEL_GRAPH_NODES(SEQ_LENGTH_LIMIT, current_level));
         }
 
-        GraphNode* node = &graph.nodes[read_idx];
+        // Skip useless nodes
         if (node->isUseless) {
             continue;
         }
 
-        // Compact node to new position
+        // Compact node to new position if needed
         if (write_idx != read_idx) {
-            graph.nodes[write_idx] = *node;            
+            graph.nodes[write_idx] = *node;
         }
 
         GraphNode* new_node = &graph.nodes[write_idx];
         new_node->node_id = write_idx;
-        // Here we create map that contain sequence of new_node union with
-        // sequences of its parent_level.        
-        uint16_t parent_level = new_node->node_level - new_node->sequence_length;     
         
-        // Merge parent level’s exist_repo into current level
-        SequenceRepository *src = &exist_repo[parent_level];
-        SequenceRepository *dst = &exist_repo[current_level];
-        for (uint32_t j = 0; j < src->capacity; j++) {
-            if (src->is_used[j]) {
-                seq_repo_increase_frequency(dst, src->entries[j].data,  src->entries[j].length);
-            }
-        }        
+        // Calculate parent level
+        uint16_t parent_level = new_node->node_level - new_node->sequence_length;
         
-        if (new_node->sequence_length > 1) {
-            // Add current node's sequence to the current level's exist_repo
-            seq_repo_increase_frequency(&exist_repo[current_level], &block[new_node->offset],
-                        new_node->sequence_length);
-        }        
-
-        // Compute min_depth if not the root node
+        // For non-root nodes, merge parent's sequences and calculate depth
         if (write_idx != 0) {
-            uint16_t parent_level = new_node->node_level - new_node->sequence_length;
-
-            // Defensive check: parent_level must be in range
+            // Validate parent level
             if (parent_level >= graph.total_levels) {
-                fprintf(stderr, "Invalid parent level %u for node %u\n", parent_level, new_node->node_id);
+                fprintf(stderr, "Invalid parent level %u for node %u\n", 
+                       parent_level, new_node->node_id);
                 exit(1);
             }
 
-            uint16_t parent_min_depth = graph.level_min_depth[parent_level];
-            new_node->min_depth = parent_min_depth + 1;
+            // Merge parent level's sequences into current level
+            SequenceRepository *src = &exist_repo[parent_level];
+            SequenceRepository *dst = &exist_repo[current_level];
+            for (uint32_t j = 0; j < src->capacity; j++) {
+                if (src->is_used[j]) {
+                    seq_repo_increase_frequency(dst, 
+                                              src->entries[j].data,  
+                                              src->entries[j].length);
+                }
+            }
+
+            // Calculate node's minimum depth
+            new_node->min_depth = graph.level_min_depth[parent_level] + 1;
         }
 
-        // Track level's minimum depth
+        // Add current node's sequence if length > 1
+        if (new_node->sequence_length > 1) {
+            seq_repo_increase_frequency(&exist_repo[current_level], 
+                                      &block[new_node->offset],
+                                      new_node->sequence_length);
+        }
+
+        // Update level's minimum depth
         if (write_idx == level_start) {
+            // First node in level sets initial depth
             graph.level_min_depth[current_level] = new_node->min_depth;
         } else if (new_node->min_depth < graph.level_min_depth[current_level]) {
+            // Subsequent nodes may lower the level's depth
             graph.level_min_depth[current_level] = new_node->min_depth;
         }
 
         write_idx++;
     }
 
-    // Final level boundary
+    // Finalize last level's boundary
     graph.first_node_of_level[current_level] = level_start;
 
-    // Update remaining levels if any
-    while (++current_level < graph.total_levels) {
-        graph.first_node_of_level[current_level] = write_idx;
+    // Initialize any remaining levels (if graph.total_levels was reduced)
+    for (uint32_t l = current_level + 1; l < graph.total_levels; l++) {
+        graph.first_node_of_level[l] = write_idx;
+        graph.level_min_depth[l] = UINT16_MAX; // Mark as invalid
     }
 
-    // Resize graph
+    // Update graph size
     graph.size = write_idx;
     
-    #ifdef DEBUG
+#ifdef DEBUG
+    // Debug output
     for (uint32_t level = 0; level <= get_last_level_index(); level++) {
         printf("Level %u sequences:\n", level);
         seq_repo_print_all(&exist_repo[level]);
     }
     printf("Total nodes after compaction =%u\n", graph.size);
     verify_graph_integrity();
-    #endif
+#endif
 }
 
 static inline void print_node_link(GraphNode* node, GraphNode* parent) {
