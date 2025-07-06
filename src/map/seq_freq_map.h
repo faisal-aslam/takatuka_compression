@@ -33,5 +33,5 @@ void seq_freq_decrement(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32
 uint32_t seq_freq_get(const SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index);
 void list_freq_1_sequences(const SeqFreqMap *map, void (*callback)(const uint8_t *seq, uint8_t len));
 void print_seq_freq_map(const SeqFreqMap *map);
-
+bool sequences_equal(const uint8_t *a, const uint8_t *b, uint8_t len); //todo move it to some utility class later on.
 #endif // SEQ_FREQ_MAP_H

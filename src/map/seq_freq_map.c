@@ -6,7 +6,7 @@
 #include <string.h>
 #include <assert.h>
 
-static inline bool sequences_equal(const uint8_t *a, const uint8_t *b, uint8_t len) {
+bool sequences_equal(const uint8_t *a, const uint8_t *b, uint8_t len) {
     switch (len) {
         case 1: return *a == *b;
         case 2: return *(uint16_t*)a == *(uint16_t*)b;

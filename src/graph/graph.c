@@ -1,4 +1,5 @@
 #include "graph.h"
+#include "../map/seq_freq_map.h"
 
 #define PER_LEVEL_GRAPH_NODES(SEQ_LIMIT, LEVEL) \
     ((LEVEL) == 0 ? 1 : \
@@ -102,22 +103,6 @@ static void record_level_wize_nodes(const uint8_t* block) {
 }
 
 
-static inline uint8_t check_useless(uint8_t size_pre, uint32_t* candidates_pre,
-    const uint8_t* seq, uint8_t len, const uint8_t* block) {
-    for (int i = 0; i < size_pre; i++) {
-        uint32_t c_node_id = candidates_pre[i];
-        GraphNode *c_node = get_graph_node(c_node_id);
-        const uint8_t *c_seq = &block[c_node->offset];
-        const uint8_t c_len = c_node->sequence_length;
-        if (c_len != len)
-            continue;
-        if (sequences_equal(seq, c_seq, len)) {
-            return c_node_id;
-        }
-    } 
-    return 0;
-}
-
 /**
  * Marks graph nodes as useless based on sequence frequency analysis.
  *
@@ -126,22 +111,21 @@ static inline uint8_t check_useless(uint8_t size_pre, uint32_t* candidates_pre,
  * - Since `exist_repo[last_level]` accumulates all sequences from all levels, 
  *   a frequency of 1 means the sequence is unique and not reused anywhere else.
  *
- * Step 2:
- * - A node may appear to have duplicates due to overlapping substrings (e.g., AAAA → AAA, AAA).
- * - We count how many times the node's sequence is absent from the parent's level.
- * - If this absence count equals the sequence frequency at the last level,
- *   it means the sequence never appeared without overlapping itself.
- *   Such nodes are also marked useless.
+ * Step 2: A node is also useless if:
+ *   - Its sequence appears exactly twice in the graph (based on the last level map)
+ *   - It does not appear at the parent level (freq is 0 at the parent level map)
+ *   - And another such node with the same sequence exists in the previous level
+ *     with the same conditions. Both (current and previous level nodes) 
+ *     are then marked useless (overlap-only).
  */
 static void mark_nodes_useless(const uint8_t* block) {
     const uint16_t last_level = get_last_level_index();
-    uint32_t freq_2_useless_candidate1[SEQ_LENGTH_LIMIT]; //of level-1
-    uint8_t size1 = 0;
-    uint32_t freq_2_useless_candidate2[SEQ_LENGTH_LIMIT]; //of level-1
-    uint8_t size2 = 0;
-    uint8_t current_array = 1;
-    uint16_t level = 0;
-    #ifdef DEBUG
+    uint32_t level_candidates[2][SEQ_LENGTH_LIMIT] = {{0}};
+    uint8_t level_counts[2] = {0};
+    uint8_t current_buffer = 0;
+    uint16_t current_level = 0;
+
+#ifdef DEBUG
     printf("\n\nMarking useless nodes of two different kind with graph size= %u\n", graph.size);
 #endif
 
@@ -151,18 +135,18 @@ static void mark_nodes_useless(const uint8_t* block) {
         printf("Processing node=%u\n", node->node_id);
 #endif
         if (node->sequence_length <= 1 || node->isUseless) {
-            continue; // Ignore very short or already-marked nodes
+            continue;
         }
-        if (node->node_level != level) { //change of level            
-            current_array = current_array == 1? 2 : 1;
-            if (current_array == 1) {
-                size1 = 0;
-            } else {
-                size2 = 0;
-            }
+
+        // Handle level transitions
+        if (node->node_level != current_level) {
+            // Switch buffers and clear the new current buffer
+            current_buffer ^= 1;  // Toggle between 0 and 1
+            level_counts[current_buffer] = 0;
+            current_level = node->node_level;
         }
-        level = node->node_level;
-        const uint16_t parent_level = level - node->sequence_length;
+
+        const uint16_t parent_level = current_level - node->sequence_length;
         const uint8_t* seq = &block[node->offset];
         const uint8_t len = node->sequence_length;
 
@@ -173,46 +157,33 @@ static void mark_nodes_useless(const uint8_t* block) {
 #ifdef DEBUG
             printf("Marked node_id=%u as USELESS (unique in graph)\n", node->node_id);
 #endif
-            continue; // Skip Step 2 if already useless
-        }
-
-        // Step 2: Check if all appearances are due to overlaps
-
-        //a) Is the sequence of node has freq 2 at the last level. If not then continue.
-        if (seq_repo_get_frequency(&exist_repo[last_level], seq, len) > 2) {
             continue;
         }
 
-        //b) If parent level has frequency greater than 0 then continue
-        if (seq_repo_get_frequency(&exist_repo[parent_level], seq, len) > 0) {
-            continue;
-        }
-
-        if (current_array == 1) {
-            uint32_t c_node_id = check_useless(size2, freq_2_useless_candidate2, seq, len, block);
-            if (c_node_id) {
+        // Step 2: Check for overlap-only sequences
+        if (freq_in_graph == 2 && 
+            seq_repo_get_frequency(&exist_repo[parent_level], seq, len) == 0) {
+            
+            // Check against previous level's candidates
+            uint8_t prev_buffer = current_buffer ^ 1;
+            for (uint8_t j = 0; j < level_counts[prev_buffer]; j++) {
+                GraphNode* candidate = get_graph_node(level_candidates[prev_buffer][j]);
+                if (candidate->sequence_length == len &&
+                    sequences_equal(seq, &block[candidate->offset], len)) {
+                    // Mark both nodes as useless
+                    candidate->isUseless = 1;
+                    node->isUseless = 1;
 #ifdef DEBUG
-            printf("Marked node_id=%u and %u as USELESS (only overlaps)\n", node->node_id, c_node_id);
+                    printf("Marked node_id=%u and %u as USELESS (only overlaps)\n",
+                           node->node_id, candidate->node_id);
 #endif
-            get_graph_node(c_node_id)->isUseless = 1;
-            node->isUseless = 1;
-            } else {
-                freq_2_useless_candidate1[size1++] = node->node_id;
+                    break;
+                }
             }
-        } else {
-            uint32_t c_node_id = check_useless(size1, freq_2_useless_candidate1,
-                                               seq, len, block);
-            if (c_node_id) {
-#ifdef DEBUG
-                printf("Marked node_id=%u and %u as USELESS (only overlaps)\n",
-                       node->node_id, c_node_id);
-#endif
 
-                get_graph_node(c_node_id)->isUseless = 1;
-                node->isUseless = 1;
-
-            } else {
-                freq_2_useless_candidate2[size2++] = node->node_id;
+            // If not marked useless, add to current level's candidates
+            if (!node->isUseless) {
+                level_candidates[current_buffer][level_counts[current_buffer]++] = node->node_id;
             }
         }
     }
@@ -265,20 +236,12 @@ void compact_graph(const uint8_t* block) {
         // Detect level transition
         if (current_level + 1 < graph.total_levels &&
             read_idx >= graph.first_node_of_level[current_level + 1]) {
-
             // Record compacted start of the current level
             graph.first_node_of_level[current_level] = level_start;
-#ifdef DEBUG
-        printf("Level %u sequences:\n", current_level);
-        seq_repo_print_all(&exist_repo[current_level]);
-
-#endif                        
             current_level++;
             level_start = write_idx;
-
             //First we initialize the new map.
             seq_repo_init(&exist_repo[current_level], PER_LEVEL_GRAPH_NODES(SEQ_LENGTH_LIMIT, current_level));
-
         }
 
         GraphNode* node = &graph.nodes[read_idx];
@@ -346,8 +309,12 @@ void compact_graph(const uint8_t* block) {
 
     // Resize graph
     graph.size = write_idx;
-
+    
     #ifdef DEBUG
+    for (uint32_t level = 0; level <= get_last_level_index(); level++) {
+        printf("Level %u sequences:\n", level);
+        seq_repo_print_all(&exist_repo[level]);
+    }
     printf("Total nodes after compaction =%u\n", graph.size);
     verify_graph_integrity();
     #endif
