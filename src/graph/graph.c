@@ -101,31 +101,44 @@ static void record_level_wize_nodes(const uint8_t* block) {
  *
  * Step 1:
  * - A node is marked useless if its sequence appears only once in the entire graph.
- * - Since `exist_repo[last_level]` accumulates all sequences from all levels, 
- *   a frequency of 1 means the sequence is unique and not reused anywhere else.
  *
  * Step 2: A node is also useless if:
- *   - Its sequence appears exactly twice in the graph (based on the last level map)
+ *   - Its sequence appears exactly k times in the graph (2 <= k <= n_consec_level)
  *   - It does not appear at the parent level (freq is 0 at the parent level map)
- *   - And another such node with the same sequence exists in the previous level
- *     with the same conditions. Both (current and previous level nodes) 
- *     are then marked useless (overlap-only).
+ *   - And all k appearances are in consecutive levels
+ *   - Marks ALL k matching nodes as useless
  */
 static void mark_nodes_useless(const uint8_t* block) {
     const uint16_t last_level = get_last_level_index();
-    uint32_t level_candidates[2][SEQ_LENGTH_LIMIT] = {{0}};
-    uint8_t level_counts[2] = {0};
-    uint8_t current_buffer = 0;
+    
+    // Maximum expected sequence length limit
+    #define MAX_CONSEC_LEVELS 10
+    uint8_t n_consec_level = MAX_CONSEC_LEVELS;
+    // Static arrays with maximum size to avoid VLAs
+    uint32_t level_candidates[MAX_CONSEC_LEVELS][SEQ_LENGTH_LIMIT];
+    uint8_t level_counts[MAX_CONSEC_LEVELS] = {0};
+    uint8_t current_slot = 0;
     uint16_t current_level = 0;
 
+    // Validate n_consec_level
+    if (n_consec_level < 2 || n_consec_level > MAX_CONSEC_LEVELS) {
+        fprintf(stderr, "Invalid n_consec_level: %d (must be 2-%d)\n", 
+               n_consec_level, MAX_CONSEC_LEVELS);
+        return;
+    }
+
 #ifdef DEBUG
-    printf("\n\nMarking useless nodes of two different kind with graph size= %u\n", graph.size);
+    printf("\n\nMarking useless nodes with n_consec_level=%d, graph size=%u\n", 
+           n_consec_level, graph.size);
 #endif
+
+    // Initialize all level counts to 0
+    memset(level_counts, 0, sizeof(level_counts));
 
     for (uint32_t i = 0; i < graph.size; i++) {
         GraphNode* node = &graph.nodes[i];
 #ifdef DEBUG
-        printf("Processing node=%u\n", node->node_id);
+        printf("Processing node=%u at level=%u\n", node->node_id, node->node_level);
 #endif
         if (node->sequence_length <= 1 || node->isUseless) {
             continue;
@@ -133,9 +146,9 @@ static void mark_nodes_useless(const uint8_t* block) {
 
         // Handle level transitions
         if (node->node_level != current_level) {
-            // Switch buffers and clear the new current buffer
-            current_buffer ^= 1;  // Toggle between 0 and 1
-            level_counts[current_buffer] = 0;
+            // Advance the circular buffer slot
+            current_slot = (current_slot + 1) % n_consec_level;
+            level_counts[current_slot] = 0;  // Clear the new slot
             current_level = node->node_level;
         }
 
@@ -153,48 +166,68 @@ static void mark_nodes_useless(const uint8_t* block) {
             continue;
         }
 
-        // Step 2: Check for overlap-only sequences
-        if (freq_in_graph == 2 && 
+        // Step 2: Check for k-consecutive overlap-only sequences (2 <= k <= n_consec_level)
+        if (freq_in_graph >= 2 && freq_in_graph <= n_consec_level && 
             seq_repo_get_frequency(&exist_repo[parent_level], seq, len) == 0) {
             
-            // Check against previous level's candidates
-            uint8_t prev_buffer = current_buffer ^ 1;
-            for (uint8_t j = 0; j < level_counts[prev_buffer]; j++) {
-                GraphNode* candidate = get_graph_node(level_candidates[prev_buffer][j]);
-                if (candidate->sequence_length == len &&
-                    sequences_equal(seq, &block[candidate->offset], len)) {
-                    // Mark both nodes as useless
-                    candidate->isUseless = 1;
-                    node->isUseless = 1;
+            // Try all possible k values from freq_in_graph down to 2
+            for (uint8_t k = freq_in_graph; k >= 2; k--) {
+                uint8_t matches_found = 0;
+                uint32_t matched_nodes[MAX_CONSEC_LEVELS];
+                
+                // Include current node in the matches
+                matched_nodes[matches_found++] = node->node_id;
+
+                // Check previous k-1 levels for matching sequences
+                for (uint8_t offset = 1; offset < k; offset++) {
+                    uint8_t check_slot = (current_slot + n_consec_level - offset) % n_consec_level;
+                    
+                    for (uint8_t j = 0; j < level_counts[check_slot]; j++) {
+                        GraphNode* candidate = get_graph_node(level_candidates[check_slot][j]);
+                        if (!candidate->isUseless && 
+                            candidate->sequence_length == len &&
+                            sequences_equal(seq, &block[candidate->offset], len)) {
+                            matched_nodes[matches_found++] = candidate->node_id;
+                            break;  // Only need one match per level
+                        }
+                    }
+                }
+
+                // If we found all k matches, mark all nodes as useless
+                if (matches_found == k) {
+                    for (uint8_t m = 0; m < matches_found; m++) {
+                        GraphNode* matched_node = get_graph_node(matched_nodes[m]);
+                        matched_node->isUseless = 1;
 #ifdef DEBUG
-                    printf("Marked node_id=%u and %u as USELESS (only overlaps)\n",
-                           node->node_id, candidate->node_id);
+                        printf("Marked node_id=%u as USELESS (%d consecutive levels)\n", 
+                               matched_node->node_id, k);
 #endif
-                    break;
+                    }
+                    break;  // No need to check smaller k values
                 }
             }
 
             // If not marked useless, add to current level's candidates
-            if (!node->isUseless) {
-                level_candidates[current_buffer][level_counts[current_buffer]++] = node->node_id;
+            if (!node->isUseless && level_counts[current_slot] < SEQ_LENGTH_LIMIT) {
+                level_candidates[current_slot][level_counts[current_slot]++] = node->node_id;
             }
         }
     }
 }
+
 
 void compact_graph(const uint8_t* block) {
     assert(graph.size == 0 || (graph.nodes[0].node_id == 0 && !graph.nodes[0].isUseless));    
   
     // Step 1: Analyze nodes and mark useless ones
     record_level_wize_nodes(block);
-    mark_nodes_useless(block);
-
+    mark_nodes_useless(block);    
     uint32_t write_idx = 0;
     uint32_t level_start = 0;
     uint32_t current_level = 0;
     
 #ifdef DEBUG
-    printf("\n\nTotal nodes before compaction =%u\n", graph.size);
+    printf("\n\nStarting compacting graph. \nTotal nodes before compaction =%u\n", graph.size);
 #endif
 
     // Initialize root node
@@ -208,6 +241,9 @@ void compact_graph(const uint8_t* block) {
         GraphNode* node = &graph.nodes[read_idx];
         // Calculate parent level
         uint16_t parent_level = node->node_level - node->sequence_length;
+#ifdef DEBUG
+        printf("\n\nProcessing node=%u, read_idx=%u, write_idx=%u\n", node->node_id, read_idx, write_idx);
+#endif
         
         // Detect level transition
         if (node->node_level != current_level) {
@@ -235,6 +271,9 @@ void compact_graph(const uint8_t* block) {
         }
         // Skip useless nodes
         if (node->isUseless) {
+#ifdef DEBUG
+            printf(" Ignoring useless node %u\n", node->node_id);
+#endif            
             continue;
         }
 
