@@ -132,6 +132,44 @@ uint32_t seq_repo_get_node_id(SequenceRepository *repo, const uint8_t* data, uin
     return UINT32_MAX;
 }
 
+uint32_t seq_repo_set_frequency(SequenceRepository *repo, const uint8_t* data, uint16_t length, uint32_t frequency) {
+    if (!data || length <= 1) return 0;
+
+    if (repo->count >= repo->capacity * LOAD_FACTOR) {
+        resize_repository(repo);    
+    }
+
+    uint64_t hash = XXH3_64bits(data, length);
+    uint32_t start = hash % repo->capacity;
+    uint32_t index = start;
+
+    do {
+        if (!repo->is_used[index]) {
+            // Insert new entry
+            repo->entries[index].data = data;
+            repo->entries[index].length = length;
+            repo->hash_values[index] = hash;
+            repo->values[index] = frequency;
+            repo->is_used[index] = 1;
+            repo->count++;
+            return 1;
+        }
+
+        if (repo->hash_values[index] == hash &&
+            repo->entries[index].length == length &&
+            memcmp(repo->entries[index].data, data, length) == 0) {
+            // Sequence already exists — overwrite frequency
+            repo->values[index] = frequency;
+            return 1;
+        }
+
+        index = (index + 1) % repo->capacity;
+    } while (index != start);
+
+    return 0; // Insertion failed (should not happen unless map is full)
+}
+
+
 uint32_t seq_repo_increase_frequency(SequenceRepository *repo, const uint8_t* data, uint16_t length) {
     if (!data || length <= 1) return 0;
     if (repo->count >= repo->capacity * LOAD_FACTOR) {

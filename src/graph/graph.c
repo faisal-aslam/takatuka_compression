@@ -51,10 +51,6 @@ static void record_level_wize_nodes(const uint8_t* block) {
     printf("\n\nStart level_wize node recording graph size= %u\n", graph.size);
 #endif
 
-    // Initialize root node's depth and its empty repository
-    graph.nodes[0].min_depth = 0;
-    graph.level_min_depth[0] = 0;
-
     uint32_t last_processed_level = UINT32_MAX;
 
     for (uint32_t i = 0; i < graph.size; i++) {
@@ -66,28 +62,25 @@ static void record_level_wize_nodes(const uint8_t* block) {
         if (level != last_processed_level) {
             seq_repo_init(&exist_repo[level], PER_LEVEL_GRAPH_NODES(SEQ_LENGTH_LIMIT, level));
             last_processed_level = level;
-
+            // Merge parent level’s sequences into current level
+            uint32_t parent_level = level - node->sequence_length;
+            SequenceRepository* parent_repo = &exist_repo[parent_level];            
+            for (uint32_t j = 0; j < parent_repo->capacity; j++) {
+                if (parent_repo->is_used[j]) {
+                    seq_repo_set_frequency(&exist_repo[level],
+                                                parent_repo->entries[j].data,
+                                                parent_repo->entries[j].length,
+                                                parent_repo->values[j]);
+                }
+            }
 #ifdef DEBUG
             printf("Initialized sequence repository for level %u, with capacity=%u\n", level, exist_repo[level].capacity);
 #endif
         }
 
-        // Merge parent level’s sequences into current level
-        uint32_t parent_level = level - node->sequence_length;
-        SequenceRepository* parent_repo = &exist_repo[parent_level];
-        SequenceRepository* current_repo = &exist_repo[level];
-
-        for (uint32_t j = 0; j < parent_repo->capacity; j++) {
-            if (parent_repo->is_used[j]) {
-                seq_repo_increase_frequency(current_repo,
-                                            parent_repo->entries[j].data,
-                                            parent_repo->entries[j].length);
-            }
-        }
-
         // Add current node's sequence if length > 1
         if (node->sequence_length > 1) {
-            seq_repo_increase_frequency(current_repo,
+            seq_repo_increase_frequency(&exist_repo[level],
                                         &block[node->offset],
                                         node->sequence_length);
         }
@@ -191,7 +184,7 @@ static void mark_nodes_useless(const uint8_t* block) {
 
 void compact_graph(const uint8_t* block) {
     assert(graph.size == 0 || (graph.nodes[0].node_id == 0 && !graph.nodes[0].isUseless));    
-    
+  
     // Step 1: Analyze nodes and mark useless ones
     record_level_wize_nodes(block);
     mark_nodes_useless(block);
@@ -213,9 +206,9 @@ void compact_graph(const uint8_t* block) {
 
     for (uint32_t read_idx = 0; read_idx < graph.size; read_idx++) {
         GraphNode* node = &graph.nodes[read_idx];
-        if (node->node_level == 5) {
-            printf("\nStop here\n");
-        }
+        // Calculate parent level
+        uint16_t parent_level = node->node_level - node->sequence_length;
+        
         // Detect level transition
         if (node->node_level != current_level) {
             // Save the previous level's boundary
@@ -228,8 +221,18 @@ void compact_graph(const uint8_t* block) {
             // Initialize new level's repository
             seq_repo_init(&exist_repo[current_level], 
                          PER_LEVEL_GRAPH_NODES(SEQ_LENGTH_LIMIT, current_level));
+                        // Merge parent level's sequences into current level
+            SequenceRepository *src = &exist_repo[parent_level];
+            SequenceRepository *dst = &exist_repo[current_level];
+            for (uint32_t j = 0; j < src->capacity; j++) {
+                if (src->is_used[j]) {
+                    seq_repo_set_frequency(dst, 
+                                              src->entries[j].data,  
+                                              src->entries[j].length, 
+                                              src->values[j]);
+                }
+            }
         }
-
         // Skip useless nodes
         if (node->isUseless) {
             continue;
@@ -243,8 +246,7 @@ void compact_graph(const uint8_t* block) {
         GraphNode* new_node = &graph.nodes[write_idx];
         new_node->node_id = write_idx;
         
-        // Calculate parent level
-        uint16_t parent_level = new_node->node_level - new_node->sequence_length;
+        
         
         // For non-root nodes, merge parent's sequences and calculate depth
         if (write_idx != 0) {
@@ -253,17 +255,6 @@ void compact_graph(const uint8_t* block) {
                 fprintf(stderr, "Invalid parent level %u for node %u\n", 
                        parent_level, new_node->node_id);
                 exit(1);
-            }
-
-            // Merge parent level's sequences into current level
-            SequenceRepository *src = &exist_repo[parent_level];
-            SequenceRepository *dst = &exist_repo[current_level];
-            for (uint32_t j = 0; j < src->capacity; j++) {
-                if (src->is_used[j]) {
-                    seq_repo_increase_frequency(dst, 
-                                              src->entries[j].data,  
-                                              src->entries[j].length);
-                }
             }
 
             // Calculate node's minimum depth
