@@ -14,8 +14,7 @@ int prune_count =0;
  * - If length > 1 and frequency == 1: cost = length + 1
  * - If length > 1 and frequency > 1: cost = 1
  */
-#define COST(len, freq) (((len) == 1) ? 9 : (((freq) == 1) ? ((len*8) + len) : 8))
-//#define COST(len, freq) (((len) == 1) ? 1 : (((freq) == 1) ? ((len) + 1) : 1))
+#define COST(len, freq) (((len) == 1) ? 1 : (((freq) == 1) ? ((len) + 1) : 1))
 
 
 typedef struct {
@@ -74,7 +73,7 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
     const double cost = isCurrent ? path_state.current_path_cost : path_state.best_path_cost;
     const uint32_t *stack = isCurrent ? path_state.current_path_stack : path_state.best_path_stack;
     
-    printf("\nShortest path size=%d, cost=%lf \n", size, cost/8);    
+    printf("\nShortest path size=%d, cost=%lf \n", size, cost);    
     for (int32_t i = size; i >= 0; i--) {
         uint32_t node_id = stack[i];
         GraphNode *node = get_graph_node(node_id);
@@ -175,6 +174,11 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top,
     for (uint8_t i = 0; i < parent_count; i++) {
         GraphNode *parent = &parents[i];
         uint32_t parent_level = parent->node_level;
+        if (parent_level == 39 && parent->node_id != 165) continue;
+        if (parent_level == 34 && parent->node_id != 128) continue;
+        if (parent_level == 21 && parent->node_id != 97) continue;
+        if (parent_level == 13 && parent->node_id != 63) continue;
+        if (parent_level == 8 && parent->node_id != 26) continue;
 
         if (should_prune(parent)) {
 #ifdef DEBUG
@@ -270,7 +274,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
 #endif
             if(update_best_path()) {
                 best_count++;
-                printf("Saved the path %d with cost: %lf\n", best_count, path_state.current_path_cost/8);
+                printf("Saved the path %d with cost: %lf\n", best_count, path_state.current_path_cost);
                 printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count, back_track_count, push_count);
                 push_count = 0;
                 back_track_count = 0;
