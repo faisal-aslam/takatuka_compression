@@ -1,5 +1,6 @@
 #include "graph.h"
 #include "../map/seq_freq_map.h"
+#include "timer.h"
 
 #define MAX_CONSEC_LEVELS 10
 #define PER_LEVEL_GRAPH_NODES(SEQ_LIMIT, LEVEL) \
@@ -58,9 +59,10 @@ static void record_level_wize_nodes(const uint8_t* block) {
         GraphNode* node = &graph.nodes[i];
 
         uint32_t level = node->node_level;
-
+        
         // Initialize new level's repository when first node of a new level is encountered
         if (level != last_processed_level) {
+            //printf("Processed Level %u :\n", level);
             seq_repo_init(&exist_repo[level], PER_LEVEL_GRAPH_NODES(SEQ_LENGTH_LIMIT, level));
             last_processed_level = level;
             // Merge parent level’s sequences into current level
@@ -220,8 +222,12 @@ void compact_graph(const uint8_t* block) {
     assert(graph.size == 0 || (graph.nodes[0].node_id == 0 && !graph.nodes[0].isUseless));    
   
     // Step 1: Analyze nodes and mark useless ones
+    /*
     record_level_wize_nodes(block);
-    mark_nodes_useless(block, 10);    
+    printf("\n*** Done with creating level maps nodes=%u, in %lu ms\n",get_graph_size(), get_elapsed_ms());
+    mark_nodes_useless(block, 10); 
+    printf("\n*** Done with marking useless nodes=%u, in %lu ms\n",get_graph_size(), get_elapsed_ms());
+    */
     uint32_t write_idx = 0;
     uint32_t level_start = 0;
     uint32_t current_level = 0;
@@ -235,8 +241,7 @@ void compact_graph(const uint8_t* block) {
     graph.level_min_depth[0] = 0;
 
     // Initialize first level's repository
-    seq_repo_init(&exist_repo[0], PER_LEVEL_GRAPH_NODES(SEQ_LENGTH_LIMIT, 0));
-
+    
     for (uint32_t read_idx = 0; read_idx < graph.size; read_idx++) {
         GraphNode* node = &graph.nodes[read_idx];
         // Calculate parent level
@@ -252,22 +257,7 @@ void compact_graph(const uint8_t* block) {
             
             // Update to new level
             current_level = node->node_level;
-            level_start = write_idx;
-            
-            // Initialize new level's repository
-            seq_repo_init(&exist_repo[current_level], 
-                         PER_LEVEL_GRAPH_NODES(SEQ_LENGTH_LIMIT, current_level));
-                        // Merge parent level's sequences into current level
-            SequenceRepository *src = &exist_repo[parent_level];
-            SequenceRepository *dst = &exist_repo[current_level];
-            for (uint32_t j = 0; j < src->capacity; j++) {
-                if (src->is_used[j]) {
-                    seq_repo_set_frequency(dst, 
-                                              src->entries[j].data,  
-                                              src->entries[j].length, 
-                                              src->values[j]);
-                }
-            }
+            level_start = write_idx;        
         }
         // Skip useless nodes
         if (node->isUseless) {
@@ -300,13 +290,6 @@ void compact_graph(const uint8_t* block) {
             new_node->min_depth = graph.level_min_depth[parent_level] + 1;
         }
 
-        // Add current node's sequence if length > 1
-        if (new_node->sequence_length > 1) {
-            seq_repo_increase_frequency(&exist_repo[current_level], 
-                                      &block[new_node->offset],
-                                      new_node->sequence_length);
-        }
-
         // Update level's minimum depth
         if (write_idx == level_start) {
             // First node in level sets initial depth
@@ -332,11 +315,6 @@ void compact_graph(const uint8_t* block) {
     graph.size = write_idx;
     
 #ifdef DEBUG
-    // Debug output
-    for (uint32_t level = 0; level <= get_last_level_index(); level++) {
-        printf("Level %u sequences:\n", level);
-        seq_repo_print_all(&exist_repo[level]);
-    }
     printf("Total nodes after compaction =%u\n", graph.size);
     verify_graph_integrity();
 #endif

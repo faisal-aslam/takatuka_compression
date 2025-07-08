@@ -5,7 +5,6 @@
 
 
 int prune_count =0;
-SeqFreqMap map;
 
 /**
  * Calculates the cost of adding a sequence to the path based on its length and frequency.
@@ -114,9 +113,6 @@ static inline void backtrack_node(uint32_t node_id, const uint8_t* block) {
 
     path_state.current_path_cost -= path_state.cost_stack[path_state.current_path_size];
 
-    if (node->sequence_length > 1) {
-        seq_freq_decrement(&map, &block[node->offset], node->sequence_length, node->node_id);        
-    }
 
     path_state.current_path_size--;
 }
@@ -134,11 +130,7 @@ static inline void process_node(const uint8_t* block, GraphNode* node) {
     path_state.current_path_stack[++path_state.current_path_size] = node->node_id;
 
     uint32_t freq = 1;
-    if (node->sequence_length > 1) {
-        freq = seq_freq_increment(&map, &block[node->offset], node->sequence_length, node->node_id);
-        //printf("\n node_id=%u, freq=%d \n", node->node_id, freq);
-    }
-
+    
     double added_cost = COST(node->sequence_length, freq);
     if (node->node_id == 0) added_cost = 0;
     path_state.cost_stack[path_state.current_path_size] = added_cost;
@@ -191,27 +183,6 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top,
             continue;
         }
 
-        // Check all freq=1 sequences in current map
-        uint8_t should_prune_due_to_missing_seq = 0;
-
-        for (uint32_t j = 0; j < map.freq1_count; j++) {
-            uint32_t idx = map.freq1_indices[j];
-            const uint8_t *seq = map.entries[idx].sequence;
-            uint8_t len = map.entries[idx].length;
-
-            if (parent->node_id == 0 || seq_repo_get_frequency(&exist_repo[parent_level], seq, len) == 0) {
-                should_prune_due_to_missing_seq = 1;
-#ifdef DEBUG
-                printf("Prune parent_id=%u: missing freq=1 sequence of len=%u\n", parent->node_id, len);
-#endif
-                break;
-            }
-        }
-
-        if (should_prune_due_to_missing_seq) {
-            continue;
-        }
-
         // Passed all pruning checks, push to stack
         stack[++(*top)] = (StackItem){
             .node_id = parent->node_id,
@@ -244,7 +215,7 @@ static inline uint8_t start_fresh_from_another_leaf(int *top, StackItem *main_st
  */
 void find_shortest_path_to_sink(const uint8_t *block) {
     long stack_size = MIN(total_input_size+1, BLOCK_SIZE);//note: there is one extra level with no data. Count it!
-    long max_push = 100*stack_size;
+    long max_push = 100*get_graph_size();
     StackItem main_stack[stack_size];
     int top = -1;
     uint16_t last_level = get_last_level_index();
@@ -253,14 +224,13 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     uint32_t push_count = 0;
     uint32_t node_of_last_level_served = 0;
     path_init();      // Reset path state
-    init_seq_freq_map(&map, stack_size, stack_size);  
     initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
-        /*if (push_count > max_push && best_count >= 1 
+        if (push_count > max_push && best_count >= 1 
             && !start_fresh_from_another_leaf(&top, main_stack, last_level, node_of_last_level_served, &push_count)) {
             break;            
-        }*/
+        }
         StackItem current = main_stack[top--];
 
         if (current.node_id == UINT32_MAX) {
@@ -314,5 +284,5 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     }
     printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count, back_track_count, push_count);
     // Final output
-    print_path(0, 1, block);
+    //print_path(0, 1, block);
 }

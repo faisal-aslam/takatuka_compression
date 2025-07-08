@@ -5,8 +5,9 @@
 #include <stdio.h>
 #include "logic.h"
 #include "constants.h"
-
+#include "timer.h"
 #include <sys/stat.h>  // for file size
+
 long total_input_size;
 
 int main(int argc, char *argv[]) {
@@ -14,7 +15,7 @@ int main(int argc, char *argv[]) {
         printf("Usage: %s <input_file>\n", argv[0]);
         return 1;
     }
-
+    init_timer();
     // Open file
     FILE *file = fopen(argv[1], "rb");
     if (!file) {
