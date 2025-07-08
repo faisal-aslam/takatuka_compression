@@ -38,7 +38,8 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #ifdef DEBUG
     print_graph_node(get_graph_node(0));
 #endif
-
+    uint16_t level_to_keep[MAX_LEVELS] = {0};
+    level_to_keep[get_last_level_index()]=1;
     for (uint32_t block_index = 0; block_index < block_size; block_index++) {
         increment_graph_level();
         uint16_t current_level = get_last_level_index();
@@ -59,8 +60,10 @@ void process_block(const uint8_t *block, uint32_t block_size) {
                 if (node_id != UINT32_MAX) {                    
                     GraphNode *old_node = get_graph_node(node_id);
                     if (old_node->node_level+seq_len <= current_node->node_level) {
-                        if (old_node) old_node->isUseless = 0; // Mark existing node as useful                    
+                        old_node->isUseless = 0; // Mark existing node as useful
+                        level_to_keep[get_parent_level(old_node)] = 1;                        
                         current_node->isUseless = 0;                // Mark current node as useful
+                        level_to_keep[get_parent_level(current_level)] = 1;
                         seq_repo_add(&useless_repo, &block[start], seq_len, current_node->node_id); //store new id for future nodes.
                     } 
                 } else { //map does not have any record of this sequence. Add it.
@@ -74,7 +77,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         }
     }
     printf("\n*** Done with creating nodes=%u, in %lu ms\n",get_graph_size(), get_elapsed_ms());
-    compact_graph(block); //compact the graph by removing useless nodes.
+    compact_graph(block, level_to_keep); //compact the graph by removing useless nodes.
 
     printf("\n*** Done with nodes compaction, nodes=%u, in %lu ms\n",get_graph_size(), get_elapsed_ms());
 #ifdef DEBUG

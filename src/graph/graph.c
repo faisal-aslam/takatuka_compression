@@ -34,7 +34,7 @@ void verify_graph_integrity() {
     }
 }
 
-void compact_graph(const uint8_t* block) {
+void compact_graph(const uint8_t* block, uint16_t* levels_to_keep) {
     assert(graph.size == 0 || (graph.nodes[0].node_id == 0 && !graph.nodes[0].isUseless));    
   
     uint32_t write_idx = 0;
