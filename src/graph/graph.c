@@ -107,42 +107,40 @@ static void record_level_wize_nodes(const uint8_t* block) {
  *   - Its sequence appears exactly k times in the graph (2 <= k <= n_consec_level)
  *   - It does not appear at the parent level (freq is 0 at the parent level map)
  *   - And all k appearances are in consecutive levels
- *   - Marks ALL k matching nodes as useless
- */
-/**
- * Marks graph nodes as useless based on sequence frequency analysis.
+ *   - Marks ALL k matching nodes as useless.
  * 
- * For sequences appearing in 2..n_consec_level consecutive levels with matching frequency,
- * marks ALL such nodes as useless.
  */
-static void mark_nodes_useless(const uint8_t* block, uint8_t n_consec_level) {
+static void mark_nodes_useless(const uint8_t *block, uint8_t n_consec_level) {
     const uint16_t last_level = get_last_level_index();
-    
+
     // Track candidates from last N levels
     typedef struct {
         uint32_t node_ids[SEQ_LENGTH_LIMIT];
         uint8_t count;
     } LevelCandidates;
-    
+
     LevelCandidates level_candidates[MAX_CONSEC_LEVELS] = {0};
     uint8_t current_slot = 0;
     uint16_t current_level = 0;
 
     // Validate n_consec_level
     if (n_consec_level < 2 || n_consec_level > MAX_CONSEC_LEVELS) {
-        fprintf(stderr, "Invalid n_consec_level: %d (must be 2-%d)\n", 
-               n_consec_level, MAX_CONSEC_LEVELS);
+        fprintf(stderr, "Invalid n_consec_level: %d (must be 2-%d)\n",
+                n_consec_level, MAX_CONSEC_LEVELS);
         return;
     }
 
 #ifdef DEBUG
-    printf("\nMarking useless nodes (n_consec_level=%d), graph size=%u\n", 
+    printf("\nMarking useless nodes (n_consec_level=%d), graph size=%u\n",
            n_consec_level, graph.size);
 #endif
 
     for (uint32_t i = 0; i < graph.size; i++) {
-        GraphNode* node = &graph.nodes[i];
-        
+        GraphNode *node = &graph.nodes[i];
+
+#ifdef DEBUG
+        printf("Processing node=%u \n", node->node_id);
+#endif
         if (node->sequence_length <= 1 || node->isUseless) {
             continue;
         }
@@ -155,70 +153,65 @@ static void mark_nodes_useless(const uint8_t* block, uint8_t n_consec_level) {
         }
 
         const uint16_t parent_level = current_level - node->sequence_length;
-        const uint8_t* seq = &block[node->offset];
+        const uint8_t *seq = &block[node->offset];
         const uint8_t len = node->sequence_length;
 
         // Step 1: Mark unique sequences
-        uint32_t freq_in_graph = seq_repo_get_frequency(&exist_repo[last_level], seq, len);
+        uint32_t freq_in_graph =
+            seq_repo_get_frequency(&exist_repo[last_level], seq, len);
         if (freq_in_graph == 1) {
             node->isUseless = 1;
 #ifdef DEBUG
             printf("Marked node_id=%u (unique sequence)\n", node->node_id);
 #endif
-            continue;
+            continue; // node is mark useless in step 1, no need to check for
+                      // step 2.
         }
 
         // Step 2: Check for k-consecutive appearances (k = 2..n_consec_level)
         if (freq_in_graph >= 2 && freq_in_graph <= n_consec_level &&
             seq_repo_get_frequency(&exist_repo[parent_level], seq, len) == 0) {
-            
-            // Check all possible k values
-            for (uint8_t k = freq_in_graph; k >= 2; k--) {
-                uint32_t matches[MAX_CONSEC_LEVELS];
-                uint8_t match_count = 1;
-                matches[0] = node->node_id;
 
-                // Check previous k-1 levels
-                uint8_t found_all = 1;
-                for (uint8_t offset = 1; offset < k; offset++) {
-                    uint8_t check_slot = (current_slot + n_consec_level - offset) % n_consec_level;
-                    uint8_t found = 0;
-                    
-                    for (uint8_t j = 0; j < level_candidates[check_slot].count; j++) {
-                        GraphNode* candidate = get_graph_node(level_candidates[check_slot].node_ids[j]);
-                        if (!candidate->isUseless &&
-                            candidate->sequence_length == len &&
-                            sequences_equal(seq, &block[candidate->offset], len)) {
-                            matches[match_count++] = candidate->node_id;
-                            found = 1;
-                            break;
-                        }
-                    }
-                    
-                    if (!found) {
-                        found_all = 0;
+            // Check all possible k values            
+            uint32_t matches[MAX_CONSEC_LEVELS];
+            uint8_t match_count = 1;
+            matches[0] = node->node_id;
+
+            // Check previous k-1 levels
+            for (uint8_t offset = 1; offset < freq_in_graph; offset++) {
+                uint8_t check_slot = (current_slot + n_consec_level - offset) % n_consec_level;
+
+                for (uint8_t j = 0; j < level_candidates[check_slot].count; j++) {
+                    GraphNode *candidate = get_graph_node(
+                        level_candidates[check_slot].node_ids[j]);
+                    if (!candidate->isUseless &&
+                        candidate->sequence_length == len &&
+                        sequences_equal(seq, &block[candidate->offset], len)) {
+                        matches[match_count++] = candidate->node_id;
                         break;
                     }
                 }
-
-                // If found k consecutive matches, mark them all
-                if (found_all && match_count == k) {
-                    for (uint8_t m = 0; m < match_count; m++) {
-                        GraphNode* matched = get_graph_node(matches[m]);
-                        matched->isUseless = 1;
-#ifdef DEBUG
-                        printf("Marked node_id=%u (%d consecutive levels)\n", 
-                               matched->node_id, k);
-#endif
-                    }
-                    break;
-                }
             }
+
+            // If found k consecutive matches, mark them all
+            if (match_count == freq_in_graph) {
+                for (uint8_t m = 0; m < match_count; m++) {
+                    GraphNode *matched = get_graph_node(matches[m]);
+                    matched->isUseless = 1;
+#ifdef DEBUG
+                    printf("Marked node_id=%u (%d consecutive levels)\n",
+                           matched->node_id, freq_in_graph);
+#endif
+                }               
+            } 
         }
 
         // Add current node to candidates if not marked useless
-        if (!node->isUseless && level_candidates[current_slot].count < SEQ_LENGTH_LIMIT) {
-            level_candidates[current_slot].node_ids[level_candidates[current_slot].count++] = node->node_id;
+        if (!node->isUseless &&
+            level_candidates[current_slot].count < SEQ_LENGTH_LIMIT) {
+            level_candidates[current_slot]
+                .node_ids[level_candidates[current_slot].count++] =
+                node->node_id;
         }
     }
 }
