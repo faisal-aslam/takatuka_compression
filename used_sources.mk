@@ -7,6 +7,7 @@ SRCS = \
     src/graph/graph_visualizer.c \
     src/map/sequence_repository.c \
     src/map/seq_freq_map.c \
+    src/time.c \
     src/graph/shortest_path.c \
     src/graph/graph.c
 
