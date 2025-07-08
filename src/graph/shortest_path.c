@@ -227,10 +227,10 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
-        if (push_count > max_push && best_count >= 1 
+        /*if (push_count > max_push && best_count >= 1 
             && !start_fresh_from_another_leaf(&top, main_stack, last_level, node_of_last_level_served, &push_count)) {
             break;            
-        }
+        }*/
         StackItem current = main_stack[top--];
 
         if (current.node_id == UINT32_MAX) {
@@ -284,5 +284,8 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     }
     printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count, back_track_count, push_count);
     // Final output
-    //print_path(0, 1, block);
+//#ifdef DEBUG    
+    print_path(0, 1, block);
+//#endif
+
 }

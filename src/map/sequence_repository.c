@@ -104,9 +104,8 @@ void seq_repo_add(SequenceRepository *repo, const uint8_t* data, uint16_t length
         if (repo->hash_values[index] == hash &&
             repo->entries[index].length == length &&
             memcmp(repo->entries[index].data, data, length) == 0) {
-            if (repo->values[index] != node_id) {
-                repo->values[index] = UINT32_MAX;
-            }
+
+            repo->values[index] = node_id;            
             return;
         }
         index = (index + 1) % repo->capacity;

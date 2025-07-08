@@ -50,27 +50,26 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         // Make sequences of specific sizes. 
         for (uint8_t seq_len = 1; seq_len <=  max_sequence; seq_len++) {
             uint32_t start = block_index - seq_len + 1;
-            GraphNode *node = create_node(start, seq_len);
-
+            GraphNode *current_node = create_node(start, seq_len);
+           current_node->isUseless = 1; // Assume useless initially
             if (seq_len > 1) {
                 uint32_t node_id = seq_repo_get_node_id(&useless_repo, &block[start], seq_len);
-                node->isUseless = 1; // Assume useless initially
+     
 
-                if (node_id != UINT32_MAX) {
-                    GraphNode *g_node = get_graph_node(node_id);
-                    if (g_node) g_node->isUseless = 0; // Mark existing node as useful
-                    node->isUseless = 0;                // Mark current node as useful
-                } else {
-                    seq_repo_add(&useless_repo, &block[start], seq_len, node->node_id);
-                    // Still marked useless until repeated
-                }
-            } else {
-                // 1-length sequences are always useful and not tracked
-                node->isUseless = 0;
+                if (node_id != UINT32_MAX) {                    
+                    GraphNode *old_node = get_graph_node(node_id);
+                    if (old_node->node_level+seq_len <= current_node->node_level) {
+                        if (old_node) old_node->isUseless = 0; // Mark existing node as useful                    
+                        current_node->isUseless = 0;                // Mark current node as useful
+                        seq_repo_add(&useless_repo, &block[start], seq_len, current_node->node_id); //store new id for future nodes.
+                    } 
+                } else { //map does not have any record of this sequence. Add it.
+                    seq_repo_add(&useless_repo, &block[start], seq_len, current_node->node_id); //always store last node id.
+                } 
             }
 
 #ifdef DEBUG
-            print_graph_node(node);
+            print_graph_node(current_node);
 #endif
         }
     }
