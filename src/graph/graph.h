@@ -58,7 +58,7 @@ static inline uint16_t get_parent_level(GraphNode* node);
 static inline void reset_graph(void);
 void print_graph_node(GraphNode *node);
 void print_node_sequence(GraphNode *node, const uint8_t* block);
-void compact_graph(const uint8_t* block, uint16_t* levels_to_keep);
+void compact_graph(const uint8_t* block, uint8_t* levels_to_keep);
 
 static inline void reset_graph(void) {
     graph.size = 0;
