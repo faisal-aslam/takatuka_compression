@@ -88,16 +88,20 @@ static inline uint32_t get_level_end_id(uint16_t level) {
     if (level == graph.total_levels - 1) {
         return graph.size;
     }
-    return graph.first_node_of_level[level + 1];
+    uint32_t first_node_of_next_level = UINT32_MAX;
+    while(first_node_of_next_level == UINT32_MAX) {
+        first_node_of_next_level = graph.first_node_of_level[++level];
+    }
+    return first_node_of_next_level;
 }
 
 static inline uint16_t get_last_level_index(void)  {
     return (graph.total_levels > 0) ? graph.total_levels - 1 : 0;
 }
 
-static inline uint16_t get_parent_level(GraphNode* node) {
+static inline uint16_t get_parent_level(GraphNode* node) {    
     uint16_t parent_level =  node->node_level-node->sequence_length; 
-    if (parent_level == UINT16_MAX ||  parent_level > MAX_LEVELS) {
+    if (!node || parent_level == UINT16_MAX ||  parent_level > MAX_LEVELS) {
         fprintf(stderr, "illegal parent level");
         exit(1);
     }
@@ -132,7 +136,8 @@ uint8_t get_parent_nodes_count(GraphNode* node) {
     }
     uint8_t parents_count = total_nodes_at_level(get_parent_level(node));
     if (parents_count > SEQ_LENGTH_LIMIT) {
-        fprintf(stderr, "Illegal number of parent nodes");
+        fprintf(stderr, "Illegal number of parent nodes, at node=%d, node_level=%d\n", node->node_id, node->node_level);
+        uint8_t parents_count = total_nodes_at_level(get_parent_level(node));
         exit(1);
     }
     return parents_count;

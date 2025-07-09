@@ -18,7 +18,7 @@ static void print_node_content(FILE* output, const GraphNode* node, const uint8_
     }
 
     for (uint8_t i = 0; i < node->sequence_length; i++) {
-        if (node->isUseless) continue;
+       
         if (i > 0) fprintf(output, ",");
         fprintf(output, "%c", block[node->offset + i]);
     }
@@ -42,7 +42,7 @@ static void print_node(FILE* output, const GraphNode* node, const uint8_t *block
 }
 
 static void print_links(FILE* output, const GraphNode* node) {
-    if (node->node_id == 0 || node->isUseless) return;
+    if (node->node_id == 0 ) return;
 
     uint16_t parent_count = get_parent_nodes_count((GraphNode*)node);
     GraphNode* parent_nodes = get_parent_nodes((GraphNode*)node);
@@ -71,7 +71,7 @@ void visualize_graph(const uint8_t* block) {
     for (uint32_t i = 0; i < get_graph_size(); i++) {
         GraphNode* node = get_graph_node(i);        
         if (node) {
-            if (node->isUseless) continue;
+            
             print_node(output, node, block);
         }
     }
@@ -85,8 +85,7 @@ void visualize_graph(const uint8_t* block) {
 
         // Check if this level has any nodes
         for (uint32_t i = 0; i < get_graph_size(); i++) {
-            GraphNode* node = get_graph_node(i);
-            if (node->isUseless) continue;
+            GraphNode* node = get_graph_node(i);            
             if (node && node->node_level == level) {
                 level_has_nodes = true;
                 break;
@@ -94,16 +93,14 @@ void visualize_graph(const uint8_t* block) {
         }
 
         if (!level_has_nodes) {
-            fprintf(stderr, "❌ Error: No nodes found at node_level=%u (max_level=%u)\n", level, max_level);
-            fprintf(stderr, "Last processed node_id=%u\n", get_graph_node(get_graph_size() - 1)->node_id);
-            abort();
+            continue; // otherwise continue to the next level.
         }
 
         // Print rank group for this level
         fprintf(output, "  subgraph level_%u {\n    rank=same;\n", level);
         for (uint32_t i = 0; i < get_graph_size(); i++) {
             GraphNode *node = get_graph_node(i);
-            if (node->isUseless) continue;
+          
             if (node && node->node_level == level) {
                 fprintf(output, "    %d;\n", node->node_id);
             }
@@ -116,7 +113,7 @@ void visualize_graph(const uint8_t* block) {
     fprintf(output, "  // Edges\n");
     for (uint32_t i = 0; i < get_graph_size(); i++) {
         GraphNode* node = get_graph_node(i);
-        if (node->isUseless) continue;
+        
         if (node && node->node_id != 0) {
             print_links(output, node);
         }

@@ -18,19 +18,27 @@ void init_graph(void) {
 }
 
 // Verification function of the graph.
-void verify_graph_integrity() {
-    for (uint32_t i = 1; i < graph.size; i++) {
-        GraphNode* node = &graph.nodes[i];
+void verify_graph_integrity(const uint8_t *block) {
+    for (uint32_t i = 0; i < graph.size; i++) {
+        GraphNode *node = &graph.nodes[i];
         if (node->isUseless) {
-            fprintf(stderr, "\nStill found a useless node. There should be None. node_id=%u, node_level=%u \n\n", node->node_id, node->node_level);
+            fprintf(stderr,
+                    "\nStill found a useless node. There should be None. "
+                    "node_id=%u, node_level=%u \n\n",
+                    node->node_id, node->node_level);
             abort();
         }
-        uint16_t parent_level = node->node_level - node->sequence_length;
-        if (parent_level >= graph.total_levels) {
-            fprintf(stderr, "Node %u has invalid parent level %u\n",
-                   node->node_id, parent_level);
-            abort();
+        if (node->node_id != 0) {
+            uint16_t parent_level = node->node_level - node->sequence_length;
+            if (parent_level >= graph.total_levels) {
+                fprintf(stderr, "Node %u has invalid parent level %u\n",
+                        node->node_id, parent_level);
+                abort();
+            }
         }
+        //print_graph_node(node);
+        //print_node_sequence(node, block);
+        printf("\n");
     }
 }
 
@@ -50,33 +58,45 @@ void compact_graph(const uint8_t* block, uint16_t* levels_to_keep) {
     // Initialize root node
     graph.nodes[0].min_depth = 0;
     graph.level_min_depth[0] = 0;
-
-    for (uint32_t read_idx = 0; read_idx < graph.size; ) {
+    uint32_t read_idx = 0;
+    while(read_idx < graph.size) {
         GraphNode* node = &graph.nodes[read_idx];
         
         // Detect level transition
         if (node->node_level != current_level) {
+            if (levels_to_keep[node->node_level] == 0) { //this level has no nodes and should be skipped.
+                graph.first_node_of_level[node->node_level] = UINT32_MAX;
+                read_idx++;
+                continue; //no node at this level.
+            } 
             // Check if previous level had any useful nodes
             if (current_level > 0 && !level_has_useful_node) {
                 // Forcefully mark the first node of the level as useful
-                graph.nodes[first_node_in_level_idx].isUseless = 0;
+                GraphNode* first_node = &graph.nodes[first_node_in_level_idx];
+                first_node->isUseless = 0;
+                //As it was the node of the last level. We decrement level number to start again.
+                first_node->node_level = current_level--;
                 // Jump back to process this node
                 read_idx = first_node_in_level_idx;
 #ifdef DEBUG
-                printf(" Level %u had no useful nodes - marking node %u as useful\n", 
+                printf("Level %u had no useful nodes - marking node %u as useful\n", 
                        current_level, first_node_in_level_idx);
 #endif
                 // Reset level tracking for reprocessing
                 current_level = node->node_level;
                 level_has_useful_node = false;
+#ifdef DEBUG
+                printf("\nnode_id=%u, node_level=%u, node_depth=%u\n", first_node->node_id, first_node->node_level, first_node->min_depth);
+                print_node_sequence(first_node, block);
+                printf("\n");
+#endif 
                 continue;
             }
             
             // Save the previous level's boundary
             graph.first_node_of_level[current_level] = level_start;
-            
+            current_level = node->node_level; //switch to new level.
             // Update to new level
-            current_level = node->node_level;
             level_start = write_idx;
             level_has_useful_node = false;
             first_node_in_level_idx = read_idx;
@@ -85,11 +105,12 @@ void compact_graph(const uint8_t* block, uint16_t* levels_to_keep) {
         // Skip useless nodes (unless we're processing a forced useful node)
         if (node->isUseless) {
 #ifdef DEBUG
-            printf(" Ignoring useless node %u\n", node->node_id);
+            printf("Ignoring useless node %u\n", node->node_id);
 #endif            
             read_idx++;
             continue;
         }
+        
 
         level_has_useful_node = true;
         
@@ -98,9 +119,8 @@ void compact_graph(const uint8_t* block, uint16_t* levels_to_keep) {
             graph.nodes[write_idx] = *node;
         }
 
-        GraphNode* new_node = &graph.nodes[write_idx];
+        GraphNode* new_node = &graph.nodes[write_idx];                
         new_node->node_id = write_idx;
-        
         // For non-root nodes, merge parent's sequences and calculate depth
         if (write_idx != 0) {
             // Calculate parent level
@@ -116,7 +136,11 @@ void compact_graph(const uint8_t* block, uint16_t* levels_to_keep) {
             // Calculate node's minimum depth
             new_node->min_depth = graph.level_min_depth[parent_level] + 1;
         }
-
+#ifdef DEBUG
+        printf("\nNode_id=%u, node_level=%u, node_depth=%u\n", new_node->node_id, new_node->node_level, new_node->min_depth);
+        print_node_sequence(new_node, block);
+        printf("\n");
+#endif        
         // Update level's minimum depth
         if (write_idx == level_start) {
             // First node in level sets initial depth
@@ -177,7 +201,7 @@ void compact_graph(const uint8_t* block, uint16_t* levels_to_keep) {
     
 #ifdef DEBUG
     printf("Total nodes after compaction =%u\n", graph.size);
-    verify_graph_integrity();
+    verify_graph_integrity(block);
 #endif
 }
 

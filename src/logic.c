@@ -39,7 +39,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     print_graph_node(get_graph_node(0));
 #endif
     uint16_t level_to_keep[MAX_LEVELS] = {0};
-    level_to_keep[get_last_level_index()]=1;
+   
     for (uint32_t block_index = 0; block_index < block_size; block_index++) {
         increment_graph_level();
         uint16_t current_level = get_last_level_index();
@@ -61,9 +61,11 @@ void process_block(const uint8_t *block, uint32_t block_size) {
                     GraphNode *old_node = get_graph_node(node_id);
                     if (old_node->node_level+seq_len <= current_node->node_level) {
                         old_node->isUseless = 0; // Mark existing node as useful
-                        level_to_keep[get_parent_level(old_node)] = 1;                        
+                        level_to_keep[get_parent_level(old_node)] = 1;
+                        level_to_keep[old_node->node_level] = 1;                        
                         current_node->isUseless = 0;                // Mark current node as useful
-                        level_to_keep[get_parent_level(current_level)] = 1;
+                        level_to_keep[get_parent_level(current_node)] = 1;
+                        level_to_keep[current_node->node_level] = 1;
                         seq_repo_add(&useless_repo, &block[start], seq_len, current_node->node_id); //store new id for future nodes.
                     } 
                 } else { //map does not have any record of this sequence. Add it.
@@ -76,6 +78,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #endif
         }
     }
+    level_to_keep[get_last_level_index()]=1;
     printf("\n*** Done with creating nodes=%u, in %lu ms\n",get_graph_size(), get_elapsed_ms());
     compact_graph(block, level_to_keep); //compact the graph by removing useless nodes.
 
@@ -83,6 +86,6 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #ifdef DEBUG
     visualize_graph(block); //create graph in DOT for visualization.
 #endif    
-    find_shortest_path_to_sink(block); //find shortest path
+    //find_shortest_path_to_sink(block); //find shortest path
 
 }
