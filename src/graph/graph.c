@@ -51,7 +51,51 @@ void verify_graph_integrity(const uint8_t *block) {
     }
 }
 
-void compact_graph(const uint8_t *block, uint8_t *levels_to_keep) {
+static inline void calculate_levels_to_keep(uint8_t *levels_to_keep) {
+    // Clear all levels (0 = don't keep)
+    memset(levels_to_keep, 0, graph.total_levels * sizeof(uint8_t));
+    
+    // Keep the last and the first level by default
+    if (graph.total_levels > 0) {
+        levels_to_keep[graph.total_levels - 1] = 1;
+        levels_to_keep[0] = 1;
+    }
+
+    uint16_t current_level = graph.total_levels-1; //starting from the last level.
+    uint8_t has_useful_node = 0;
+    // Process nodes in reverse order
+    for (int32_t read_idx = graph.size - 1; read_idx >= 0; read_idx--) {
+        GraphNode* node = &graph.nodes[read_idx];
+        if (current_level != node->node_level) {
+            if (!has_useful_node && levels_to_keep[current_level]) {
+                uint32_t first_node_id = graph.first_node_of_level[current_level];
+                GraphNode* firstNode = get_graph_node(first_node_id);
+                firstNode->isUseless = 0; //make it useful as every good level must have one.
+                uint16_t parent_level = get_parent_level(firstNode);
+                if (parent_level < graph.total_levels) {  // Validate parent level
+                    levels_to_keep[parent_level] = 1;
+                }
+            }
+            has_useful_node = 0; //mark it zero at the begining of every level.
+            current_level = node->node_level;
+        }
+        // Only process nodes from levels we're keeping
+        if (!levels_to_keep[node->node_level]) {
+            continue;
+        }
+
+        // Mark parent level to keep (if not root node)
+        if (node->node_id != 0 && !node->isUseless) {  // Skip root node (level 0)
+            has_useful_node = 1;
+            uint16_t parent_level = get_parent_level(node);
+            if (parent_level < graph.total_levels) {  // Validate parent level
+                levels_to_keep[parent_level] = 1;
+            }
+        }
+    }
+}
+
+void compact_graph(const uint8_t *block) {
     assert(graph.size == 0 ||
            (graph.nodes[0].node_id == 0 && !graph.nodes[0].isUseless));
 
@@ -59,9 +103,9 @@ void compact_graph(const uint8_t *block, uint8_t *levels_to_keep) {
     uint32_t current_level = 0;
     uint32_t level_start = 0;
     uint32_t first_node_idx = 0;
-    bool level_has_useful = false;
     uint32_t max_level_processed = 0; // Track the highest level we actually process
-
+    uint8_t levels_to_keep[graph.total_levels];
+    calculate_levels_to_keep(levels_to_keep);
     // Initialize root node
     if (graph.size > 0) {
         graph.nodes[0].min_depth = 0;
@@ -76,17 +120,7 @@ void compact_graph(const uint8_t *block, uint8_t *levels_to_keep) {
         // Level transition handling
         if (node->node_level != current_level) {
             // Finalize previous level
-            if (levels_to_keep[current_level] == 1) {
-                if (!level_has_useful) {
-                    // Force include first node
-                    GraphNode *first_node = &graph.nodes[first_node_idx];
-                    first_node->isUseless = 0;
-                    read_idx = first_node_idx - 1;
-                    current_level = first_node->node_level;
-                    level_start = write_idx;
-                    level_has_useful = false;
-                    continue;
-                }
+            if (levels_to_keep[current_level] == 1) {              
                 graph.first_node_of_level[current_level] = level_start;
             } else {
                 graph.first_node_of_level[current_level] = UINT32_MAX;
@@ -101,7 +135,6 @@ void compact_graph(const uint8_t *block, uint8_t *levels_to_keep) {
             current_level = node->node_level;
             first_node_idx = read_idx;
             level_start = write_idx;
-            level_has_useful = false;
         }
 
         // Skip nodes from excluded levels. Skip useless nodes too, unless we force-include them.
@@ -112,9 +145,6 @@ void compact_graph(const uint8_t *block, uint8_t *levels_to_keep) {
 
             continue;
         }
-
-        // Mark level as having useful nodes
-        level_has_useful = true;
 
         // Copy node if needed and update properties
         if (write_idx != read_idx) {
@@ -146,42 +176,9 @@ void compact_graph(const uint8_t *block, uint8_t *levels_to_keep) {
     }
 
     // Finalize last level
-    if (current_level < graph.total_levels) {
-        if (levels_to_keep[current_level] == 1) {
-            if (!level_has_useful) {
-                // Force include first node of last level
-                GraphNode *first_node = &graph.nodes[first_node_idx];
-                first_node->isUseless = 0;
+    graph.first_node_of_level[current_level] = level_start;
 
-                if (write_idx != first_node_idx) {
-                    graph.nodes[write_idx] = *first_node;
-                }
 
-                GraphNode *new_node = &graph.nodes[write_idx];
-                new_node->node_id = write_idx;
-
-                if (write_idx != 0) {
-                    uint16_t parent_level =
-                        new_node->node_level - new_node->sequence_length;
-                    new_node->min_depth =
-                        graph.level_min_depth[parent_level] + 1;
-                }
-
-                graph.first_node_of_level[current_level] = write_idx;
-                graph.level_min_depth[current_level] = new_node->min_depth;
-                write_idx++;
-            } else {
-                graph.first_node_of_level[current_level] = level_start;
-            }
-        } else {
-            graph.first_node_of_level[current_level] = UINT32_MAX;
-        }
-
-        // Update max processed level one last time
-        if (current_level > max_level_processed) {
-            max_level_processed = current_level;
-        }
-    }
 #ifdef DEBUG
         printf("\nGraph size before compaction %u and after =%u\n", graph.size, write_idx);
 #endif

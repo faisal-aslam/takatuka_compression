@@ -174,11 +174,6 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top,
     for (uint8_t i = 0; i < parent_count; i++) {
         GraphNode *parent = &parents[i];
         uint32_t parent_level = parent->node_level;
-        if (parent_level == 39 && parent->node_id != 165) continue;
-        if (parent_level == 34 && parent->node_id != 128) continue;
-        if (parent_level == 21 && parent->node_id != 97) continue;
-        if (parent_level == 13 && parent->node_id != 63) continue;
-        if (parent_level == 8 && parent->node_id != 26) continue;
 
         if (should_prune(parent)) {
 #ifdef DEBUG
