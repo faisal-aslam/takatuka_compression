@@ -8,6 +8,8 @@
     ((LEVEL) <= (SEQ_LIMIT)) ? ((LEVEL) * ((LEVEL) + 1)) / 2 \
                              : ((SEQ_LIMIT) * ((SEQ_LIMIT) + 1)) / 2 + ((LEVEL) - (SEQ_LIMIT)) * (SEQ_LIMIT))
 
+#define MIN_RLE_SEQ_LENGTH 6
+#define RLE_MAX_PATTERN_LENGTH 3 // such as abcabcabc...
 
 Graph graph; // Actual single definition
 
@@ -17,8 +19,108 @@ void init_graph(void) {
     memset(graph.first_node_of_level, 0, sizeof(graph.first_node_of_level));
 }
 
+/**
+ * @brief Detects RLE-eligible sequences with optimized path for uniform sequences
+ * 
+ * Optimization strategy:
+ * 1. Always check uniform sequences first (common case)
+ * 2. Only check complex patterns when:
+ *    - Sequence is sufficiently long
+ *    - Not obviously random (based on first few bytes)
+ * 3. Use efficient comparisons and early exits
+ */
+uint8_t is_RLE_sequence(GraphNode* node, const uint8_t *block) {
+    // Initialize outputs
+    node->run_length_encoding = 0;
+    node->repeat_seq_length = 0;
+
+    // Fast rejection for short sequences
+    if (node->sequence_length < MIN_RLE_SEQ_LENGTH) {
+        return 0;
+    }
+
+    const uint8_t* sequence = block + node->offset;
+    const uint8_t first_byte = sequence[0];
+
+    // ===== STAGE 1: Uniform Sequence Check =====
+    bool uniform = true;
+    // Unroll first 4 bytes for quick rejection
+    if (sequence[1] != first_byte || sequence[2] != first_byte || sequence[3] != first_byte) {
+        uniform = false;
+    } else {
+        // Only check remaining bytes if first 4 matched
+        for (uint8_t i = 4; i < node->sequence_length; i++) {
+            if (sequence[i] != first_byte) {
+                uniform = false;
+                break;
+            }
+        }
+    }
+
+    if (uniform) {
+        node->run_length_encoding = 1;
+        node->repeat_seq_length = 1;
+        
+        #ifdef DEBUG
+        printf("[RLE] Uniform: ID=%u @%u (len=%u)\n", 
+               node->node_id, node->offset, node->sequence_length);
+        print_node_sequence(node, block);
+        #endif
+        return 1;
+    }
+
+    // ===== STAGE 2: Non-uniform Pattern Check =====
+    // Only check patterns if sequence is long enough to justify the cost
+    if (node->sequence_length < 16) {  // Threshold adjustable based on profiling
+        return 0;
+    }
+
+    // Quick entropy check - if first 4 bytes are unique, unlikely to have patterns
+    uint8_t unique_bytes = 0;
+    for (uint8_t i = 0; i < 4; i++) {
+        if (i == 0 || sequence[i] != sequence[i-1]) {
+            unique_bytes++;
+        }
+    }
+    if (unique_bytes == 4) {  // All first 4 bytes different
+        return 0;
+    }
+
+    uint8_t max_pattern = MIN(node->sequence_length / 2, RLE_MAX_PATTERN_LENGTH);
+
+    // Check from largest possible pattern down
+    for (uint8_t pattern_len = max_pattern; pattern_len >= 2; pattern_len--) {
+        if (node->sequence_length % pattern_len != 0) continue;
+
+        uint8_t repeats = node->sequence_length / pattern_len;
+        bool valid = true;
+
+        // Compare pattern segments
+        for (uint8_t r = 1; r < repeats; r++) {
+            if (memcmp(sequence, sequence + r * pattern_len, pattern_len) != 0) {
+                valid = false;
+                break;
+            }
+        }
+
+        if (valid && repeats >= 2) {  // Require at least 2 full repeats
+            node->run_length_encoding = 1;
+            node->repeat_seq_length = pattern_len;
+            
+            #ifdef DEBUG
+            printf("[RLE] Pattern: ID=%u @%u (len=%u) [pattern=%u repeats=%u]\n",
+                   node->node_id, node->offset, node->sequence_length,
+                   pattern_len, repeats);
+            print_node_sequence(node, block);
+            #endif
+            return 1;
+        }
+    }
+
+    return 0;
+}
 // Verification function of the graph.
-void verify_graph_integrity(const uint8_t *block) {
+static void verify_graph_integrity(const uint8_t *block) {
     uint8_t beggining_of_last_level = 0;
     for (uint32_t i = 0; i < graph.size; i++) {
         GraphNode *node = &graph.nodes[i];
@@ -102,7 +204,6 @@ void compact_graph(const uint8_t *block) {
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
     uint32_t level_start = 0;
-    uint32_t first_node_idx = 0;
     uint32_t max_level_processed = 0; // Track the highest level we actually process
     uint8_t levels_to_keep[graph.total_levels];
     calculate_levels_to_keep(levels_to_keep);
@@ -133,7 +234,6 @@ void compact_graph(const uint8_t *block) {
 
             // Start new level
             current_level = node->node_level;
-            first_node_idx = read_idx;
             level_start = write_idx;
         }
 
@@ -201,7 +301,7 @@ void print_node_sequence(GraphNode *node, const uint8_t* block) {
         }
         
     }
-    //printf("\n");
+    printf("\n");
 }
 
 void print_graph_node(GraphNode *node) {

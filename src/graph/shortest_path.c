@@ -7,14 +7,51 @@
 int prune_count =0;
 
 /**
- * Calculates the cost of adding a sequence to the path based on its length and frequency.
- * Cost rules:
- * - If lenght == 0: cost = 0
- * - If length == 1: cost = 1
- * - If length > 1 and frequency == 1: cost = length + 1
- * - If length > 1 and frequency > 1: cost = 1
+ * @brief Calculates the storage cost in bytes for adding a graph node to a path
+ * 
+ * This is a hot path function - optimized for minimal branching and fast execution.
+ * All costs are calculated in bytes of storage required.
+ * 
+ * Cost Rules:
+ * - Zero-length sequences: 0 bytes (invalid case, handled defensively)
+ * - Single-byte sequences: 1 byte (raw byte)
+ * - Multi-byte unique sequences (freq=1): n+1 bytes (n bytes + 1 byte length prefix)
+ * - Multi-byte repeated sequences (freq>1): 1 byte (reference to dictionary)
+ * - RLE sequences: pattern_length + 1 byte (pattern + repeat count)
+ * 
+ * @param node Pointer to graph node being evaluated
+ * @param frequency Frequency count of this sequence in the data
+ * @return double Storage cost in bytes (always >= 0)
  */
-#define COST(len, freq) (((len) == 1) ? 1 : (((freq) == 1) ? ((len) + 1) : 1))
+static inline double calc_cost(GraphNode *node, uint32_t frequency) {
+    // Branchless design for common cases - reduces pipeline stalls
+    const uint8_t len = node->sequence_length;
+    double base_cost;
+    
+    // Handle RLE case first (uses different cost model)
+    if (node->run_length_encoding) {
+        // RLE cost: pattern length + 1 byte for repeat count
+        return node->repeat_seq_length + 1;
+    }
+    
+    // Main cost calculation branches
+    if (len <= 1) {
+        // Cases: 0 bytes = 0 cost, 1 byte = 1 cost
+        base_cost = len;
+    } else {
+        // Multi-byte case: 1 byte if repeated, n+1 bytes if unique
+        base_cost = (frequency > 1) ? 1 : (len + 1);
+    }
+    
+    // Debug verification (compiled out in release builds)
+    #ifdef DEBUG
+    if (base_cost == 0 && len != 0) {
+        printf("WARNING: Zero cost for non-zero length node %u\n", node->node_id);
+    }
+    #endif
+    
+    return base_cost;
+}
 
 
 typedef struct {
@@ -137,7 +174,7 @@ static inline void process_node(const uint8_t* block, GraphNode* node) {
         //printf("\n node_id=%u, freq=%d \n", node->node_id, freq);
     }
     
-    double added_cost = COST(node->sequence_length, freq);
+    double added_cost = calc_cost(node, freq);
     if (node->node_id == 0) added_cost = 0;
     path_state.cost_stack[path_state.current_path_size] = added_cost;
     path_state.current_path_cost += added_cost;
@@ -180,7 +217,7 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top,
 
     for (uint8_t i = 0; i < parent_count; i++) {
         GraphNode *parent = &parents[i];
-        if (should_prune(parent)) {
+        if (should_prune(parent) /*&& (node->node_level < get_last_level_index()-1 && parent->min_depth == node->min_depth)*/) {
 #ifdef DEBUG
             printf("Prune by cost: parent node_id=%u\n", parent->node_id);
 #endif

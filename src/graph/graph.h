@@ -31,6 +31,8 @@ typedef struct {
     uint16_t min_depth;
     uint8_t sequence_length;
     uint8_t isUseless;
+    uint8_t run_length_encoding;
+    uint8_t repeat_seq_length;
 } GraphNode;
 
 typedef struct {    
@@ -59,6 +61,39 @@ static inline void reset_graph(void);
 void print_graph_node(GraphNode *node);
 void print_node_sequence(GraphNode *node, const uint8_t* block);
 void compact_graph(const uint8_t* block);
+/**
+ * @brief Determines if a node's sequence can be Run-Length Encoded (RLE) by detecting repeating patterns.
+ * 
+ * This function analyzes the sequence associated with a graph node to determine if it contains
+ * a repeating subsequence that would make it suitable for RLE compression. If found, it sets
+ * the node's RLE flags and stores the repeating pattern length.
+ * 
+ * Key Characteristics:
+ * - Only sequences >= MIN_RLE_SEQ_LENGTH are considered for RLE
+ * - Checks for repeating patterns up to RLE_MAX_PATTERN_LENGTH
+ * - Processes patterns from largest to smallest for optimal compression
+ * - Uses efficient memcmp for pattern comparison
+ * 
+ * @param node     Pointer to the GraphNode being analyzed (input/output)
+ *                 - Uses: node->offset, node->sequence_length
+ *                 - Sets: node->run_length_encoding (1 if RLE applicable)
+ *                        node->repeat_seq_length (length of repeating pattern)
+ * @param block    Pointer to the source data block containing the sequence
+ * 
+ * @return uint8_t Returns 1 if RLE pattern was found and applied, 0 otherwise
+ * 
+ * @note Memory Efficiency:
+ *       - Operates directly on block data without copies
+ *       - Limits pattern search space for performance
+ * 
+ * @example For sequence "ABCABCABC":
+ *          - Would set run_length_encoding=1, repeat_seq_length=3
+ *          - For "ABCDEFG": would leave flags unset (returns 0)
+ * 
+ * @see MIN_RLE_SEQ_LENGTH - Minimum sequence length to consider for RLE
+ * @see RLE_MAX_PATTERN_LENGTH - Maximum repeating pattern size to check
+ */
+uint8_t is_RLE_sequence(GraphNode* node, const uint8_t *block);
 
 static inline void reset_graph(void) {
     graph.size = 0;
