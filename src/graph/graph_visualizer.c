@@ -36,7 +36,11 @@ static void print_node(FILE* output, const GraphNode* node, const uint8_t *block
 
     fprintf(output, "    %d [label=\"%d\\n", node->node_id, node->node_id);
     print_node_content(output, node, block);
-    fprintf(output, "\n l=%u,d=%u", node->node_level, node->min_depth);
+    if(!node->run_length_encoding) {
+        fprintf(output, "\n l=%u,d=%u", node->node_level, node->min_depth);
+    } else {
+        fprintf(output, "\n l=%u,d=%u, \nRLE", node->node_level, node->min_depth);
+    }
     fprintf(output, "\", shape=box, style=filled, fillcolor=\"%s\", fontcolor=\"%s\"];\n", 
             fillcolor, fontcolor);
 }

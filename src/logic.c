@@ -38,7 +38,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #ifdef DEBUG
     print_graph_node(get_graph_node(0));
 #endif
- 
+
     for (uint32_t block_index = 0; block_index < block_size; block_index++) {
         increment_graph_level();
         uint16_t current_level = get_last_level_index();
@@ -46,25 +46,40 @@ void process_block(const uint8_t *block, uint32_t block_size) {
             break;
 
         uint8_t max_sequence = MIN(current_level, MAX_WEIGHTS);
-
-        // Make sequences of specific sizes. 
-        for (uint8_t seq_len = 1; seq_len <=  max_sequence; seq_len++) {
+        uint32_t previous_RLE_node_id = UINT32_MAX;
+        // Make sequences of specific sizes.
+        for (uint8_t seq_len = 1; seq_len <= max_sequence; seq_len++) {
             uint32_t start = block_index - seq_len + 1;
             GraphNode *current_node = create_node(start, seq_len);
-           current_node->isUseless = 1; // Assume useless initially
-            if (seq_len > 1) {
-                uint32_t node_id = seq_repo_get_node_id(&useless_repo, &block[start], seq_len);    
-
-                if (node_id != UINT32_MAX) { //we have found this sequence before.
-                    GraphNode *old_node = get_graph_node(node_id);
-                    if (old_node->node_level+seq_len <= current_node->node_level) { 
-                        old_node->isUseless = 0; // Mark existing node as useful                                          
-                        current_node->isUseless = 0;                // Mark current node as useful
-                        seq_repo_add(&useless_repo, &block[start], seq_len, current_node->node_id); //store new id for future nodes.
+            if (is_RLE_sequence(current_node, block)) {
+                current_node->isUseless = 0; // mark it useful
+                if (previous_RLE_node_id != UINT32_MAX) {
+                    GraphNode* prev_node_rle = get_graph_node(previous_RLE_node_id);
+                    if (prev_node_rle->node_level+1 == current_level || prev_node_rle->node_level == current_level) {
+                        prev_node_rle->isUseless = 1; //make it useless. We want to keep the longer one which must be the current.
                     } 
-                } else { //map does not have any record of this sequence. Add it.
-                    seq_repo_add(&useless_repo, &block[start], seq_len, current_node->node_id);
-                } 
+                }
+                previous_RLE_node_id = current_node->node_id;
+            } else {
+                current_node->isUseless = 1; // Assume useless initially
+                if (seq_len > 1) {
+                    uint32_t node_id = seq_repo_get_node_id(
+                        &useless_repo, &block[start], seq_len);
+
+                    if (node_id != UINT32_MAX) { // we have found this sequence before.
+                        GraphNode *old_node = get_graph_node(node_id);
+                        if (old_node->node_level + seq_len <=
+                            current_node->node_level) {
+                            old_node->isUseless = 0; // Mark existing node as useful
+                            current_node->isUseless =  0; // Mark current node as useful
+                            seq_repo_add( &useless_repo, &block[start], seq_len,  current_node->node_id); // store new id for
+                                                        // future nodes.
+                        }
+                    } else { // map does not have any record of this sequence.
+                             // Add it.
+                        seq_repo_add(&useless_repo, &block[start], seq_len, current_node->node_id);
+                    }
+                }
             }
 
 #ifdef DEBUG
@@ -72,13 +87,14 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #endif
         }
     }
-    printf("\n*** Done with creating nodes=%u, in %lu ms\n",get_graph_size(), get_elapsed_ms());
-    compact_graph(block); //compact the graph by removing useless nodes.
+    printf("\n*** Done with creating nodes=%u, in %lu ms\n", get_graph_size(),
+           get_elapsed_ms());
+    compact_graph(block); // compact the graph by removing useless nodes.
 
-    printf("\n*** Done with nodes compaction, nodes=%u, in %lu ms\n",get_graph_size(), get_elapsed_ms());
+    printf("\n*** Done with nodes compaction, nodes=%u, in %lu ms\n",
+           get_graph_size(), get_elapsed_ms());
 #ifdef DEBUG
-    visualize_graph(block); //create graph in DOT for visualization.
-#endif    
-    find_shortest_path_to_sink(block); //find shortest path
-
+    visualize_graph(block); // create graph in DOT for visualization.
+#endif
+    find_shortest_path_to_sink(block); // find shortest path
 }
