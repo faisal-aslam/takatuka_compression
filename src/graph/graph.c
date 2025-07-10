@@ -19,37 +19,26 @@ void init_graph(void) {
     memset(graph.first_node_of_level, 0, sizeof(graph.first_node_of_level));
 }
 
-/**
- * @brief Detects RLE-eligible sequences with optimized path for uniform sequences
- * 
- * Optimization strategy:
- * 1. Always check uniform sequences first (common case)
- * 2. Only check complex patterns when:
- *    - Sequence is sufficiently long
- *    - Not obviously random (based on first few bytes)
- * 3. Use efficient comparisons and early exits
- */
-uint8_t is_RLE_sequence(GraphNode* node, const uint8_t *block) {
-    // Initialize outputs
-    node->run_length_encoding = 0;
-    node->repeat_seq_length = 0;
+uint8_t is_RLE_sequence(uint8_t* repeat_seq_length, uint8_t seq_len, uint32_t offset, const uint8_t *block) {
+    *repeat_seq_length = 0;
 
-    // Fast rejection for short sequences
-    if (node->sequence_length < MIN_RLE_SEQ_LENGTH) {
+    if (seq_len < MIN_RLE_SEQ_LENGTH) {
         return 0;
     }
 
-    const uint8_t* sequence = block + node->offset;
+    const uint8_t* sequence = block + offset;
     const uint8_t first_byte = sequence[0];
 
-    // ===== STAGE 1: Uniform Sequence Check =====
+    // ===== Stage 1: Uniform Sequence Check =====
     bool uniform = true;
-    // Unroll first 4 bytes for quick rejection
-    if (sequence[1] != first_byte || sequence[2] != first_byte || sequence[3] != first_byte) {
+
+    // Unroll first 4 bytes for fast early rejection
+    if (sequence[1] != first_byte ||
+        sequence[2] != first_byte ||
+        sequence[3] != first_byte) {
         uniform = false;
     } else {
-        // Only check remaining bytes if first 4 matched
-        for (uint8_t i = 4; i < node->sequence_length; i++) {
+        for (uint8_t i = 4; i < seq_len; i++) {
             if (sequence[i] != first_byte) {
                 uniform = false;
                 break;
@@ -58,67 +47,56 @@ uint8_t is_RLE_sequence(GraphNode* node, const uint8_t *block) {
     }
 
     if (uniform) {
-        node->run_length_encoding = 1;
-        node->repeat_seq_length = 1;
-        
-        #ifdef DEBUG
-        printf("[RLE] Uniform: ID=%u @%u (len=%u)\n", 
-               node->node_id, node->offset, node->sequence_length);
-        print_node_sequence(node, block);
-        #endif
+        *repeat_seq_length = 1;
         return 1;
     }
 
-    // ===== STAGE 2: Non-uniform Pattern Check =====
-    // Only check patterns if sequence is long enough to justify the cost
-    if (node->sequence_length < 16) {  // Threshold adjustable based on profiling
+    // ===== Stage 2: Pattern-Based RLE Check =====
+    if (seq_len < 16) {
         return 0;
     }
 
-    // Quick entropy check - if first 4 bytes are unique, unlikely to have patterns
-    uint8_t unique_bytes = 0;
-    for (uint8_t i = 0; i < 4; i++) {
-        if (i == 0 || sequence[i] != sequence[i-1]) {
-            unique_bytes++;
+    // Quick entropy filter: check uniqueness among first 4 bytes
+    bool is_unique = true;
+    for (int i = 0; i < 4 && is_unique; i++) {
+        for (int j = i + 1; j < 4; j++) {
+            if (sequence[i] == sequence[j]) {
+                is_unique = false;
+                break;
+            }
         }
     }
-    if (unique_bytes == 4) {  // All first 4 bytes different
+    if (is_unique) {
         return 0;
     }
 
-    uint8_t max_pattern = MIN(node->sequence_length / 2, RLE_MAX_PATTERN_LENGTH);
+    int max_pattern = MIN(seq_len / 2, RLE_MAX_PATTERN_LENGTH);
 
-    // Check from largest possible pattern down
-    for (uint8_t pattern_len = max_pattern; pattern_len >= 2; pattern_len--) {
-        if (node->sequence_length % pattern_len != 0) continue;
+    for (int pattern_len = max_pattern; pattern_len >= 2; pattern_len--) {
+        if (seq_len % pattern_len != 0) {
+            continue;
+        }
 
-        uint8_t repeats = node->sequence_length / pattern_len;
+        int repeats = seq_len / pattern_len;
         bool valid = true;
 
-        // Compare pattern segments
-        for (uint8_t r = 1; r < repeats; r++) {
+        for (int r = 1; r < repeats; r++) {
             if (memcmp(sequence, sequence + r * pattern_len, pattern_len) != 0) {
                 valid = false;
                 break;
             }
         }
 
-        if (valid && repeats >= 2) {  // Require at least 2 full repeats
-            node->run_length_encoding = 1;
-            node->repeat_seq_length = pattern_len;
-            
-            #ifdef DEBUG
-            printf("[RLE] Pattern: ID=%u @%u (len=%u) [pattern=%u repeats=%u]\n",
-                   node->node_id, node->offset, node->sequence_length,
-                   pattern_len, repeats);
-            print_node_sequence(node, block);
-            #endif
+        if (valid && repeats >= 2) {
+            *repeat_seq_length = pattern_len;            
             return 1;
         }
     }
 
     return 0;
 }
+
+#ifdef DEBUG
 // Verification function of the graph.
 static void verify_graph_integrity(const uint8_t *block) {
     uint8_t beggining_of_last_level = 0;
@@ -131,7 +109,7 @@ static void verify_graph_integrity(const uint8_t *block) {
             abort();
         }
         beggining_of_last_level = graph.first_node_of_level[node->node_level];
-        if (node->isUseless) {
+        if (node->is_useless) {
             fprintf(stderr,
                     "\nStill found a useless node. There should be None. "
                     "node_id=%u, node_level=%u \n\n",
@@ -152,6 +130,7 @@ static void verify_graph_integrity(const uint8_t *block) {
         //printf("\n");
     }
 }
+#endif
 
 static inline void calculate_levels_to_keep(uint8_t *levels_to_keep) {
     // Clear all levels (0 = don't keep)
@@ -172,7 +151,7 @@ static inline void calculate_levels_to_keep(uint8_t *levels_to_keep) {
             if (!has_useful_node && levels_to_keep[current_level]) {
                 uint32_t first_node_id = graph.first_node_of_level[current_level];
                 GraphNode* firstNode = get_graph_node(first_node_id);
-                firstNode->isUseless = 0; //make it useful as every good level must have one.
+                firstNode->is_useless = 0; //make it useful as every good level must have one.
                 uint16_t parent_level = get_parent_level(firstNode);
                 if (parent_level < graph.total_levels) {  // Validate parent level
                     levels_to_keep[parent_level] = 1;
@@ -187,7 +166,7 @@ static inline void calculate_levels_to_keep(uint8_t *levels_to_keep) {
         }
 
         // Mark parent level to keep (if not root node)
-        if (node->node_id != 0 && !node->isUseless) {  // Skip root node (level 0)
+        if (node->node_id != 0 && !node->is_useless) {  // Skip root node (level 0)
             has_useful_node = 1;
             uint16_t parent_level = get_parent_level(node);
             if (parent_level < graph.total_levels) {  // Validate parent level
@@ -199,7 +178,7 @@ static inline void calculate_levels_to_keep(uint8_t *levels_to_keep) {
 
 void compact_graph(const uint8_t *block) {
     assert(graph.size == 0 ||
-           (graph.nodes[0].node_id == 0 && !graph.nodes[0].isUseless));
+           (graph.nodes[0].node_id == 0 && !graph.nodes[0].is_useless));
 
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
@@ -238,7 +217,7 @@ void compact_graph(const uint8_t *block) {
         }
 
         // Skip nodes from excluded levels. Skip useless nodes too, unless we force-include them.
-        if (levels_to_keep[current_level] == 0 || node->isUseless) {
+        if (levels_to_keep[current_level] == 0 || node->is_useless) {
 #ifdef DEBUG
         printf("\nNode Excluded=%u, level=%u\n", node->node_id, node->node_level);
 #endif
@@ -313,9 +292,13 @@ void print_graph_node(GraphNode *node) {
         printf("\n");
     }
     uint16_t parent_nodes_count = get_parent_nodes_count(node);
-    printf("node_id = %u, start_of_sequence = %u, sequence_length = %u",
-           node->node_id, node->offset, node->sequence_length);
-    printf(", parent_count = %u\n", parent_nodes_count);
+    printf("node_id = %u, start_of_sequence = %u, sequence_length = %u, isUseless=%u, level=%u",
+           node->node_id, node->offset, node->sequence_length, node->is_useless, node->node_level);
+    if (!node->is_RLE) {
+        printf(", parent_count = %u\n", parent_nodes_count);
+    } else {
+        printf(", RLE=YES, parent_count = %u\n", parent_nodes_count);
+    }
     GraphNode* parent_nodes = get_parent_nodes(node);
     if (!parent_nodes) return;
     for (int i = 0; i < parent_nodes_count; i++) {
@@ -323,4 +306,13 @@ void print_graph_node(GraphNode *node) {
         break;// just print one link per node as other belings to the same level.
     }
 
+}
+
+void print_all_nodes(const uint8_t *block) {
+    for (uint32_t i = 0; i < graph.size; i++) {
+        GraphNode *node = &graph.nodes[i];
+        if (node->is_useless) continue;
+        print_graph_node(node);
+        print_node_sequence(node, block);
+    }
 }

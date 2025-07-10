@@ -24,12 +24,15 @@ int prune_count =0;
  * @return double Storage cost in bytes (always >= 0)
  */
 static inline double calc_cost(GraphNode *node, uint32_t frequency) {
+    
     // Branchless design for common cases - reduces pipeline stalls
     const uint8_t len = node->sequence_length;
     double base_cost;
     
+    if (node->node_id == 0) return 0; // no cost for the root node.
+
     // Handle RLE case first (uses different cost model)
-    if (node->run_length_encoding) {
+    if (node->is_RLE) {
         // RLE cost: pattern length + 1 byte for repeat count
         return node->repeat_seq_length + 1;
     }

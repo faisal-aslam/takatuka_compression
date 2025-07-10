@@ -30,8 +30,8 @@ typedef struct {
     uint16_t node_level;
     uint16_t min_depth;
     uint8_t sequence_length;
-    uint8_t isUseless;
-    uint8_t run_length_encoding;
+    uint8_t is_useless;
+    uint8_t is_RLE;
     uint8_t repeat_seq_length;
 } GraphNode;
 
@@ -60,6 +60,7 @@ static inline uint16_t get_parent_level(GraphNode* node);
 static inline void reset_graph(void);
 void print_graph_node(GraphNode *node);
 void print_node_sequence(GraphNode *node, const uint8_t* block);
+void print_all_nodes(const uint8_t* block);
 void compact_graph(const uint8_t* block);
 /**
  * @brief Determines if a node's sequence can be Run-Length Encoded (RLE) by detecting repeating patterns.
@@ -74,12 +75,6 @@ void compact_graph(const uint8_t* block);
  * - Processes patterns from largest to smallest for optimal compression
  * - Uses efficient memcmp for pattern comparison
  * 
- * @param node     Pointer to the GraphNode being analyzed (input/output)
- *                 - Uses: node->offset, node->sequence_length
- *                 - Sets: node->run_length_encoding (1 if RLE applicable)
- *                        node->repeat_seq_length (length of repeating pattern)
- * @param block    Pointer to the source data block containing the sequence
- * 
  * @return uint8_t Returns 1 if RLE pattern was found and applied, 0 otherwise
  * 
  * @note Memory Efficiency:
@@ -93,7 +88,7 @@ void compact_graph(const uint8_t* block);
  * @see MIN_RLE_SEQ_LENGTH - Minimum sequence length to consider for RLE
  * @see RLE_MAX_PATTERN_LENGTH - Maximum repeating pattern size to check
  */
-uint8_t is_RLE_sequence(GraphNode* node, const uint8_t *block);
+uint8_t is_RLE_sequence(uint8_t* repeat_seq_length, uint8_t seq_len, uint32_t offset, const uint8_t *block);
 
 static inline void reset_graph(void) {
     graph.size = 0;
