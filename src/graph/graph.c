@@ -136,12 +136,6 @@ static inline void calculate_levels_to_keep(uint8_t *levels_to_keep) {
     // Clear all levels (0 = don't keep)
     memset(levels_to_keep, 0, graph.total_levels * sizeof(uint8_t));
     
-    // Keep the last and the first level by default
-    if (graph.total_levels > 0) {
-        levels_to_keep[graph.total_levels - 1] = 1;
-        levels_to_keep[0] = 1;
-    }
-
     uint16_t current_level = graph.total_levels-1; //starting from the last level.
     uint8_t has_useful_node = 0;
     // Process nodes in reverse order
@@ -176,15 +170,14 @@ static inline void calculate_levels_to_keep(uint8_t *levels_to_keep) {
     }
 }
 
-void compact_graph(const uint8_t *block) {
+void compact_graph(const uint8_t *block, uint8_t* levels_to_keep) {
     assert(graph.size == 0 ||
            (graph.nodes[0].node_id == 0 && !graph.nodes[0].is_useless));
 
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
     uint32_t level_start = 0;
-    uint32_t max_level_processed = 0; // Track the highest level we actually process
-    uint8_t levels_to_keep[graph.total_levels];
+    uint32_t max_level_processed = 0; // Track the highest level we actually process    
     calculate_levels_to_keep(levels_to_keep);
     // Initialize root node
     if (graph.size > 0) {

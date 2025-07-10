@@ -61,7 +61,7 @@ static inline void reset_graph(void);
 void print_graph_node(GraphNode *node);
 void print_node_sequence(GraphNode *node, const uint8_t* block);
 void print_all_nodes(const uint8_t* block);
-void compact_graph(const uint8_t* block);
+void compact_graph(const uint8_t* block, uint8_t* levels_to_keep);
 /**
  * @brief Determines if a node's sequence can be Run-Length Encoded (RLE) by detecting repeating patterns.
  * 

@@ -15,8 +15,6 @@ SequenceRepository useless_repo;
 
 static GraphNode* root_node = NULL;
 
-uint32_t RLE_nodes_id[MAX_LEVELS]; //every level can have at max one RLE node whose ID is stored here for usefulness.
-
 static inline void create_root() {   
     increment_graph_level();
     root_node = get_next_node();
@@ -33,9 +31,14 @@ static GraphNode* create_node(uint32_t start, uint8_t length) {
 }
 
 void process_block(const uint8_t *block, uint32_t block_size) {
+    
     init_graph();
     create_root();
     seq_repo_init(&useless_repo, INITIAL_CAPACITY);
+
+    uint8_t levels_to_keep[graph.total_levels];
+    memset(levels_to_keep, 0, graph.total_levels*sizeof(uint8_t));
+    levels_to_keep[0]=levels_to_keep[get_last_level_index()]=1;
 
 #ifdef DEBUG
     print_graph_node(get_graph_node(0));
@@ -56,16 +59,9 @@ void process_block(const uint8_t *block, uint32_t block_size) {
             current_node = create_node(start, max_sequence);
             current_node->is_RLE = 1;
             current_node->repeat_seq_length = repeat_seq_length;
-            current_node->is_useless = 0; // mark it useful
-            RLE_nodes_id[current_level] = current_node->node_id;
+            current_node->is_useless = 0; // mark it useful            
             for (int i = 1; i < max_sequence; i++) {
-                uint32_t node_id_rle = RLE_nodes_id[current_level - i];
-                if (node_id_rle != 0) { // make previous level nodes useless.
-                    get_graph_node(node_id_rle)->is_useless = 1;
-                    RLE_nodes_id[current_level - i] = 0; // for speed so that we do not make
-                                                         // a same not useless multiple
-                                                         // times.
-                }
+                levels_to_keep[current_level-i] = 0;                
             }
 #ifdef DEBUG
         print_graph_node(current_node); // print the newly create node.
@@ -101,7 +97,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     }
     print_all_nodes(block);
     printf("\n*** Done with creating nodes=%u, in %lu ms\n", get_graph_size(), get_elapsed_ms());
-    compact_graph(block); // compact the graph by removing useless nodes.
+    compact_graph(block, levels_to_keep); // compact the graph by removing useless nodes.
 
     printf("\n*** Done with nodes compaction, nodes=%u, in %lu ms\n", get_graph_size(), get_elapsed_ms());
 #ifdef DEBUG
