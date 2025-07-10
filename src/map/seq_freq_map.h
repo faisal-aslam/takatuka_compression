@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "../constants.h"
 
 typedef struct {
     const uint8_t *sequence;  // Points to external memory
@@ -20,12 +21,9 @@ typedef struct {
 
     uint32_t *freq1_indices;
     uint32_t freq1_count;
-
-    uint64_t *hash_cache;
-    uint32_t hash_cache_size;
 } SeqFreqMap;
 
-void init_seq_freq_map(SeqFreqMap *map, uint32_t capacity, uint32_t hash_cache_size);
+void init_seq_freq_map(SeqFreqMap *map, uint32_t capacity);
 void free_seq_freq_map(SeqFreqMap *map);
 
 uint32_t seq_freq_increment(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index);

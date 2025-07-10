@@ -16,38 +16,35 @@ bool sequences_equal(const uint8_t *a, const uint8_t *b, uint8_t len) {
     }
 }
 
-void init_seq_freq_map(SeqFreqMap *map, uint32_t capacity, uint32_t hash_cache_size) {
+void init_seq_freq_map(SeqFreqMap *map, uint32_t capacity) {
     map->capacity = capacity;
     map->used = 0;
     map->freq1_count = 0;
 
     map->entries = calloc(capacity, sizeof(SeqFreqEntry));
     map->freq1_indices = calloc(capacity, sizeof(uint32_t));
-    map->hash_cache = calloc(hash_cache_size, sizeof(uint64_t));
-    map->hash_cache_size = hash_cache_size;
 }
 
 void free_seq_freq_map(SeqFreqMap *map) {
     free(map->entries);
     free(map->freq1_indices);
-    free(map->hash_cache);
     map->entries = NULL;
     map->freq1_indices = NULL;
-    map->hash_cache = NULL;
     map->capacity = 0;
     map->used = 0;
     map->freq1_count = 0;
-    map->hash_cache_size = 0;
 }
 
 uint32_t seq_freq_increment(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index) {
-    uint64_t hash = map->hash_cache[hash_index];
-    if (hash == 0) {
+    uint32_t idx = 0;//= map->hash_cache[hash_index];
+    uint64_t hash;
+    if (idx == 0) {
         hash = XXH3_64bits(seq, len);
-        map->hash_cache[hash_index] = hash;
+        idx = hash % map->capacity;
+        //map->hash_cache[hash_index] = idx;
     }
 
-    uint32_t idx = hash % map->capacity;
+    
     uint32_t orig_idx = idx;
 
     while (map->entries[idx].is_used &&
@@ -84,10 +81,10 @@ uint32_t seq_freq_increment(SeqFreqMap *map, const uint8_t *seq, uint8_t len, ui
 }
 
 void seq_freq_decrement(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index) {
-    uint64_t hash = map->hash_cache[hash_index];
+    uint64_t hash = 0;// map->hash_cache[hash_index];
     if (hash == 0) {
         hash = XXH3_64bits(seq, len);
-        map->hash_cache[hash_index] = hash;
+        //map->hash_cache[hash_index] = hash;
     }
 
     uint32_t idx = hash % map->capacity;
@@ -126,7 +123,7 @@ void seq_freq_decrement(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32
 }
 
 uint32_t seq_freq_get(const SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index) {
-    uint64_t hash = map->hash_cache[hash_index];
+    uint64_t hash = 0;//map->hash_cache[hash_index];
     if (hash == 0) {
         hash = XXH3_64bits(seq, len);
     }

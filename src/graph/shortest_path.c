@@ -35,6 +35,7 @@ typedef struct {
 } Path;
 
 Path path_state;
+SeqFreqMap map;
 
 /**
  * Initializes the path state for a new search.
@@ -111,7 +112,9 @@ static inline void backtrack_node(uint32_t node_id, const uint8_t* block) {
 #endif
 
     path_state.current_path_cost -= path_state.cost_stack[path_state.current_path_size];
-
+    if (node->sequence_length > 1) {
+            seq_freq_decrement(&map, &block[node->offset], node->sequence_length, node->node_id);        
+    }
 
     path_state.current_path_size--;
 }
@@ -129,6 +132,10 @@ static inline void process_node(const uint8_t* block, GraphNode* node) {
     path_state.current_path_stack[++path_state.current_path_size] = node->node_id;
 
     uint32_t freq = 1;
+    if (node->sequence_length > 1) {
+        freq = seq_freq_increment(&map, &block[node->offset], node->sequence_length, node->node_id);
+        //printf("\n node_id=%u, freq=%d \n", node->node_id, freq);
+    }
     
     double added_cost = COST(node->sequence_length, freq);
     if (node->node_id == 0) added_cost = 0;
@@ -173,8 +180,6 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top,
 
     for (uint8_t i = 0; i < parent_count; i++) {
         GraphNode *parent = &parents[i];
-        uint32_t parent_level = parent->node_level;
-
         if (should_prune(parent)) {
 #ifdef DEBUG
             printf("Prune by cost: parent node_id=%u\n", parent->node_id);
@@ -223,6 +228,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     uint32_t push_count = 0;
     uint32_t node_of_last_level_served = 0;
     path_init();      // Reset path state
+    init_seq_freq_map(&map, stack_size);
     initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
