@@ -259,7 +259,7 @@ static inline uint8_t start_fresh_from_another_leaf(int *top, StackItem *main_st
  */
 void find_shortest_path_to_sink(const uint8_t *block) {
     long stack_size = MIN(total_input_size+1, BLOCK_SIZE);//note: there is one extra level with no data. Count it!
-    long max_push = 100*get_graph_size();
+    long max_push = 10*get_graph_size();
     StackItem main_stack[stack_size];
     int top = -1;
     uint16_t last_level = get_last_level_index();
@@ -272,10 +272,10 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
-        /*if (push_count > max_push && best_count >= 1 
+        if (push_count > max_push && best_count >= 1 
             && !start_fresh_from_another_leaf(&top, main_stack, last_level, node_of_last_level_served, &push_count)) {
             break;            
-        }*/
+        }
         StackItem current = main_stack[top--];
 
         if (current.node_id == UINT32_MAX) {

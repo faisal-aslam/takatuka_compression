@@ -79,7 +79,20 @@ void process_block(const uint8_t *block, uint32_t block_size) {
                     uint32_t node_id = seq_repo_get_node_id(&useless_repo, &block[start], seq_len);
                     if (node_id != UINT32_MAX) { // we have found this sequence before.
                         GraphNode *old_node = get_graph_node(node_id);
-                        if (old_node->node_level + seq_len <= current_node->node_level) {
+                        if (old_node->node_level + seq_len == current_node->node_level) {
+                            old_node->is_useless = 0;     // Mark existing node as useful
+                            current_node->is_useless = 0; // Mark current node as useful
+                            seq_repo_add(&useless_repo, &block[start], seq_len,
+                                         current_node->node_id); // store new id for
+                                                                 // future nodes.
+                            uint32_t current_node_id = current_node->node_id;
+                            for (uint8_t j=seq_len-1; j>= 1; j--) {
+                                GraphNode* previous_node_cl = get_graph_node(current_node_id-j);
+                                GraphNode* previous_node_ol = get_graph_node(old_node->node_id-j);
+                                if (previous_node_cl->node_level == current_level) previous_node_cl->is_useless = 1;
+                                if (previous_node_ol->node_level == old_node->node_level) previous_node_ol->is_useless = 1;
+                            }
+                        } else if (old_node->node_level + seq_len < current_node->node_level) {
                             old_node->is_useless = 0;     // Mark existing node as useful
                             current_node->is_useless = 0; // Mark current node as useful
                             seq_repo_add(&useless_repo, &block[start], seq_len,
@@ -97,7 +110,6 @@ void process_block(const uint8_t *block, uint32_t block_size) {
             }            
         }
     }
-    print_all_nodes(block);
     levels_to_keep[get_last_level_index()] = 1; //keep the last level level.
     printf("\n*** Done with creating nodes=%u, in %lu ms\n", get_graph_size(), get_elapsed_ms());
     compact_graph(block, levels_to_keep); // compact the graph by removing useless nodes.
