@@ -19,40 +19,46 @@ void init_graph(void) {
     memset(graph.first_node_of_level, 0, sizeof(graph.first_node_of_level));
 }
 
-uint8_t is_RLE_sequence(uint8_t* repeat_seq_length, uint8_t seq_len, uint32_t offset, const uint8_t *block) {
-    *repeat_seq_length = 0;
+void mass_increment_levels(int add_levels) {
+    if (graph.total_levels + add_levels < MAX_LEVELS) {
+        for (int i=1; i < add_levels; i++) {
+            graph.first_node_of_level[graph.total_levels+i] = UINT32_MAX; //no node at this level.
+        }
+        graph.total_levels += add_levels;
+    }
 
-    if (seq_len < MIN_RLE_SEQ_LENGTH) {
+}
+
+uint8_t is_RLE_sequence(uint8_t* repeat_seq_length, uint8_t* length_of_RLE, uint8_t block_size, uint32_t offset, const uint8_t *block) {
+    *repeat_seq_length = 0;
+    *length_of_RLE = 0;
+
+    if (block_size < MIN_RLE_SEQ_LENGTH) {
         return 0;
     }
 
     const uint8_t* sequence = block + offset;
     const uint8_t first_byte = sequence[0];
 
-    // ===== Stage 1: Uniform Sequence Check =====
-    bool uniform = true;
-
-    // Unroll first 4 bytes for fast early rejection
-    if (sequence[1] != first_byte ||
-        sequence[2] != first_byte ||
-        sequence[3] != first_byte) {
-        uniform = false;
-    } else {
-        for (uint8_t i = 4; i < seq_len; i++) {
-            if (sequence[i] != first_byte) {
-                uniform = false;
-                break;
-            }
+    // ===== Stage 1: Uniform Sequence Check (for whole sequence or prefix) =====
+    uint8_t uniform_length = block_size;
+    
+    // Find the first position where the byte differs
+    for (uint8_t i = 1; i < block_size; i++) {
+        if (sequence[i] != first_byte) {
+            uniform_length = i;
+            break;
         }
     }
 
-    if (uniform) {
+    if (uniform_length >= MIN_RLE_SEQ_LENGTH) {
         *repeat_seq_length = 1;
+        *length_of_RLE = uniform_length;
         return 1;
     }
 
-    // ===== Stage 2: Pattern-Based RLE Check =====
-    if (seq_len < 16) {
+    // ===== Stage 2: Pattern-Based RLE Check (for whole sequence or prefix) =====
+    if (block_size < 16) {
         return 0;
     }
 
@@ -70,25 +76,39 @@ uint8_t is_RLE_sequence(uint8_t* repeat_seq_length, uint8_t seq_len, uint32_t of
         return 0;
     }
 
-    int max_pattern = MIN(seq_len / 2, RLE_MAX_PATTERN_LENGTH);
+    int max_pattern = MIN(block_size / 2, RLE_MAX_PATTERN_LENGTH);
 
     for (int pattern_len = max_pattern; pattern_len >= 2; pattern_len--) {
-        if (seq_len % pattern_len != 0) {
+        // Check if any multiple of the pattern length exists that's >= MIN_RLE_SEQ_LENGTH
+        int max_possible_repeats = block_size / pattern_len;
+        if (max_possible_repeats * pattern_len < MIN_RLE_SEQ_LENGTH) {
             continue;
         }
 
-        int repeats = seq_len / pattern_len;
+        // Find the maximum number of complete repeats we can get
+        int max_valid_repeats = 0;
         bool valid = true;
-
-        for (int r = 1; r < repeats; r++) {
-            if (memcmp(sequence, sequence + r * pattern_len, pattern_len) != 0) {
-                valid = false;
+        
+        for (int r = 1; r <= max_possible_repeats; r++) {
+            int current_length = r * pattern_len;
+            for (int i = 0; i < pattern_len; i++) {
+                if (current_length + i >= block_size) {
+                    break;  // Reached end of sequence
+                }
+                if (sequence[i] != sequence[current_length + i]) {
+                    valid = false;
+                    break;
+                }
+            }
+            if (!valid) {
                 break;
             }
+            max_valid_repeats = r;
         }
 
-        if (valid && repeats >= 2) {
-            *repeat_seq_length = pattern_len;            
+        if (max_valid_repeats >= 2 && (max_valid_repeats * pattern_len) >= MIN_RLE_SEQ_LENGTH) {
+            *repeat_seq_length = pattern_len;
+            *length_of_RLE = max_valid_repeats * pattern_len;
             return 1;
         }
     }

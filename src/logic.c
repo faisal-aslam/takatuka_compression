@@ -16,7 +16,7 @@ SequenceRepository useless_repo;
 static GraphNode* root_node = NULL;
 
 static inline void create_root() {   
-    increment_graph_level();
+    create_graph_level();
     root_node = get_next_node();
     assert(root_node != NULL);
 }
@@ -36,38 +36,38 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     create_root();
     seq_repo_init(&useless_repo, INITIAL_CAPACITY);
 
-    uint8_t levels_to_keep[graph.total_levels];
-    memset(levels_to_keep, 0, graph.total_levels*sizeof(uint8_t));
-    levels_to_keep[0]=levels_to_keep[get_last_level_index()]=1;
+    uint8_t levels_to_keep[block_size+1];
+    memset(levels_to_keep, 0, (block_size+1)*sizeof(uint8_t));
+    levels_to_keep[0]=1;
 
 #ifdef DEBUG
     print_graph_node(get_graph_node(0));
 #endif
 
     for (uint32_t block_index = 0; block_index < block_size; block_index++) {
-        increment_graph_level();
-        uint16_t current_level = get_last_level_index();
-        if (current_level >= MAX_LEVELS) break;
 
-        uint8_t max_sequence = MIN(current_level, MAX_WEIGHTS);
-
-        uint32_t start = block_index - max_sequence + 1;        
-        uint8_t repeat_seq_length;
+        uint8_t repeat_seq_length, length_of_RLE;
         GraphNode *current_node = NULL;
         // Create RLE node, if any. There could be at most one RLE node per level.
-        if (is_RLE_sequence(&repeat_seq_length, max_sequence, start, block)) {
-            current_node = create_node(start, max_sequence);
+        if (is_RLE_sequence(&repeat_seq_length, &length_of_RLE, MIN(block_size, SEQ_LENGTH_LIMIT), block_index,
+                            block)) {
+            create_graph_level();
+            current_node = create_node(block_index, length_of_RLE);
             current_node->is_RLE = 1;
             current_node->repeat_seq_length = repeat_seq_length;
-            current_node->is_useless = 0; // mark it useful            
-            for (int i = 1; i < max_sequence; i++) {
-                levels_to_keep[current_level-i] = 0;                
-            }
+            current_node->is_useless = 0; // mark it useful
+            block_index = block_index + length_of_RLE - 1; // compensating for increase of block index at the end of for loop.
+            mass_increment_levels(length_of_RLE-1);
 #ifdef DEBUG
-        print_graph_node(current_node); // print the newly create node.
+            print_graph_node(current_node); // print the newly create node.
 #endif
 
         } else {
+            create_graph_level(); //create new level of the graph
+            uint16_t current_level = get_last_level_index();
+            if (current_level >= MAX_LEVELS) break;
+            uint8_t max_sequence = MIN(current_level, MAX_WEIGHTS);
+            uint8_t start;
             // Make sequences of specific sizes.
             for (uint8_t seq_len = 1; seq_len <= max_sequence; seq_len++) {
                 start = block_index - seq_len + 1;
@@ -92,10 +92,11 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #ifdef DEBUG
                     print_graph_node(current_node); // print the newly create node.
 #endif
-            }
+            }            
         }
     }
     print_all_nodes(block);
+    levels_to_keep[get_last_level_index()] = 1; //keep the last level level.
     printf("\n*** Done with creating nodes=%u, in %lu ms\n", get_graph_size(), get_elapsed_ms());
     compact_graph(block, levels_to_keep); // compact the graph by removing useless nodes.
 

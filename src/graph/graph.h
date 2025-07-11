@@ -53,7 +53,7 @@ static inline uint32_t get_level_end_id(uint16_t level);
 static inline uint16_t get_last_level_index(void); 
 static inline GraphNode* get_graph_node(uint32_t node_id);
 static inline GraphNode* get_next_node(void);
-static inline void increment_graph_level(void);
+static inline void create_graph_level(void);
 static inline uint32_t get_graph_size(void);
 static inline GraphNode* get_parent_nodes(GraphNode* node);
 static inline uint16_t get_parent_level(GraphNode* node);
@@ -61,34 +61,47 @@ static inline void reset_graph(void);
 void print_graph_node(GraphNode *node);
 void print_node_sequence(GraphNode *node, const uint8_t* block);
 void print_all_nodes(const uint8_t* block);
+void mass_increment_levels(int add_levels);
 void compact_graph(const uint8_t* block, uint8_t* levels_to_keep);
+
 /**
- * @brief Determines if a node's sequence can be Run-Length Encoded (RLE) by detecting repeating patterns.
+ * @brief Detects Run-Length Encodable (RLE) sequences within a data block
  * 
- * This function analyzes the sequence associated with a graph node to determine if it contains
- * a repeating subsequence that would make it suitable for RLE compression. If found, it sets
- * the node's RLE flags and stores the repeating pattern length.
+ * This function analyzes a block of data to identify the longest prefix suitable for RLE compression,
+ * either as a uniform byte sequence or a repeating pattern. The function is optimized for performance
+ * when processing entire blocks at once.
  * 
- * Key Characteristics:
- * - Only sequences >= MIN_RLE_SEQ_LENGTH are considered for RLE
- * - Checks for repeating patterns up to RLE_MAX_PATTERN_LENGTH
- * - Processes patterns from largest to smallest for optimal compression
- * - Uses efficient memcmp for pattern comparison
+ * Key Features:
+ * - Detects both uniform sequences (e.g., "AAAAA") and patterned sequences (e.g., "ABABAB")
+ * - Returns the longest valid RLE prefix meeting minimum length requirements
+ * - Processes data in-place without memory allocation
+ * - Uses optimized checks for early rejection of non-RLE candidates
  * 
- * @return uint8_t Returns 1 if RLE pattern was found and applied, 0 otherwise
+ * Output Parameters:
+ * - repeat_seq_length: For uniform sequences = 1, for patterns = pattern length
+ * - length_of_RLE: Number of bytes that can be RLE encoded (may be less than block_size)
  * 
- * @note Memory Efficiency:
- *       - Operates directly on block data without copies
- *       - Limits pattern search space for performance
+ * @param[out] repeat_seq_length Length of repeating pattern (1 for uniform sequences)
+ * @param[out] length_of_RLE Length of encodable sequence (0 if no RLE found)
+ * @param[in] block_size Total size of the block to analyze
+ * @param[in] offset Byte offset within the block to start analysis
+ * @param[in] block Pointer to the data block
  * 
- * @example For sequence "ABCABCABC":
- *          - Would set run_length_encoding=1, repeat_seq_length=3
- *          - For "ABCDEFG": would leave flags unset (returns 0)
+ * @return uint8_t Returns 1 if RLE sequence found, 0 otherwise
  * 
- * @see MIN_RLE_SEQ_LENGTH - Minimum sequence length to consider for RLE
- * @see RLE_MAX_PATTERN_LENGTH - Maximum repeating pattern size to check
+ * @note Performance Considerations:
+ *       - Processes data in a single pass when possible
+ *       - Uses memcmp for efficient pattern comparison
+ *       - Early termination on non-RLE sequences
+ * 
+ * @example "AAAAAAABCD" → returns 1, repeat_seq_length=1, length_of_RLE=7
+ * @example "ABABABXXXX" → returns 1, repeat_seq_length=2, length_of_RLE=6
+ * @example "ABCDEFGHIJ" → returns 0
+ * 
+ * @see MIN_RLE_SEQ_LENGTH Minimum sequence length to consider for RLE
+ * @see RLE_MAX_PATTERN_LENGTH Maximum pattern length to check
  */
-uint8_t is_RLE_sequence(uint8_t* repeat_seq_length, uint8_t seq_len, uint32_t offset, const uint8_t *block);
+uint8_t is_RLE_sequence(uint8_t* repeat_seq_length, uint8_t* length_of_RLE, uint8_t block_size, uint32_t offset, const uint8_t *block);
 
 static inline void reset_graph(void) {
     graph.size = 0;
@@ -148,7 +161,7 @@ static inline GraphNode* get_graph_node(uint32_t node_id) {
 }
 
 
-static inline void increment_graph_level(void) {
+static inline void create_graph_level(void) {
     if (graph.total_levels < MAX_LEVELS) {
         graph.first_node_of_level[graph.total_levels] = graph.size;
         graph.total_levels++;
