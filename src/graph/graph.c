@@ -21,7 +21,7 @@ void init_graph(void) {
 
 void mass_increment_levels(int add_levels) {
     if (graph.total_levels + add_levels < MAX_LEVELS) {
-        for (int i=1; i < add_levels; i++) {
+        for (int i=0; i < add_levels; i++) {
             graph.first_node_of_level[graph.total_levels+i] = UINT32_MAX; //no node at this level.
         }
         graph.total_levels += add_levels;
@@ -153,8 +153,6 @@ static void verify_graph_integrity(const uint8_t *block) {
 #endif
 
 static inline void calculate_levels_to_keep(uint8_t *levels_to_keep) {
-    // Clear all levels (0 = don't keep)
-    memset(levels_to_keep, 0, graph.total_levels * sizeof(uint8_t));
     
     uint16_t current_level = graph.total_levels-1; //starting from the last level.
     uint8_t has_useful_node = 0;
