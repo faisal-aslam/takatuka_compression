@@ -1,4 +1,3 @@
-// seq_freq_map.h
 #ifndef SEQ_FREQ_MAP_H
 #define SEQ_FREQ_MAP_H
 
@@ -18,18 +17,14 @@ typedef struct {
     SeqFreqEntry *entries;
     uint32_t capacity;
     uint32_t used;
-
-    uint32_t *freq1_indices;
-    uint32_t freq1_count;
 } SeqFreqMap;
 
 void init_seq_freq_map(SeqFreqMap *map, uint32_t capacity);
 void free_seq_freq_map(SeqFreqMap *map);
 
 uint32_t seq_freq_increment(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index);
-void seq_freq_decrement(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index);
+uint32_t seq_freq_decrement(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index);
 uint32_t seq_freq_get(const SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index);
-void list_freq_1_sequences(const SeqFreqMap *map, void (*callback)(const uint8_t *seq, uint8_t len));
-void print_seq_freq_map(const SeqFreqMap *map);
-bool sequences_equal(const uint8_t *a, const uint8_t *b, uint8_t len); //todo move it to some utility class later on.
+bool sequences_equal(const uint8_t *a, const uint8_t *b, uint8_t len);
+
 #endif // SEQ_FREQ_MAP_H
