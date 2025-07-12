@@ -6,18 +6,6 @@
 
 int prune_count =0;
 
-#define PATH_CURRENT 0
-#define PATH_BEST 1
-
-typedef struct {
-    uint32_t path_stack[2][MAX_LEVELS];   // 0 = current, 1 = best
-    int32_t cost_stack[2][MAX_LEVELS];    // cost per node
-    uint32_t path_freqs[2][MAX_LEVELS];   // frequencies per node
-    double path_per_node_costs[2][MAX_LEVELS];     // per-node cost
-    int32_t path_size[2];                 // size of each path
-    double path_total_cost[2];                  // total cost
-    uint32_t freq_eq_1_count; //only for the current path. A guard not to copy a bad path to current path.
-} Path;
 
 typedef struct {
     uint32_t node_id;
@@ -394,4 +382,11 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     print_path(0, 1, block);
 //#endif
 
+}
+
+
+void free_path_state() {
+    // Only if path_state has dynamic allocations
+    free_seq_freq_map(&map);  // Example if map needs freeing
+    memset(&path_state, 0, sizeof(Path));
 }

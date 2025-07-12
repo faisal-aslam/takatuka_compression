@@ -4,12 +4,14 @@
 #include <string.h>
 #include <limits.h> 
 #include "write_in_file.h"
-
+#include "../second_pass/group.h"
+#include "../graph/best_path_view.h"
 
 #define BUFFER_SIZE (1024 * 1024)  // 1MB buffer for better I/O performance
 #define MAX_SEQ_LENGTH 8
 #define ALIGNMENT 64  // Cache line alignment for AVX/SSE
 
+#ifdef LATER
 static void write_bits(uint16_t data, uint8_t num_bits,
                       uint8_t* bit_buffer, uint8_t* bit_pos,
                       uint8_t* byte_buffer, size_t* byte_pos);
@@ -400,12 +402,11 @@ static void write_bits(uint16_t value, uint8_t num_bits, uint8_t* bit_buffer, ui
 /**
  * @brief Calculates used sequences and assigns group IDs/codewords
  * 
- * @param node TreeNode containing compression sequences
  * @param block Raw data block
  * @param block_index Starting index in block
  * @return int Number of used sequences found (or -1 on error)
  */
-static int calcUsedAndAssignGroupID(TreeNode *node, const uint8_t* block, uint32_t block_index) {
+static int calcUsedAndAssignGroupID(const uint8_t* block, uint32_t block_index) {
     // Validate inputs
     if (!node || !block) {
         fprintf(stderr, "Error: Invalid node or block pointer\n");
@@ -487,7 +488,7 @@ static int calcUsedAndAssignGroupID(TreeNode *node, const uint8_t* block, uint32
     return used_count;
 }
 
-
+#endif
 
 /**
   * @brief Main function to write complete compressed output file
@@ -496,11 +497,10 @@ static int calcUsedAndAssignGroupID(TreeNode *node, const uint8_t* block, uint32
   * @param sequences Array of binary sequences for header
   * @param seq_count Number of sequences
   * @param best_node TreeNode with best compression path
-  * @param raw_data Pointer to raw data block
+  * @param block Pointer to raw data block
   */
-void writeCompressedOutput(const char* filename, BinarySequence** sequences, 
-                         int seq_count, TreeNode *best_node, const uint8_t* raw_data) {
-    if (!filename || !sequences || seq_count <= 0 || !best_node || !raw_data) {
+void writeCompressedOutput(const char* filename, const uint8_t* block) {
+    if (!filename || !block) {
         fprintf(stderr, "Error: Invalid inputs in writeCompressedOutput\n");
         return;
     }
@@ -510,11 +510,15 @@ void writeCompressedOutput(const char* filename, BinarySequence** sequences,
         perror("Failed to open output file");
         return;
     }
+    BestPathView view = get_best_path_view(); //we got the best view.
+
     printf("\n ==== Starting compressed output writing === \n");
+    //Step 1: assign codes to the best path, corresponding to each node.
+
 	//printNode(best_node, raw_data, 0);
-    int used_count = calcUsedAndAssignGroupID(best_node, raw_data, 0);
+    /*int used_count = calcUsedAndAssignGroupID(block, 0);
     writeHeaderOfCompressedFile(sequences, seq_count, used_count, file);
-    writeCompressedDataInFile(best_node, raw_data, file);
+    writeCompressedDataInFile(best_node, block, file);*/
     printf("\n === Writing compressed output completed ==\n");
    
     if (fclose(file) != 0) {

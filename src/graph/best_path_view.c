@@ -1,0 +1,77 @@
+#include "best_path_view.h"
+#include "../graph/shortest_path.h"
+
+
+
+BestPathView get_best_path_view() {
+    const int idx = PATH_BEST;
+    
+    return (BestPathView){
+        // Direct pointers to existing arrays
+        .nodes = path_state.path_stack[idx],
+        .costs = path_state.cost_stack[idx],
+        .freqs = path_state.path_freqs[idx],
+        .per_node_costs = path_state.path_per_node_costs[idx],
+        
+        // Code fields initialized to NULL (writer will allocate)
+        .per_node_codes = NULL,
+        .codes_length = NULL,
+        
+        // Metadata
+        .path_size = path_state.path_size[idx] + 1, // Convert to count
+        .total_cost = path_state.path_total_cost[idx]
+    };
+}
+
+
+/**
+ * Prints the best path from a BestPathView structure
+ * @param view Pointer to BestPathView structure
+ * @param shouldPrintData If true, prints sequence details as well
+ * @param block Pointer to input block (for sequence data)
+ */
+void print_best_view(const BestPathView *view, uint8_t shouldPrintData, const uint8_t *block) {
+    printf("\n=== BEST PATH VIEW ===\n");
+    printf("Path size = %d, Total cost = %.2lf\n", view->path_size, view->total_cost);
+    printf("Node chain (node_id, level):\n");
+
+    // Print node chain (reverse order as in original)
+    for (int32_t i = view->path_size - 1; i >= 0; i--) {
+        GraphNode *node = get_graph_node(view->nodes[i]);
+        if (!node) continue;
+        printf("(%u,%u)", node->node_id, node->node_level);
+        if (i > 0) printf(" -> ");
+    }
+    printf("\n");
+
+    if (!shouldPrintData) return;
+
+    printf("\nDetailed sequence info:\n");
+    for (int32_t i = view->path_size - 1; i >= 0; i--) {
+        GraphNode *node = get_graph_node(view->nodes[i]);
+        if (!node) continue;
+
+        const uint8_t len = node->sequence_length;
+        const uint32_t freq = view->freqs[i];
+        const double cost = view->per_node_costs[i];
+
+        printf(" -> ");
+        if (node->is_RLE) {
+            printf("RLE=YES ");
+        }
+
+        printf("| id=%u len=%u freq=%u cost=%.2f | ",
+               node->node_id, len, freq, cost);
+
+        print_node_sequence(node, block);
+
+        if (i % 20 == 0) fflush(stdout);
+    }
+    printf("\n\n");
+}
+
+void free_best_path_view(BestPathView* view) {
+    free(view->per_node_codes);
+    free(view->codes_length);
+    memset(view, 0, sizeof(BestPathView)); // Optional safety
+}
