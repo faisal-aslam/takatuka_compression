@@ -511,9 +511,13 @@ void writeCompressedOutput(const char* filename, const uint8_t* block) {
         return;
     }
     BestPathView view = get_best_path_view(); //we got the best view.
+#ifdef DEBUG
+    print_best_view(&view, 1, block); //to check if our view is consistent with the path computed.
+#endif
 
     printf("\n ==== Starting compressed output writing === \n");
     //Step 1: assign codes to the best path, corresponding to each node.
+
 
 	//printNode(best_node, raw_data, 0);
     /*int used_count = calcUsedAndAssignGroupID(block, 0);
