@@ -13,13 +13,8 @@ BestPathView get_best_path_view() {
         .freqs = path_state.path_freqs[idx],
         .per_node_costs = path_state.path_per_node_costs[idx],
         
-        // Code fields initialized to NULL (writer will allocate)
-        .per_node_codes = NULL,
-        .codes_length = NULL,
-        
         // Metadata
-        .path_size = path_state.path_size[idx] + 1, // Convert to count
-        .total_cost = path_state.path_total_cost[idx]
+        .path_size = path_state.path_size[idx] + 1, // Convert to count        
     };
 }
 
@@ -32,7 +27,7 @@ BestPathView get_best_path_view() {
  */
 void print_best_view(const BestPathView *view, uint8_t shouldPrintData, const uint8_t *block) {
     printf("\n=== BEST PATH VIEW ===\n");
-    printf("Path size = %d, Total cost = %.2lf\n", view->path_size, view->total_cost);
+    printf("Path size = %d\n", view->path_size);
     printf("Node chain (node_id, level):\n");
 
     // Print node chain (reverse order as in original)
@@ -71,7 +66,5 @@ void print_best_view(const BestPathView *view, uint8_t shouldPrintData, const ui
 }
 
 void free_best_path_view(BestPathView* view) {
-    free(view->per_node_codes);
-    free(view->codes_length);
     memset(view, 0, sizeof(BestPathView)); // Optional safety
 }

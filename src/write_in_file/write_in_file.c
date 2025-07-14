@@ -4,7 +4,7 @@
 #include <string.h>
 #include <limits.h> 
 #include "write_in_file.h"
-#include "../second_pass/group.h"
+#include "code_classes.h"
 #include "../graph/best_path_view.h"
 
 #define BUFFER_SIZE (1024 * 1024)  // 1MB buffer for better I/O performance
@@ -517,7 +517,7 @@ void writeCompressedOutput(const char* filename, const uint8_t* block) {
 
     printf("\n ==== Starting compressed output writing === \n");
     //Step 1: assign codes to the best path, corresponding to each node.
-
+    
 
 	//printNode(best_node, raw_data, 0);
     /*int used_count = calcUsedAndAssignGroupID(block, 0);
