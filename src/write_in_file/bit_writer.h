@@ -1,0 +1,22 @@
+// bit_writer.h
+#ifndef BIT_WRITER_H
+#define BIT_WRITER_H
+
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+
+typedef struct {
+    uint8_t* buffer;
+    size_t buffer_size;
+    size_t byte_pos;
+    uint8_t bit_pos;  // 0 (MSB) to 7 (LSB)
+    bool overflow;
+} BitWriter;
+
+void bitwriter_init(BitWriter* bw, uint8_t* buffer, size_t size);
+bool bitwriter_write(BitWriter* bw, uint32_t value, uint8_t num_bits);
+void bitwriter_flush(BitWriter* bw);
+size_t bitwriter_bytes_written(const BitWriter* bw);
+
+#endif // BIT_WRITER_H

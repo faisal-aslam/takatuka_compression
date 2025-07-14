@@ -6,6 +6,7 @@
 #include "write_in_file.h"
 #include "code_classes.h"
 #include "best_path_view.h"
+#include "compressed_header.h"
 
 #define BUFFER_SIZE (1024 * 1024)  // 1MB buffer for better I/O performance
 #define MAX_SEQ_LENGTH 8
@@ -510,12 +511,13 @@ void writeCompressedOutput(const char* filename, const uint8_t* block) {
         perror("Failed to open output file");
         return;
     }
-    BestPathView view = get_best_path_view(); //we got the best view.
+    BestPathView best_view = get_best_path_view(); //we got the best view.
 #ifdef DEBUG
-    print_best_view(&view, 1, block); //to check if our view is consistent with the path computed.
+    print_best_view(&best_view, 1, block); //to check if our view is consistent with the path computed.
 #endif
 
     printf("\n ==== Starting compressed output writing === \n");
+    populate_header(best_view, block);
     //Step 1: assign codes to the best path, corresponding to each node.
     
 

@@ -7,6 +7,7 @@
 #include "graph/shortest_path.h"
 #include "map/sequence_repository_useless.h"
 #include "timer.h"
+#include "write_in_file/write_in_file.h"
 
 SequenceRepository useless_repo;
 
@@ -124,4 +125,6 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     visualize_graph(block); // create graph in DOT for visualization.
 #endif
     find_shortest_path_to_sink(block); // find shortest path
+    //finally write compress file.
+    writeCompressedOutput("output.fa", block);
 }
