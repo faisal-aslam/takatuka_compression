@@ -517,7 +517,7 @@ void writeCompressedOutput(const char* filename, const uint8_t* block) {
 #endif
 
     printf("\n ==== Starting compressed output writing === \n");
-    populate_header(best_view, block);
+    populate_header(best_view, block, file);
     //Step 1: assign codes to the best path, corresponding to each node.
     
 

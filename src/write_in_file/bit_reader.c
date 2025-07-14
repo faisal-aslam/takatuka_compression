@@ -1,5 +1,6 @@
 // bit_reader.c
 #include "bit_reader.h"
+#include <stdlib.h>
 
 void bitreader_init(BitReader* br, const uint8_t* buffer, size_t size) {
     br->buffer = buffer;
@@ -30,4 +31,21 @@ bool bitreader_read(BitReader* br, uint32_t* value, uint8_t num_bits) {
         }
     }
     return true;
+}
+
+uint8_t* bitreader_load_from_file(FILE* fp, size_t* out_size) {
+    fseek(fp, 0, SEEK_END);
+    size_t size = ftell(fp);
+    rewind(fp);
+
+    uint8_t* buffer = malloc(size);
+    if (!buffer) return NULL;
+
+    if (fread(buffer, 1, size, fp) != size) {
+        free(buffer);
+        return NULL;
+    }
+
+    if (out_size) *out_size = size;
+    return buffer;
 }

@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 typedef struct {
     uint8_t* buffer;
@@ -18,5 +19,6 @@ void bitwriter_init(BitWriter* bw, uint8_t* buffer, size_t size);
 bool bitwriter_write(BitWriter* bw, uint32_t value, uint8_t num_bits);
 void bitwriter_flush(BitWriter* bw);
 size_t bitwriter_bytes_written(const BitWriter* bw);
+bool bitwriter_write_to_file(const BitWriter* bw, FILE* fp);
 
 #endif // BIT_WRITER_H

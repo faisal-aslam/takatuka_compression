@@ -1,5 +1,6 @@
 // bit_writer.c
 #include "bit_writer.h"
+#include <string.h>
 
 void bitwriter_init(BitWriter* bw, uint8_t* buffer, size_t size) {
     bw->buffer = buffer;
@@ -7,6 +8,7 @@ void bitwriter_init(BitWriter* bw, uint8_t* buffer, size_t size) {
     bw->byte_pos = 0;
     bw->bit_pos = 0;
     bw->overflow = false;
+    memset(buffer, 0, size);
 }
 
 bool bitwriter_write(BitWriter* bw, uint32_t value, uint8_t num_bits) {
@@ -41,3 +43,7 @@ size_t bitwriter_bytes_written(const BitWriter* bw) {
     return bw->byte_pos + (bw->bit_pos != 0 ? 1 : 0);
 }
 
+bool bitwriter_write_to_file(const BitWriter* bw, FILE* fp) {
+    size_t bytes_to_write = bitwriter_bytes_written(bw);
+    return fwrite(bw->buffer, 1, bytes_to_write, fp) == bytes_to_write;
+}

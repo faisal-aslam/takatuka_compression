@@ -23,7 +23,7 @@ typedef struct {
 #pragma pack(pop)
 
 // Function to populate header
-void populate_header(BestPathView best_path, const uint8_t* block);
+void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to_write);
 void free_compressed_header(CompressedHeader* header);  // Free function
 
 #endif

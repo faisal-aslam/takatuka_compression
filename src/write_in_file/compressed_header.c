@@ -27,7 +27,7 @@ static inline uint8_t select_code_class(uint64_t value, const uint16_t* assigned
     return 3;
 }
 
-void populate_header(BestPathView best_path, const uint8_t* block) {
+void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to_write) {
     uint8_t* buffer = malloc(HEADER_BUFFER_SIZE);
     if (!buffer) {
         fprintf(stderr, "Failed to allocate header buffer\n");
@@ -74,7 +74,7 @@ void populate_header(BestPathView best_path, const uint8_t* block) {
 
     // Store header somewhere or return
     // e.g., write to file, or assign to a global CompressedHeaderBytes structure
-
+    bitwriter_write_to_file(&writer, file_to_write);
     free(buffer);
 }
 

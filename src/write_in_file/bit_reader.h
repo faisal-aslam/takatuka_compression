@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 typedef struct {
     const uint8_t* buffer;
@@ -16,5 +17,6 @@ typedef struct {
 
 void bitreader_init(BitReader* br, const uint8_t* buffer, size_t size);
 bool bitreader_read(BitReader* br, uint32_t* value, uint8_t num_bits);
+uint8_t* bitreader_load_from_file(FILE* fp, size_t* out_size);
 
 #endif // BIT_READER_H
