@@ -2,7 +2,7 @@
 #define BEST_VIEW_H
 
 #include <stdint.h>
-#include "graph.h"
+#include "../graph/graph.h"
 #include <limits.h>
 #include <stdio.h>
 

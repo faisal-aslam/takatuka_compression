@@ -1,31 +1,29 @@
 #ifndef COMPRESSED_HEADER_H
 #define COMPRESSED_HEADER_H
 
+#pragma once
+
 #include <stdint.h>
 #include <string.h>
 #include "best_path_view.h"
 
-// Platform-independent packed struct
-
-#pragma pack(push, 1)  // Ensure no padding
-typedef struct __attribute__((packed)) {
-    uint8_t code_class : 2;  // 2-bit code class
-    uint8_t seq_length;  // 8-bit sequence length (supports up to 256 bytes)
-    uint8_t* code;      // Flexible array for code + sequence
+#pragma pack(push, 1)
+typedef struct {
+    uint8_t code_class : 2;
+    uint8_t seq_length;
+    uint8_t data[];  // code bits + sequence
 } Code;
 #pragma pack(pop)
 
-// Safety check
-//this is throwing an assert why 
-//static_assert(sizeof(EncodedData) == 1, "Struct has padding!");
-
-#pragma pack(push, 1)  // No padding
+#pragma pack(push, 1)
 typedef struct {
-    uint16_t  number_of_codes;  // Number of codes in the header.
-    Code* codes;  // a array of codes.
+    uint16_t number_of_codes;
+    Code** codes;  // Array of pointers to individually allocated Code blocks
 } CompressedHeader;
 #pragma pack(pop)
 
+// Function to populate header
+void populate_header(BestPathView best_path, const uint8_t* block);
+void free_compressed_header(CompressedHeader* header);  // Free function
 
-void populate_header(BestPathView best_path);
 #endif

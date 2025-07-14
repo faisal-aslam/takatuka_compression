@@ -5,7 +5,7 @@
 #include <limits.h> 
 #include "write_in_file.h"
 #include "code_classes.h"
-#include "../graph/best_path_view.h"
+#include "best_path_view.h"
 
 #define BUFFER_SIZE (1024 * 1024)  // 1MB buffer for better I/O performance
 #define MAX_SEQ_LENGTH 8

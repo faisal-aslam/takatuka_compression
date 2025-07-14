@@ -9,7 +9,9 @@ SRCS = \
     src/graph/shortest_path.c \
     src/graph/graph.c \
     src/graph/graph_visualizer.c \
-    src/graph/best_path_view.c \
+    src/write_in_file/best_path_view.c \
+    src/write_in_file/compressed_header.c \
+    src/write_in_file/code_classes.c \
     src/logic.c \
     src/main.c
 

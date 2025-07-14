@@ -3,6 +3,7 @@
 
 
 
+
 BestPathView get_best_path_view() {
     const int idx = PATH_BEST;
     
