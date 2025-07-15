@@ -9,9 +9,7 @@
 typedef struct {
     // Core path data (direct pointers to internal arrays)
     const uint32_t* nodes;          // Node IDs 
-    const int32_t* costs;           // Node costs
-    const uint32_t* freqs;          // Node frequencies
-    const double* per_node_costs;   // Per-node costs
+    const uint32_t* freqs;          // Node frequencies  
 
     // Metadata
     int32_t path_size;              // These are the total number of nodes. 

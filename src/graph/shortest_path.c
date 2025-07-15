@@ -15,7 +15,7 @@ typedef struct {
 
 
 Path path_state;
-SeqFreqMap map;
+static SeqFreqMap map;
 
 
 /**

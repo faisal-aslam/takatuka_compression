@@ -47,3 +47,10 @@ bool bitwriter_write_to_file(const BitWriter* bw, FILE* fp) {
     size_t bytes_to_write = bitwriter_bytes_written(bw);
     return fwrite(bw->buffer, 1, bytes_to_write, fp) == bytes_to_write;
 }
+
+void bitwriter_print_state(const BitWriter* bw) {
+    printf("[BitWriter] byte_pos = %zu, bit_pos = %u, total_bits = %zu, overflow = %s\n",
+           bw->byte_pos, bw->bit_pos,
+           bw->byte_pos * 8 + bw->bit_pos,
+           bw->overflow ? "true" : "false");
+}

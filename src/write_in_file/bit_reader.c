@@ -49,3 +49,10 @@ uint8_t* bitreader_load_from_file(FILE* fp, size_t* out_size) {
     if (out_size) *out_size = size;
     return buffer;
 }
+
+void bitreader_print_state(const BitReader* br) {
+    printf("[BitReader] byte_pos = %zu, bit_pos = %u, total_bits = %zu, overflow = %s\n",
+           br->byte_pos, br->bit_pos,
+           br->byte_pos * 8 + br->bit_pos,
+           br->overflow ? "true" : "false");
+}

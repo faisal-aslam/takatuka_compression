@@ -10,9 +10,7 @@ BestPathView get_best_path_view() {
     return (BestPathView){
         // Direct pointers to existing arrays
         .nodes = path_state.path_stack[idx],
-        .costs = path_state.cost_stack[idx],
         .freqs = path_state.path_freqs[idx],
-        .per_node_costs = path_state.path_per_node_costs[idx],
         
         // Metadata
         .path_size = path_state.path_size[idx] + 1, // Convert to count        
@@ -49,15 +47,14 @@ void print_best_view(const BestPathView *view, uint8_t shouldPrintData, const ui
 
         const uint8_t len = node->sequence_length;
         const uint32_t freq = view->freqs[i];
-        const double cost = view->per_node_costs[i];
 
         printf(" -> ");
         if (node->is_RLE) {
             printf("RLE=YES ");
         }
 
-        printf("| id=%u len=%u freq=%u cost=%.2f | ",
-               node->node_id, len, freq, cost);
+        printf("| id=%u len=%u freq=%u | ",
+               node->node_id, len, freq);
 
         print_node_sequence(node, block);
 
