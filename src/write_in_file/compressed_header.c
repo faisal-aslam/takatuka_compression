@@ -60,7 +60,7 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
     int candidate_count = 0;
 
     for (int32_t i = best_path.path_size - 1; i >= 0; --i) {
-        GraphNode* node = get_graph_node(best_path.nodes[i]);
+        GraphNode *node = get_graph_node(best_path.nodes[i]);
         if (!node) continue;
 
         uint32_t freq = best_path.freqs[i];
@@ -74,8 +74,17 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
         // Make a array of the sequences
         const uint8_t *sequence = &block[offset];
         candidates[candidate_count++] = (CodeCandidate){.savings = (uint64_t)len * freq,
-                                                        .sequence = &block[offset],
+                                                        .sequence = sequence,
                                                         .length = len};
+    }
+
+    if (candidate_count == 0) { //nothing to be written in the header.
+        bitwriter_flush(&writer);
+        bitwriter_write_to_file(&writer, file_to_write);
+        free_seq_freq_map(&map);
+        free(candidates);
+        free(buffer);
+        return;
     }
 
     // Step 2: Sort descending by savings
@@ -95,9 +104,9 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
         }
 
         if (code_class == -1) {
-            fprintf(stderr, "Error: All code classes are full. Aborting.\n");
+            fprintf(stderr, "Error: All code classes full after encoding %d sequences. Max thresholds: [%u, %u, %u]\n",
+                    i, max_per_class[0], max_per_class[1], max_per_class[2]);
             // Clean up
-            for (int j = i; j < candidate_count; ++j) free(candidates[j].sequence);
             free(candidates);
             free(buffer);
             exit(EXIT_FAILURE);
@@ -112,12 +121,11 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
         }
 
         assigned[code_class]++;
-        free(cand->sequence);  // Clean up sequence memory after use
     }
 
     bitwriter_flush(&writer);
     bitwriter_write_to_file(&writer, file_to_write);
-
+    free_seq_freq_map(&map);
     free(candidates);
     free(buffer);
 }
