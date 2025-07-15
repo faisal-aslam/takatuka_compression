@@ -2,15 +2,14 @@
 #include "bit_writer.h"
 #include "code_classes.h"
 #include "../graph/graph.h"
+#include "../map/seq_freq_map.h"
 #include <string.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "../map/seq_freq_map.h"
 
-#define MAX_CODES 512
 #define HEADER_BUFFER_SIZE 4096
-static SeqFreqMap map;
+SeqFreqMap map;
 
 static inline bool should_skip_node(const GraphNode* node, uint32_t freq) {
     return (node->sequence_length == 1) || 
@@ -19,21 +18,23 @@ static inline bool should_skip_node(const GraphNode* node, uint32_t freq) {
            (node->node_id == 0);
 }
 
-static inline uint8_t select_code_class(uint64_t value, const uint16_t* assigned) {
-    uint8_t class = (value < 32) ? 2 : (value < 128) ? 1 : 0;
-    while (class <= 2) {
-        if (assigned[class] < get_code_class_threshold(class)) return class;
-        class++;
-    }
-    return 3;
+static inline uint8_t sequence_seen(const uint8_t *block, uint8_t length) {
+    if (seq_repo_get_frequency(&map, block, length) >= 1) return 1;
+    seq_freq_increment(&map, block, length, -1);
+    return 0;
 }
 
-static inline uint8_t sequence_seen(const uint8_t *block, uint8_t length) {
-        if (seq_repo_get_frequency(&map, block, length) >= 1) {
-                return 1;
-        }
-        seq_freq_increment(&map, block, length, -1);
-        return 0;
+typedef struct {
+    uint64_t savings;
+    const uint8_t* sequence;  // pointer into block (no copy)
+    uint8_t length;
+} CodeCandidate;
+
+
+int compare_candidates_desc(const void* a, const void* b) {
+    const CodeCandidate* ca = (const CodeCandidate*)a;
+    const CodeCandidate* cb = (const CodeCandidate*)b;
+    return (cb->savings > ca->savings) - (cb->savings < ca->savings);
 }
 
 void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to_write) {
@@ -45,77 +46,78 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
 
     BitWriter writer;
     bitwriter_init(&writer, buffer, HEADER_BUFFER_SIZE);
-    init_seq_freq_map(&map, best_path.path_size); 
+    init_seq_freq_map(&map, best_path.path_size * 2);
 
     uint16_t assigned[3] = {0};
+    uint32_t max_per_class[3] = {
+        get_code_class_threshold(0),
+        get_code_class_threshold(1),
+        get_code_class_threshold(2)
+    };
+
+    // Step 1: collect unique sequences with savings
+    CodeCandidate* candidates = malloc(sizeof(CodeCandidate) * best_path.path_size);
+    int candidate_count = 0;
 
     for (int32_t i = best_path.path_size - 1; i >= 0; --i) {
         GraphNode* node = get_graph_node(best_path.nodes[i]);
         if (!node) continue;
-        uint8_t len = node->sequence_length;
+
         uint32_t freq = best_path.freqs[i];
+        uint8_t len = node->sequence_length;
 
         if (should_skip_node(node, freq)) continue;
-#ifdef DEBUG
-        printf("\n[DEBUG] Generating code for node_id=%u (offset=%u, len=%u, freq=%u)\n", 
-               node->node_id, node->offset, len, freq);
-        print_graph_node(node);
-        print_node_sequence(node, block);
-#endif
-
 
         uint32_t offset = node->offset;
-        if (sequence_seen(&block[offset], node->sequence_length)) continue;
-        
+        if (sequence_seen(&block[offset], len)) continue;
 
-        uint8_t code_class = select_code_class((uint64_t)len * freq, assigned);
-        if (code_class > 2) {
-            fprintf(stderr, "Code class exhausted for offset %u, len %u\n", node->offset, len);
-            continue;
+        // Make a array of the sequences
+        const uint8_t *sequence = &block[offset];
+        candidates[candidate_count++] = (CodeCandidate){.savings = (uint64_t)len * freq,
+                                                        .sequence = &block[offset],
+                                                        .length = len};
+    }
+
+    // Step 2: Sort descending by savings
+    qsort(candidates, candidate_count, sizeof(CodeCandidate), compare_candidates_desc);
+
+    // Step 3: Encode in savings order
+    for (int i = 0; i < candidate_count; ++i) {
+        CodeCandidate* cand = &candidates[i];
+
+        // Find lowest available class
+        int code_class = -1;
+        for (int c = 0; c <= 2; ++c) {
+            if (assigned[c] < max_per_class[c]) {
+                code_class = c;
+                break;
+            }
+        }
+
+        if (code_class == -1) {
+            fprintf(stderr, "Error: All code classes are full. Aborting.\n");
+            // Clean up
+            for (int j = i; j < candidate_count; ++j) free(candidates[j].sequence);
+            free(candidates);
+            free(buffer);
+            exit(EXIT_FAILURE);
         }
 
         bitwriter_write(&writer, code_class, 2);
-#ifdef DEBUG
-        printf("[DEBUG] ➤ Written 2 bits: code_class = %u\n", code_class);
-        bitwriter_print_state(&writer);
-#endif
+        bitwriter_write(&writer, cand->length, 8);
+        bitwriter_write(&writer, assigned[code_class], get_code_class_size(code_class));
 
-        bitwriter_write(&writer, len, 8);
-#ifdef DEBUG
-        printf("[DEBUG] ➤ Written 8 bits: length = %u\n", len);
-        bitwriter_print_state(&writer);
-#endif
-
-
-        uint8_t code_bits = get_code_class_size(code_class);
-        bitwriter_write(&writer, assigned[code_class], code_bits);
-
-#ifdef DEBUG
-        printf("[DEBUG] ➤ Written %u bits: code index in class[%u] = %u\n", 
-               code_bits, code_class, assigned[code_class]);
-        bitwriter_print_state(&writer);
-#endif
-
-
-        for (uint8_t j = 0; j < len; ++j) {
-            bitwriter_write(&writer, block[offset + j], 8);
+        for (uint8_t j = 0; j < cand->length; ++j) {
+            bitwriter_write(&writer, cand->sequence[j], 8);
         }
-#ifdef DEBUG
-        printf("[DEBUG] ➤ Written %u bytes: sequence = ", len);
-        for (uint8_t j = 0; j < len; ++j) {
-            printf("%02X ", block[offset + j]);
-        }
-        printf("\n");
-        bitwriter_print_state(&writer);
-#endif
 
         assigned[code_class]++;
+        free(cand->sequence);  // Clean up sequence memory after use
     }
 
     bitwriter_flush(&writer);
-
-    // Store header somewhere or return
-    // e.g., write to file, or assign to a global CompressedHeaderBytes structure
     bitwriter_write_to_file(&writer, file_to_write);
+
+    free(candidates);
     free(buffer);
 }
