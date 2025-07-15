@@ -6,11 +6,9 @@
 #include <stdint.h>
 #include <string.h>
 #include "best_path_view.h"
-#include "../map/seq_freq_map.h"
 
 
-extern SeqFreqMap code_map;
 // Function to populate header
-void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to_write);
+void populate_body(BestPathView best_path, const uint8_t* block, FILE* file_to_write);
 
 #endif

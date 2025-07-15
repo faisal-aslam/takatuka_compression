@@ -57,6 +57,36 @@ uint32_t seq_freq_increment(SeqFreqMap *map, const uint8_t *seq, uint8_t len, ui
     }
 }
 
+uint32_t seq_freq_set(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t freq) {
+    uint64_t hash = XXH3_64bits(seq, len);
+    uint32_t idx = hash % map->capacity;
+    uint32_t orig_idx = idx;
+
+    while (map->entries[idx].is_used &&
+           !(map->entries[idx].length == len &&
+             sequences_equal(map->entries[idx].sequence, seq, len))) {
+        idx = (idx + 1) % map->capacity;
+        if (idx == orig_idx) {
+            fprintf(stderr, "No space left in sequence frequency map\n");
+            abort();
+        }
+    }
+
+    if (!map->entries[idx].is_used) {
+        map->entries[idx].sequence = seq;
+        map->entries[idx].length = len;
+        map->entries[idx].frequency = freq;
+        map->entries[idx].hash = hash;
+        map->entries[idx].is_used = true;
+        map->used++;
+        return freq;
+    } else {
+        map->entries[idx].frequency = freq;
+        return freq;
+    }
+}
+
+
 uint32_t seq_freq_decrement(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index) {
     uint64_t hash = XXH3_64bits(seq, len);
     uint32_t idx = hash % map->capacity;

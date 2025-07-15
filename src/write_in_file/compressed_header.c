@@ -2,14 +2,14 @@
 #include "bit_writer.h"
 #include "code_classes.h"
 #include "../graph/graph.h"
-#include "../map/seq_freq_map.h"
 #include <string.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #define HEADER_BUFFER_SIZE 4096
-SeqFreqMap map;
+static SeqFreqMap seq_map;
+//SeqFreqMap code_map;
 
 static inline bool should_skip_node(const GraphNode* node, uint32_t freq) {
     return (node->sequence_length == 1) || 
@@ -18,9 +18,9 @@ static inline bool should_skip_node(const GraphNode* node, uint32_t freq) {
            (node->node_id == 0);
 }
 
-static inline uint8_t sequence_seen(const uint8_t *block, uint8_t length) {
-    if (seq_repo_get_frequency(&map, block, length) >= 1) return 1;
-    seq_freq_increment(&map, block, length, -1);
+static inline uint8_t sequence_seen(const uint8_t *block, uint8_t length, uint32_t freq) {
+    if (seq_repo_get_frequency(&seq_map, block, length) >= 1) return 1;
+    seq_freq_set(&seq_map, block, length, freq); //set it for future use.
     return 0;
 }
 
@@ -46,7 +46,11 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
 
     BitWriter writer;
     bitwriter_init(&writer, buffer, HEADER_BUFFER_SIZE);
-    init_seq_freq_map(&map, best_path.path_size * 2);
+    init_seq_freq_map(&seq_map, best_path.path_size * 2);
+
+    // Reserve first two bytes for number of codes
+    bitwriter_write(&writer, 0, 16); // placeholder
+    size_t header_start_bit = 0;
 
     uint16_t assigned[3] = {0};
     uint32_t max_per_class[3] = {
@@ -69,7 +73,7 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
         if (should_skip_node(node, freq)) continue;
 
         uint32_t offset = node->offset;
-        if (sequence_seen(&block[offset], len)) continue;
+        if (sequence_seen(&block[offset], len, freq)) continue;
 
         // Make a array of the sequences
         const uint8_t *sequence = &block[offset];
@@ -81,7 +85,7 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
     if (candidate_count == 0) { //nothing to be written in the header.
         bitwriter_flush(&writer);
         bitwriter_write_to_file(&writer, file_to_write);
-        free_seq_freq_map(&map);
+        free_seq_freq_map(&seq_map);
         free(candidates);
         free(buffer);
         return;
@@ -89,11 +93,11 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
 
     // Step 2: Sort descending by savings
     qsort(candidates, candidate_count, sizeof(CodeCandidate), compare_candidates_desc);
-
+    init_seq_freq_map(&code_map, candidate_count);
     // Step 3: Encode in savings order
     for (int i = 0; i < candidate_count; ++i) {
         CodeCandidate* cand = &candidates[i];
-
+        
         // Find lowest available class
         int code_class = -1;
         for (int c = 0; c <= 2; ++c) {
@@ -111,6 +115,7 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
             free(buffer);
             exit(EXIT_FAILURE);
         }
+        seq_freq_set(&code_map, cand->sequence, cand->length, code_class);
 
         bitwriter_write(&writer, code_class, 2);
         bitwriter_write(&writer, cand->length, 8);
@@ -124,8 +129,9 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
     }
 
     bitwriter_flush(&writer);
-    bitwriter_write_to_file(&writer, file_to_write);
-    free_seq_freq_map(&map);
+    bitwriter_overwrite_at(&writer, header_start_bit, candidate_count, 16);
+    bitwriter_write_to_file(&writer, file_to_write);    
+    free_seq_freq_map(&seq_map);
     free(candidates);
     free(buffer);
 }

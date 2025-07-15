@@ -25,6 +25,7 @@ void free_seq_freq_map(SeqFreqMap *map);
 uint32_t seq_freq_increment(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index);
 uint32_t seq_freq_decrement(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index);
 uint32_t seq_freq_get(const SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index);
+uint32_t seq_freq_set(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t freq);
 bool sequences_equal(const uint8_t *a, const uint8_t *b, uint8_t len);
 
 #endif // SEQ_FREQ_MAP_H
