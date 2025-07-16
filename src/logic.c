@@ -58,6 +58,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
             current_node->is_RLE = 1;
             current_node->repeat_seq_length = repeat_seq_length;
             current_node->is_useless = 0; // mark it useful
+            current_node->length_of_RLE = length_of_RLE;
             block_index = block_index + length_of_RLE - 1; // compensating for increase of block index at the end of for loop.
             
 #ifdef DEBUG

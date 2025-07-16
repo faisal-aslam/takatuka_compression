@@ -79,3 +79,11 @@ bool bitwriter_overwrite_at(BitWriter* bw, size_t bit_pos, uint32_t value, uint8
 
     return true;
 }
+
+
+void bitwriter_reset(BitWriter* bw) {
+    bw->byte_pos = 0;
+    bw->bit_pos = 0;
+    bw->overflow = false;
+    memset(bw->buffer, 0, bw->buffer_size);
+}

@@ -33,6 +33,7 @@ typedef struct {
     uint8_t is_useless;
     uint8_t is_RLE;
     uint8_t repeat_seq_length;
+    uint8_t length_of_RLE;
 } GraphNode;
 
 typedef struct {    

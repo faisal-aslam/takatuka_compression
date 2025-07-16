@@ -7,7 +7,8 @@
 #include "code_classes.h"
 #include "best_path_view.h"
 #include "compressed_header.h"
-
+#include "../map/code_map.h"
+#include "compressed_body.h"
 /**
   * @brief Main function to write complete compressed output file
   * 
@@ -39,7 +40,7 @@ void writeCompressedOutput(const char* filename, const uint8_t* block) {
     populate_header(best_view, block, file);
     
     //populate body of the compressed file.
-    
+    populate_body(best_view, block, file);
 
 	//printNode(best_node, raw_data, 0);
     /*int used_count = calcUsedAndAssignGroupID(block, 0);
@@ -50,5 +51,6 @@ void writeCompressedOutput(const char* filename, const uint8_t* block) {
     if (fclose(file) != 0) {
         perror("Warning: Error closing output file");
     }
+    //free_code_map(code_map); 
 }
 

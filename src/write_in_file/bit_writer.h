@@ -22,5 +22,6 @@ size_t bitwriter_bytes_written(const BitWriter* bw);
 bool bitwriter_write_to_file(const BitWriter* bw, FILE* fp);
 void bitwriter_print_state(const BitWriter* bw);
 bool bitwriter_overwrite_at(BitWriter* bw, size_t bit_pos, uint32_t value, uint8_t num_bits);
+void bitwriter_reset(BitWriter* bw);
 
 #endif // BIT_WRITER_H

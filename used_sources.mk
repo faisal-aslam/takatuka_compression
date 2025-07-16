@@ -12,6 +12,7 @@ SRCS = \
     src/graph/graph_visualizer.c \
     src/write_in_file/best_path_view.c \
     src/write_in_file/compressed_header.c \
+    src/write_in_file/compressed_body.c \
     src/write_in_file/code_classes.c \
     src/write_in_file/bit_writer.c \
     src/write_in_file/bit_reader.c \
