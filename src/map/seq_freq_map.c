@@ -4,16 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include "general_map.h"
+#include <string.h>
 
-bool sequences_equal(const uint8_t *a, const uint8_t *b, uint8_t len) {
-    switch (len) {
-        case 1: return *a == *b;
-        case 2: return *(uint16_t*)a == *(uint16_t*)b;
-        case 4: return *(uint32_t*)a == *(uint32_t*)b;
-        case 8: return *(uint64_t*)a == *(uint64_t*)b;
-        default: return memcmp(a, b, len) == 0;
-    }
-}
 
 void init_seq_freq_map(SeqFreqMap *map, uint32_t capacity) {
     map->capacity = capacity;

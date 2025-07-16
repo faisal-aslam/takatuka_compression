@@ -1,3 +1,5 @@
+//compressed_header.c
+
 #include "compressed_header.h"
 #include "bit_writer.h"
 #include "code_classes.h"
@@ -7,9 +9,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+
 #define HEADER_BUFFER_SIZE 4096
 static SeqFreqMap seq_map;
-//SeqFreqMap code_map;
+
+CodeMap code_map;
 
 static inline bool should_skip_node(const GraphNode* node, uint32_t freq) {
     return (node->sequence_length == 1) || 
@@ -19,7 +23,7 @@ static inline bool should_skip_node(const GraphNode* node, uint32_t freq) {
 }
 
 static inline uint8_t sequence_seen(const uint8_t *block, uint8_t length, uint32_t freq) {
-    if (seq_repo_get_frequency(&seq_map, block, length) >= 1) return 1;
+    if (seq_freq_get(&seq_map, block, length, -1) >= 1) return 1;
     seq_freq_set(&seq_map, block, length, freq); //set it for future use.
     return 0;
 }
@@ -93,7 +97,7 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
 
     // Step 2: Sort descending by savings
     qsort(candidates, candidate_count, sizeof(CodeCandidate), compare_candidates_desc);
-    init_seq_freq_map(&code_map, candidate_count);
+    init_code_map(&code_map, candidate_count);
     // Step 3: Encode in savings order
     for (int i = 0; i < candidate_count; ++i) {
         CodeCandidate* cand = &candidates[i];
@@ -115,7 +119,7 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
             free(buffer);
             exit(EXIT_FAILURE);
         }
-        seq_freq_set(&code_map, cand->sequence, cand->length, code_class);
+        code_map_set(&code_map, cand->sequence, cand->length, assigned[code_class], code_class);
 
         bitwriter_write(&writer, code_class, 2);
         bitwriter_write(&writer, cand->length, 8);
