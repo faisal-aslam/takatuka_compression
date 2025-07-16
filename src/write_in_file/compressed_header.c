@@ -15,7 +15,7 @@
 static SeqFreqMap seq_map;
 
 CodeMap code_map;
-
+ 
 static inline bool should_skip_node(const GraphNode* node, uint32_t freq) {
     return (node->sequence_length == 1) || 
            (freq == 1) || 
@@ -131,19 +131,24 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
 
         bitwriter_write(&writer, cand->length, 8);
 #ifdef DEBUG
-        printf("[DEBUG] ➤ Written 8 bits: length = %u\n", len);
+        printf("[DEBUG] ➤ Written 8 bits: length = %u\n", cand->length);
         bitwriter_print_state(&writer);
 #endif
 
         bitwriter_write(&writer, assigned[code_class], get_code_class_size(code_class));
 #ifdef DEBUG
         printf("[DEBUG] ➤ Written %u bits: code index in class[%u] = %u\n", 
-               code_bits, code_class, assigned[code_class]);
+               get_code_class_size(code_class), code_class, assigned[code_class]);
         bitwriter_print_state(&writer);
 #endif
 
         for (uint8_t j = 0; j < cand->length; ++j) {
             bitwriter_write(&writer, cand->sequence[j], 8);
+#ifdef DEBUG
+        printf("[DEBUG] ➤ Written  byte # %u : sequence = ", j);        
+        printf("%02X ", cand->sequence[j]);        
+        bitwriter_print_state(&writer);
+#endif
 
         }
 
