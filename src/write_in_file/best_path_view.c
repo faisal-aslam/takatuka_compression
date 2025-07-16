@@ -6,12 +6,11 @@
 
 BestPathView get_best_path_view() {
     const int idx = PATH_BEST;
-    
+
     return (BestPathView){
         // Direct pointers to existing arrays
         .nodes = path_state.path_stack[idx],
-        .freqs = path_state.path_freqs[idx],
-        
+        .freqs = path_state.path_freqs[idx],        
         // Metadata
         .path_size = path_state.path_size[idx] + 1, // Convert to count        
     };

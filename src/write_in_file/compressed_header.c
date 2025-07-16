@@ -72,6 +72,7 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
         GraphNode *node = get_graph_node(best_path.nodes[i]);
         if (!node) continue;
 
+
         uint32_t freq = best_path.freqs[i];
         uint8_t len = node->sequence_length;
 
@@ -123,11 +124,27 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
         code_map_set(&code_map, cand->sequence, cand->length, assigned[code_class], code_class);
 
         bitwriter_write(&writer, code_class, 2);
+#ifdef DEBUG
+        printf("[DEBUG] ➤ Written 2 bits: code_class = %u\n", code_class);
+        bitwriter_print_state(&writer);
+#endif
+
         bitwriter_write(&writer, cand->length, 8);
+#ifdef DEBUG
+        printf("[DEBUG] ➤ Written 8 bits: length = %u\n", len);
+        bitwriter_print_state(&writer);
+#endif
+
         bitwriter_write(&writer, assigned[code_class], get_code_class_size(code_class));
+#ifdef DEBUG
+        printf("[DEBUG] ➤ Written %u bits: code index in class[%u] = %u\n", 
+               code_bits, code_class, assigned[code_class]);
+        bitwriter_print_state(&writer);
+#endif
 
         for (uint8_t j = 0; j < cand->length; ++j) {
             bitwriter_write(&writer, cand->sequence[j], 8);
+
         }
 
         assigned[code_class]++;

@@ -40,7 +40,7 @@ void writeCompressedOutput(const char* filename, const uint8_t* block) {
     populate_header(best_view, block, file);
     
     //populate body of the compressed file.
-    populate_body(best_view, block, file);
+    //populate_body(best_view, block, file);
 
 	//printNode(best_node, raw_data, 0);
     /*int used_count = calcUsedAndAssignGroupID(block, 0);

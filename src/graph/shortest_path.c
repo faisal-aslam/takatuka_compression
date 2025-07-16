@@ -381,7 +381,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
 //#ifdef DEBUG    
     print_path(0, 1, block);
 //#endif
-    free_path_state();
+    //free_path_state();
 }
 
 
