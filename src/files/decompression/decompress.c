@@ -24,13 +24,12 @@ void read_compressed_file(const char* filename, const uint8_t* block) {
         perror("Failed to open binary reading file");
         return;
     }
-
     BitReader reader;
     bitreader_attach_file(&reader, file, HEADER_BUFFER_SIZE);
 
     read_header_and_create_decoder_map(&reader);   // shared reader + buffer
     read_body_using_decoder_map(&reader, "output.bin");          // reuses buffer + position
 
-    free(reader.owned_buf);
+    bitreader_close(&reader);    
     fclose(file);
 }

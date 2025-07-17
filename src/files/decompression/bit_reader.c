@@ -117,3 +117,19 @@ bool bitreader_peek(BitReader* br, uint32_t* value, uint8_t num_bits) {
 
     return success;
 }
+
+
+void bitreader_close(BitReader* br) {
+    if (br->owned_buf) {
+        free(br->owned_buf);
+        br->owned_buf = NULL;
+    }
+
+    br->buffer = NULL;
+    br->buffer_size = 0;
+    br->byte_pos = 0;
+    br->bit_pos = 0;
+    br->overflow = false;
+    br->file = NULL;
+    br->buffer_cap = 0;
+}

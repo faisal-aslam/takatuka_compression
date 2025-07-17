@@ -11,6 +11,10 @@
 #include "compressed_header.h"
 #include "code_map.h"
 #include "compressed_body.h"
+#include "bit_writer.h"
+
+#define BUFFER_SIZE 4096
+
 /**
   * @brief Main function to write complete compressed output file
   * 
@@ -31,32 +35,53 @@ void write_compressed_output(const char* filename, const uint8_t* block) {
         perror("Failed to open output file");
         return;
     }
-    BestPathView best_view = get_best_path_view(); //we got the best view.
+
+    BestPathView best_view = get_best_path_view();
 #ifdef DEBUG
-    print_best_view(&best_view, 1, block); //to check if our view is consistent with the path computed.
+    printf("[DEBUG] Initial best path view:\n");
+    print_best_view(&best_view, 1, block);
 #endif
 
     printf("\n ==== Starting compressed output writing === \n");
 
-    //populate header by giving shorter code to greater saving sequences.
-    populate_header(best_view, block, file);
+    // Allocate a single buffer for both header and body
+    size_t buffer_size = BUFFER_SIZE;
+    uint8_t* buffer = malloc(buffer_size);
+    if (!buffer) {
+        fprintf(stderr, "Failed to allocate buffer\n");
+        fclose(file);
+        return;
+    }
+
+    BitWriter writer;
+    bitwriter_init(&writer, buffer, buffer_size);
 
 #ifdef DEBUG
-    print_best_view(&best_view, 1, block); //to check if our view is consistent with the path computed.
+    printf("[DEBUG] Initialized BitWriter with buffer size: %zu\n", buffer_size);
 #endif
 
-    //populate body of the compressed file.
-    populate_body(best_view, block, file);
+    // Write header
+    populate_header(best_view, block, file, &writer);
 
-	//printNode(best_node, raw_data, 0);
-    /*int used_count = calcUsedAndAssignGroupID(block, 0);
-    writeHeaderOfCompressedFile(sequences, seq_count, used_count, file);
-    writeCompressedDataInFile(best_node, block, file);*/
+#ifdef DEBUG
+    printf("[DEBUG] After header writing:\n");
+    print_best_view(&best_view, 1, block);
+    printf("[DEBUG] BitWriter state after header:\n");
+    bitwriter_print_state(&writer);
+#endif
+
+    // Write body
+    populate_body(best_view, block, file, &writer);
+
+#ifdef DEBUG
+    printf("[DEBUG] BitWriter state after body:\n");
+    bitwriter_print_state(&writer);
+#endif
+
     printf("\n === Writing compressed output completed ==\n");
    
+    free(buffer);
     if (fclose(file) != 0) {
         perror("Warning: Error closing output file");
     }
-    //free_code_map(code_map); 
 }
-

@@ -30,3 +30,5 @@ void bitreader_print_state(const BitReader* br);
 void bitreader_reset(BitReader* br, const uint8_t* new_buffer, size_t new_size);
 
 bool bitreader_peek(BitReader* br, uint32_t* value, uint8_t num_bits);
+
+void bitreader_close(BitReader* br);
