@@ -38,9 +38,13 @@ void writeCompressedOutput(const char* filename, const uint8_t* block) {
 
     //populate header by giving shorter code to greater saving sequences.
     populate_header(best_view, block, file);
-    
+
+#ifdef DEBUG
+    print_best_view(&best_view, 1, block); //to check if our view is consistent with the path computed.
+#endif
+
     //populate body of the compressed file.
-    //populate_body(best_view, block, file);
+    populate_body(best_view, block, file);
 
 	//printNode(best_node, raw_data, 0);
     /*int used_count = calcUsedAndAssignGroupID(block, 0);

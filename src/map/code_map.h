@@ -1,3 +1,5 @@
+//code_map.h
+
 #ifndef CODE_MAP_H
 #define CODE_MAP_H
 
@@ -24,5 +26,6 @@ void init_code_map(CodeMap* map, size_t capacity);
 void free_code_map(CodeMap* map);
 bool code_map_set(CodeMap* map, const uint8_t* seq, uint8_t len, uint16_t code, uint8_t code_class);
 bool code_map_get(const CodeMap* map, const uint8_t* seq, uint8_t len, uint16_t* out_code, uint8_t* out_class);
+void print_code_map(const CodeMap* map);  // New debug function
 
 #endif

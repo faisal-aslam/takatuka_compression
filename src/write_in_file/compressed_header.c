@@ -156,8 +156,11 @@ void populate_header(BestPathView best_path, const uint8_t* block, FILE* file_to
     }
 
     bitwriter_flush(&writer);
+    bitwriter_print_state(&writer);
     bitwriter_overwrite_at(&writer, header_start_bit, candidate_count, 16);
+    bitwriter_print_state(&writer);
     bitwriter_write_to_file(&writer, file_to_write);    
+    bitwriter_print_state(&writer);
     free_seq_freq_map(&seq_map);
     free(candidates);
     free(buffer);
