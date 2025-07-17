@@ -16,6 +16,8 @@ SRCS = \
     src/write_in_file/code_classes.c \
     src/write_in_file/bit_writer.c \
     src/write_in_file/bit_reader.c \
+    src/write_in_file/decompress.c \
+    src/write_in_file/decompress_header.c \
     src/logic.c \
     src/main.c
 

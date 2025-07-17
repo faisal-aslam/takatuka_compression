@@ -56,3 +56,49 @@ void bitreader_print_state(const BitReader* br) {
            br->byte_pos * 8 + br->bit_pos,
            br->overflow ? "true" : "false");
 }
+
+
+void bitreader_reset(BitReader* br, const uint8_t* new_buffer, size_t new_size) {
+    br->buffer = new_buffer;
+    br->buffer_size = new_size;
+    br->byte_pos = 0;
+    br->bit_pos = 0;
+    br->overflow = false;
+}
+
+
+void bitreader_attach_file(BitReader* br, FILE* file, size_t buffer_cap) {
+    br->owned_buf = malloc(buffer_cap);
+    if (!br->owned_buf) {
+        fprintf(stderr, "Failed to allocate internal bitreader buffer\n");
+        exit(EXIT_FAILURE);
+    }
+
+    br->file = file;
+    br->buffer_cap = buffer_cap;
+
+    size_t bytes_read = fread(br->owned_buf, 1, buffer_cap, br->file);
+    br->buffer = br->owned_buf;
+    br->buffer_size = bytes_read;
+    br->byte_pos = 0;
+    br->bit_pos = 0;
+    br->overflow = false;
+}
+
+bool bitreader_fill_next_chunk(BitReader* br) {
+    if (!br->file || !br->owned_buf) return false;
+
+    size_t bytes_read = fread(br->owned_buf, 1, br->buffer_cap, br->file);
+    if (bytes_read == 0) {
+        br->overflow = true;
+        return false;
+    }
+
+    br->buffer = br->owned_buf;
+    br->buffer_size = bytes_read;
+    br->byte_pos = 0;
+    br->bit_pos = 0;
+    br->overflow = false;
+
+    return true;
+}
