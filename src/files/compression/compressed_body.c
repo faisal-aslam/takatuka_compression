@@ -1,9 +1,11 @@
+//compressed_body.c
+
 #include "compressed_body.h"
 #include "compressed_header.h"
 #include "bit_writer.h"
-#include "../map/code_map.h"
+#include "code_map.h"
 #include "code_classes.h"
-#include "../graph/graph.h"
+#include "graph.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>

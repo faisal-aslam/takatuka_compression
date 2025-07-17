@@ -1,5 +1,4 @@
-#ifndef SEQUENCE_REPOSITORY_USELESS_H
-#define SEQUENCE_REPOSITORY_USELESS_H
+#pragma once
 
 #include <stdint.h>
 #include <stddef.h>
@@ -11,4 +10,3 @@ void seq_repo_add(SequenceRepository *repo, const uint8_t* data, uint16_t length
 // Look up node_id for a given sequence. Returns UINT32_MAX_VALUE if not found or shared.
 uint32_t seq_repo_get_node_id(SequenceRepository *repo, const uint8_t* data, uint16_t length);
 
-#endif

@@ -1,13 +1,15 @@
+//compress.c main file to write compressed data
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h> 
-#include "write_in_file.h"
+#include "compress.h"
 #include "code_classes.h"
 #include "best_path_view.h"
 #include "compressed_header.h"
-#include "../map/code_map.h"
+#include "code_map.h"
 #include "compressed_body.h"
 /**
   * @brief Main function to write complete compressed output file
@@ -18,7 +20,7 @@
   * @param best_node TreeNode with best compression path
   * @param block Pointer to raw data block
   */
-void writeCompressedOutput(const char* filename, const uint8_t* block) {
+void write_compressed_output(const char* filename, const uint8_t* block) {
     if (!filename || !block) {
         fprintf(stderr, "Error: Invalid inputs in writeCompressedOutput\n");
         return;

@@ -8,8 +8,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "../map/seq_freq_map.h"
-#include "../map/code_map.h"
+#include "seq_freq_map.h"
+#include "code_map.h"
 
 #define HEADER_BUFFER_SIZE 4096
 static SeqFreqMap seq_map;

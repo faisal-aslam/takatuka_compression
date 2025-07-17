@@ -1,5 +1,4 @@
-#ifndef SEQUENCE_REPOSITORY_FREQ_H
-#define SEQUENCE_REPOSITORY_FREQ_H
+#pragma once
 
 #include <stdint.h>
 #include <stddef.h>
@@ -17,4 +16,3 @@ uint32_t seq_repo_decrease_by_index(SequenceRepository *repo, uint32_t node_id);
 uint32_t seq_repo_increase_frequency(SequenceRepository *repo, const uint8_t* data, uint16_t len);
 
 uint32_t seq_repo_set_frequency(SequenceRepository *repo, const uint8_t* data, uint16_t length, uint32_t frequency);
-#endif

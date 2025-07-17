@@ -1,6 +1,4 @@
-// bit_writer.h
-#ifndef BIT_WRITER_H
-#define BIT_WRITER_H
+#pragma once
 
 #include <stdint.h>
 #include <stddef.h>
@@ -24,4 +22,3 @@ void bitwriter_print_state(const BitWriter* bw);
 bool bitwriter_overwrite_at(BitWriter* bw, size_t bit_pos, uint32_t value, uint8_t num_bits);
 void bitwriter_reset(BitWriter* bw);
 
-#endif // BIT_WRITER_H

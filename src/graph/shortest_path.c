@@ -1,7 +1,7 @@
 // shortest_path.c
 
 #include "shortest_path.h"
-#include "../map/seq_freq_map.h"
+#include "seq_freq_map.h"
 
 
 int prune_count =0;

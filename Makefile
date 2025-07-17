@@ -1,110 +1,125 @@
-# === Compiler and Flags ===
-CC = gcc
-STD = -std=c17
-BUILD_DIR = build
+# ===== Configuration =====
+CC := gcc
+STD := -std=c17
+BUILD_DIR := build
 
-# === Release Flags (Optimized) ===
-CFLAGS_RELEASE = $(STD) -Wall -Wextra -pedantic -O3 -march=native -flto \
-                 -funroll-loops -fomit-frame-pointer -MMD -I./src \
-                 -fno-signed-zeros -fno-trapping-math -fassociative-math \
-                 -fno-math-errno -fstrict-aliasing -ftree-vectorize \
+# ===== Directory Structure =====
+SRC_DIR := src
+INC_DIRS := \
+    $(SRC_DIR) \
+    $(SRC_DIR)/map \
+    $(SRC_DIR)/graph \
+    $(SRC_DIR)/files \
+	$(SRC_DIR)/files/compression/ \
+	$(SRC_DIR)/files/decompression/ \
+    $(SRC_DIR)/decompress
+
+# ===== Compiler Flags =====
+WARNINGS := -Wall -Wextra -pedantic
+OPTIMIZE := -O3 -march=native -flto -funroll-loops
+DEBUG_FLAGS := -g -rdynamic -O0 -DDEBUG -fno-omit-frame-pointer -fno-inline
+PROFILE_FLAGS := -pg -O2 -g
+
+# Common flags for all builds
+COMMON_FLAGS := $(STD) $(WARNINGS) -MMD $(addprefix -I,$(INC_DIRS))
+
+# Release configuration
+CFLAGS_RELEASE := $(COMMON_FLAGS) $(OPTIMIZE) \
+                 -fomit-frame-pointer \
+                 -fno-signed-zeros -fno-trapping-math \
+                 -fassociative-math -fno-math-errno \
+                 -fstrict-aliasing -ftree-vectorize \
                  -fno-stack-protector
-LDFLAGS_RELEASE = -flto -O3 -fuse-linker-plugin
+LDFLAGS_RELEASE := $(OPTIMIZE) -fuse-linker-plugin
 
-# === Debug Flags ===
-CFLAGS_DEBUG = $(STD) -Wall -Wextra -pedantic -g -rdynamic -O0 -I./src -MMD \
-               -DDEBUG -fno-omit-frame-pointer -fno-inline
-LDFLAGS_DEBUG = -g -rdynamic
+# Debug configuration
+CFLAGS_DEBUG := $(COMMON_FLAGS) $(DEBUG_FLAGS)
+LDFLAGS_DEBUG := $(DEBUG_FLAGS)
 
-# === Profiling Flags (for gprof) ===
-CFLAGS_PROFILE = $(STD) -Wall -Wextra -pedantic -pg -O2 -g -I./src -MMD
-LDFLAGS_PROFILE = -pg -g
+# Profile configuration
+CFLAGS_PROFILE := $(COMMON_FLAGS) $(PROFILE_FLAGS)
+LDFLAGS_PROFILE := $(PROFILE_FLAGS)
 
-# === Executable Targets ===
-COMPRESS_TARGET = compress
-DECOMPRESS_TARGET = decompress
-DEBUG_COMPRESS_TARGET = compress-debug
-PROFILE_COMPRESS_TARGET = compress-profile
+# ===== Targets =====
+COMPRESS_TARGET := compress
+DECOMPRESS_TARGET := decompress
+DEBUG_COMPRESS_TARGET := compress-debug
+PROFILE_COMPRESS_TARGET := compress-profile
 
-# === Source Files ===
+# ===== Source Files =====
 include used_sources.mk
 
-COMPRESS_SRCS = $(filter-out src/decompress/decompress.c, $(SRCS))
-DECOMPRESS_SRCS = src/decompress/decompress.c
+COMPRESS_SRCS := $(filter-out $(SRC_DIR)/decompress/decompress.c, $(SRCS))
+DECOMPRESS_SRCS := $(SRC_DIR)/decompress/decompress.c
 
-# === Object Files by Mode ===
-COMPRESS_RELEASE_OBJS = $(patsubst src/%.c,$(BUILD_DIR)/release/%.o,$(COMPRESS_SRCS))
-COMPRESS_DEBUG_OBJS = $(patsubst src/%.c,$(BUILD_DIR)/debug/%.o,$(COMPRESS_SRCS))
-COMPRESS_PROFILE_OBJS = $(patsubst src/%.c,$(BUILD_DIR)/profile/%.o,$(COMPRESS_SRCS))
-DECOMPRESS_OBJ = $(patsubst src/%.c,$(BUILD_DIR)/release/%.o,$(DECOMPRESS_SRCS))
+# ===== Object Files =====
+COMPRESS_RELEASE_OBJS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/release/%.o,$(COMPRESS_SRCS))
+COMPRESS_DEBUG_OBJS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/debug/%.o,$(COMPRESS_SRCS))
+COMPRESS_PROFILE_OBJS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/profile/%.o,$(COMPRESS_SRCS))
+DECOMPRESS_OBJ := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/release/%.o,$(DECOMPRESS_SRCS))
 
-# === Dependency Files ===
-DEPS = $(COMPRESS_RELEASE_OBJS:.o=.d) $(COMPRESS_DEBUG_OBJS:.o=.d) \
-       $(DECOMPRESS_OBJ:.o=.d) $(COMPRESS_PROFILE_OBJS:.o=.d)
+# ===== Dependency Files =====
+DEPS := $(COMPRESS_RELEASE_OBJS:.o=.d) $(COMPRESS_DEBUG_OBJS:.o=.d) \
+        $(DECOMPRESS_OBJ:.o=.d) $(COMPRESS_PROFILE_OBJS:.o=.d)
 
-# === Phony Targets ===
+# ===== Phony Targets =====
 .PHONY: all release debug profile compress decompress clean help
 
-# === Default Target ===
+# ===== Build Rules =====
 all: compress decompress
 
-# === Build Targets ===
 release: compress decompress
-	@echo "Built release versions: ./compress and ./decompress"
+	@echo "Built release versions: ./$(COMPRESS_TARGET) and ./$(DECOMPRESS_TARGET)"
 
 debug: $(DEBUG_COMPRESS_TARGET) decompress
-	@echo "Built debug version: ./compress-debug and ./decompress"
+	@echo "Built debug version: ./$(DEBUG_COMPRESS_TARGET) and ./$(DECOMPRESS_TARGET)"
 
 profile: $(PROFILE_COMPRESS_TARGET)
-	@echo "Built profiling version: ./compress-profile (use with gprof)"
+	@echo "Built profiling version: ./$(PROFILE_COMPRESS_TARGET) (use with gprof)"
 
 compress: $(COMPRESS_RELEASE_OBJS)
 	$(CC) $(LDFLAGS_RELEASE) -o $(COMPRESS_TARGET) $^ -lm
-	@echo "Built compression tool: ./compress"
-	@echo "Static memory usage (compress):"
+	@echo "Built compression tool: ./$(COMPRESS_TARGET)"
 	@size $(COMPRESS_TARGET)
 
 decompress: $(DECOMPRESS_OBJ)
 	$(CC) $(LDFLAGS_RELEASE) -o $(DECOMPRESS_TARGET) $^ -lm
-	@echo "Built decompression tool: ./decompress"
-	@echo "Static memory usage (decompress):"
+	@echo "Built decompression tool: ./$(DECOMPRESS_TARGET)"
 	@size $(DECOMPRESS_TARGET)
 
 $(DEBUG_COMPRESS_TARGET): $(COMPRESS_DEBUG_OBJS)
 	$(CC) $(LDFLAGS_DEBUG) -o $@ $^ -lm
-	@echo "Built debug compression tool: ./compress-debug"
-	@echo "Static memory usage (compress-debug):"
+	@echo "Built debug compression tool: ./$@"
 	@size $@
 
 $(PROFILE_COMPRESS_TARGET): $(COMPRESS_PROFILE_OBJS)
 	$(CC) $(LDFLAGS_PROFILE) -o $@ $^ -lm
 	@echo "Built profiling binary: $@"
-	@echo "Static memory usage (compress-profile):"
 	@size $@
 
-# === Compilation Rules ===
-$(BUILD_DIR)/release/%.o: src/%.c
+# ===== Compilation Rules =====
+$(BUILD_DIR)/release/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS_RELEASE) -c $< -o $@
 
-$(BUILD_DIR)/debug/%.o: src/%.c
+$(BUILD_DIR)/debug/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS_DEBUG) -c $< -o $@
 
-$(BUILD_DIR)/profile/%.o: src/%.c
+$(BUILD_DIR)/profile/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS_PROFILE) -c $< -o $@
 
-# === Clean Target ===
+# ===== Clean =====
 clean:
 	@rm -rf $(BUILD_DIR) $(COMPRESS_TARGET) $(DEBUG_COMPRESS_TARGET) \
 	        $(DECOMPRESS_TARGET) $(PROFILE_COMPRESS_TARGET)
 	@echo "Cleaned all build artifacts"
 
-# === Auto-Include Dependencies ===
+# ===== Dependencies =====
 -include $(DEPS)
 
-# === Help Target ===
+# ===== Help =====
 help:
 	@echo "Available targets:"
 	@echo "  all         - Build both tools (default)"

@@ -1,6 +1,4 @@
-// common_types.h
-#ifndef COMMON_TYPES_H
-#define COMMON_TYPES_H
+#pragma once
 
 #include <stdint.h>
 
@@ -16,4 +14,3 @@ typedef struct {
 
 
 
-#endif

@@ -1,7 +1,4 @@
-//code_map.h
-
-#ifndef CODE_MAP_H
-#define CODE_MAP_H
+#pragma once
 
 #include <stdint.h>
 #include <stddef.h>
@@ -28,4 +25,3 @@ bool code_map_set(CodeMap* map, const uint8_t* seq, uint8_t len, uint16_t code, 
 bool code_map_get(const CodeMap* map, const uint8_t* seq, uint8_t len, uint16_t* out_code, uint8_t* out_class);
 void print_code_map(const CodeMap* map);  // New debug function
 
-#endif

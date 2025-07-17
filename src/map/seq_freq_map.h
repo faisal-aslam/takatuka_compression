@@ -1,9 +1,8 @@
-#ifndef SEQ_FREQ_MAP_H
-#define SEQ_FREQ_MAP_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "../constants.h"
+#include "constants.h"
 
 typedef struct {
     const uint8_t *sequence;  // Points to external memory
@@ -28,4 +27,3 @@ uint32_t seq_freq_get(const SeqFreqMap *map, const uint8_t *seq, uint8_t len, ui
 uint32_t seq_freq_set(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t freq);
 
 
-#endif // SEQ_FREQ_MAP_H

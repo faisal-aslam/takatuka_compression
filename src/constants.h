@@ -1,5 +1,4 @@
-#ifndef CONSTANTS_H
-#define CONSTANTS_H
+#pragma once
 
 #define TOTAL_GRAPH_NODES(SEQ_LIMIT, LEVELS) \
     (1 + ((SEQ_LIMIT) * ((SEQ_LIMIT) + 1)) / 2 + ((LEVELS) - (SEQ_LIMIT)) * (SEQ_LIMIT))
@@ -21,4 +20,3 @@
 
 #define TOTAL_GROUPS 4
 
-#endif

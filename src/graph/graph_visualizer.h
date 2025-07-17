@@ -1,5 +1,4 @@
-#ifndef GRAPH_VISUALIZER_H
-#define GRAPH_VISUALIZER_H
+#pragma once
 
 #include <stdio.h>
 #include <stdint.h>
@@ -10,4 +9,3 @@
  */
 void visualize_graph(const uint8_t* block);
 
-#endif // GRAPH_VISUALIZER_H

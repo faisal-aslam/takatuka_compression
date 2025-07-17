@@ -1,7 +1,7 @@
 
 #include "sequence_repository_useless.h"
 #include "sequence_repository_freq.h"
-#include "../constants.h"
+#include "constants.h"
 
 uint32_t hash_index_cache[MAX_GRAPH_NODES]; //for frequency hash (not for binary hash)
 void seq_repo_init(SequenceRepository *repo, uint32_t inital_capcity) {    

@@ -1,5 +1,5 @@
 #include "best_path_view.h"
-#include "../graph/shortest_path.h"
+#include "shortest_path.h"
 
 
 

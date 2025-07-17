@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#include "map/xxhash.h"
+#include "xxhash.h"
 
 #define BLOCK_SIZE 65536
 #define MIN_SEQ_LEN 2

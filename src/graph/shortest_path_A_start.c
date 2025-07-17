@@ -2,7 +2,7 @@
 
 #include "shortest_path.h"
 #include "graph.h"
-#include "map/sequence_repository_freq.h"
+#include "sequence_repository_freq.h"
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,12 +1,11 @@
-#ifndef SEQUENCE_REPOSITIRY_H
-#define SEQUENCE_REPOSITIRY_H
+#pragma once
 
 #include "xxhash.h"
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <stdio.h>
-#include "../constants.h"
+#include "constants.h"
 
 #define INITIAL_CAPACITY 1024
 #define LOAD_FACTOR 0.75
@@ -33,4 +32,3 @@ void seq_repo_init(SequenceRepository *repo, uint32_t inital_capcity);
 void seq_repo_cleanup(SequenceRepository *repo);
 void seq_repo_reset(SequenceRepository *repo);
 
-#endif

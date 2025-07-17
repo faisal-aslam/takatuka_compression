@@ -1,7 +1,4 @@
-//general_map.h
-
-#ifndef GENERAL_MAP_H
-#define GENERAL_MAP_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -28,4 +25,3 @@ static inline bool sequences_equal(const uint8_t *a, const uint8_t *b, uint8_t l
 
 }
 
-#endif

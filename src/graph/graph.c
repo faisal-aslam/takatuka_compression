@@ -1,5 +1,5 @@
 #include "graph.h"
-#include "../map/seq_freq_map.h"
+#include "seq_freq_map.h"
 #include "timer.h"
 
 #define MAX_CONSEC_LEVELS 10

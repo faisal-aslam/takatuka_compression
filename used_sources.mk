@@ -5,19 +5,19 @@ SRCS = \
     src/map/sequence_repository.c \
     src/map/seq_freq_map.c \
     src/map/code_map.c \
-    src/write_in_file/write_in_file.c \
+    src/files/compression/compress.c \
     src/time.c \
     src/graph/shortest_path.c \
     src/graph/graph.c \
     src/graph/graph_visualizer.c \
-    src/write_in_file/best_path_view.c \
-    src/write_in_file/compressed_header.c \
-    src/write_in_file/compressed_body.c \
-    src/write_in_file/code_classes.c \
-    src/write_in_file/bit_writer.c \
-    src/write_in_file/bit_reader.c \
-    src/write_in_file/decompress.c \
-    src/write_in_file/decompress_header.c \
+    src/files/best_path_view.c \
+    src/files/compression/compressed_header.c \
+    src/files/compression/compressed_body.c \
+    src/files/code_classes.c \
+    src/files/compression/bit_writer.c \
+    src/files/decompression/bit_reader.c \
+    src/files/decompression/decompress.c \
+    src/files/decompression/decompress_header.c \
     src/logic.c \
     src/main.c
 

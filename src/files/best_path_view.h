@@ -1,8 +1,7 @@
-#ifndef BEST_VIEW_H
-#define BEST_VIEW_H
+#pragma once
 
 #include <stdint.h>
-#include "../graph/graph.h"
+#include "graph.h"
 #include <limits.h>
 #include <stdio.h>
 
@@ -19,4 +18,3 @@ BestPathView get_best_path_view();
 
 void print_best_view(const BestPathView *view, uint8_t shouldPrintData, const uint8_t *block);
 
-#endif

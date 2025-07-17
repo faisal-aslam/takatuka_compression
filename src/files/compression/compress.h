@@ -1,8 +1,5 @@
-//write_in_file.h
-#ifndef WRITE_IN_FILE_H
-#define WRITE_IN_FILE_H
+#pragma once
 
-void writeCompressedOutput(const char* filename, const uint8_t* block);
+void write_compressed_output(const char* filename, const uint8_t* block);
                           
                           
-#endif

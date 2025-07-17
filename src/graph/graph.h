@@ -1,5 +1,4 @@
-#ifndef NEURALNET_GRAPH_H
-#define NEURALNET_GRAPH_H
+#pragma once
 /*
  * Graph structure with virtual parent links:
  * - Nodes are organized in levels.
@@ -196,4 +195,3 @@ static inline GraphNode* get_parent_nodes(GraphNode* node) {
 }
 
 
-#endif

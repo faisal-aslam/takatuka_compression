@@ -1,5 +1,4 @@
-#ifndef CODE_CLASSES_H
-#define CODE_CLASSES_H
+#pragma once
 
 #include <stdint.h>
 #include <string.h>
@@ -15,4 +14,3 @@ uint8_t get_code_class_overhead(uint8_t code_class);
 uint8_t get_header_overhead(uint8_t code_class, uint16_t seq_length);
 uint16_t get_code_class_threshold(uint8_t code_class);
 
-#endif

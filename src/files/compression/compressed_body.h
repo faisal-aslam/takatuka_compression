@@ -1,5 +1,4 @@
-#ifndef COMPRESSED_BODY_H
-#define COMPRESSED_BODY_H
+#pragma once
 
 #include <stdint.h>
 #include <stdio.h>  
@@ -21,4 +20,3 @@
  */
 void populate_body(BestPathView best_path, const uint8_t* block, FILE* file_to_write);
 
-#endif
