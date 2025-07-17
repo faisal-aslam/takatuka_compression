@@ -102,3 +102,18 @@ bool bitreader_fill_next_chunk(BitReader* br) {
 
     return true;
 }
+
+bool bitreader_peek(BitReader* br, uint32_t* value, uint8_t num_bits) {
+    size_t saved_byte_pos = br->byte_pos;
+    uint8_t saved_bit_pos = br->bit_pos;
+    bool saved_overflow = br->overflow;
+
+    bool success = bitreader_read(br, value, num_bits);
+
+    // Restore state
+    br->byte_pos = saved_byte_pos;
+    br->bit_pos = saved_bit_pos;
+    br->overflow = saved_overflow;
+
+    return success;
+}

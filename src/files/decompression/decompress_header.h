@@ -1,9 +1,11 @@
+// decompress_header.h
+
 #pragma once
 
-#include <stdint.h>
-#include <stdio.h>
-#include "../map/code_map.h"
+#include "bit_reader.h"
+#include "decoder_map.h"
 
-// Reconstructs CodeMap by reading the header of the compressed file
-void read_header_and_create_code_map(FILE* file_to_read);
+extern DecoderMap decoder_map;
 
+// Reconstructs DecoderMap by reading the header of the compressed file
+void read_header_and_create_decoder_map(BitReader* reader);

@@ -8,6 +8,7 @@
 #include "sequence_repository_useless.h"
 #include "timer.h"
 #include "compress.h"
+#include "decompress.h"
 
 SequenceRepository useless_repo;
 
@@ -50,7 +51,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         uint8_t repeat_seq_length=0, length_of_RLE=0;
         GraphNode *current_node = NULL;
         // Create RLE node, if any. There could be at most one RLE node per level.
-        if (is_RLE_sequence(&repeat_seq_length, &length_of_RLE, MIN(block_size, SEQ_LENGTH_LIMIT), block_index,
+        if (is_RLE_sequence(&repeat_seq_length, &length_of_RLE, MIN(block_size, 255), block_index,
                             block)) {            
             mass_increment_levels(length_of_RLE-1);
             create_graph_level();
@@ -128,4 +129,6 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     find_shortest_path_to_sink(block); // find shortest path
     //finally write compress file.
     write_compressed_output("output.fa", block);
+    read_compressed_file("output.fa", block);
+
 }

@@ -29,7 +29,8 @@ void mass_increment_levels(int add_levels) {
 
 }
 
-uint8_t is_RLE_sequence(uint8_t* repeat_seq_length, uint8_t* length_of_RLE, uint8_t block_size, uint32_t offset, const uint8_t *block) {
+uint8_t is_RLE_sequence(uint8_t *repeat_seq_length, uint8_t *length_of_RLE, uint8_t block_size, uint32_t offset,
+                        const uint8_t *block) {
     *repeat_seq_length = 0;
     *length_of_RLE = 0;
 
@@ -37,12 +38,12 @@ uint8_t is_RLE_sequence(uint8_t* repeat_seq_length, uint8_t* length_of_RLE, uint
         return 0;
     }
 
-    const uint8_t* sequence = block + offset;
+    const uint8_t *sequence = block + offset;
     const uint8_t first_byte = sequence[0];
 
     // ===== Stage 1: Uniform Sequence Check (for whole sequence or prefix) =====
     uint8_t uniform_length = block_size;
-    
+
     // Find the first position where the byte differs
     for (uint8_t i = 1; i < block_size; i++) {
         if (sequence[i] != first_byte) {
@@ -88,12 +89,12 @@ uint8_t is_RLE_sequence(uint8_t* repeat_seq_length, uint8_t* length_of_RLE, uint
         // Find the maximum number of complete repeats we can get
         int max_valid_repeats = 0;
         bool valid = true;
-        
+
         for (int r = 1; r <= max_possible_repeats; r++) {
             int current_length = r * pattern_len;
             for (int i = 0; i < pattern_len; i++) {
                 if (current_length + i >= block_size) {
-                    break;  // Reached end of sequence
+                    break; // Reached end of sequence
                 }
                 if (sequence[i] != sequence[current_length + i]) {
                     valid = false;

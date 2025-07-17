@@ -4,7 +4,6 @@ SRCS = \
     src/map/xxhash.c \
     src/map/sequence_repository.c \
     src/map/seq_freq_map.c \
-    src/map/code_map.c \
     src/files/compression/compress.c \
     src/time.c \
     src/graph/shortest_path.c \
@@ -13,11 +12,13 @@ SRCS = \
     src/files/best_path_view.c \
     src/files/compression/compressed_header.c \
     src/files/compression/compressed_body.c \
+    src/files/compression/code_map.c \
     src/files/code_classes.c \
     src/files/compression/bit_writer.c \
     src/files/decompression/bit_reader.c \
     src/files/decompression/decompress.c \
+    src/files/decompression/decoder_map.c \
     src/files/decompression/decompress_header.c \
+    src/files/decompression/decompress_body.c \
     src/logic.c \
     src/main.c
-
