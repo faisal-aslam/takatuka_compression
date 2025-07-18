@@ -21,7 +21,10 @@ bool bitwriter_write(BitWriter* bw, uint32_t value, uint8_t num_bits) {
         }
 
         uint8_t bit = (value >> i) & 1;
-        bw->buffer[bw->byte_pos] |= bit << (7 - bw->bit_pos);
+        
+        bw->buffer[bw->byte_pos] &= ~(1 << (7 - bw->bit_pos)); // Clear the bit
+        bw->buffer[bw->byte_pos] |=  (bit << (7 - bw->bit_pos)); // Set if needed
+
         bw->bit_pos++;
 
         if (bw->bit_pos == 8) {
@@ -33,10 +36,7 @@ bool bitwriter_write(BitWriter* bw, uint32_t value, uint8_t num_bits) {
 }
 
 void bitwriter_flush(BitWriter* bw) {
-    if (bw->bit_pos != 0) {
-        bw->byte_pos++;
-        bw->bit_pos = 0;
-    }
+  //
 }
 
 size_t bitwriter_bytes_written(const BitWriter* bw) {

@@ -80,6 +80,7 @@ void read_header_and_create_decoder_map(BitReader* reader) {
 
 #ifdef DEBUG
     printf("[DEBUG] Completed DecoderMap reconstruction.\n");
+    print_decoder_map(&decoder_map);
 #endif
-
+    bitreader_move_byte_boundary(reader);
 }

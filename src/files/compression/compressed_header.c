@@ -48,7 +48,7 @@ void populate_header(BestPathView best_path, const uint8_t* block,
     init_seq_freq_map(&seq_map, best_path.path_size * 2);
 
 #ifdef DEBUG
-    printf("[DEBUG] Initialized sequence frequency map with capacity: %zu\n", best_path.path_size * 2);
+    printf("[DEBUG] Initialized sequence frequency map with capacity: %u\n", best_path.path_size * 2);
     printf("[DEBUG] Initial BitWriter state:\n");
     bitwriter_print_state(writer);
 #endif
@@ -221,8 +221,9 @@ void populate_header(BestPathView best_path, const uint8_t* block,
     printf("[DEBUG] Header writing complete, flushing...\n");
 #endif
 
+    bitwriter_overwrite_at(writer, header_start_bit, candidate_count, 16);    
     bitwriter_flush(writer);
-    bitwriter_overwrite_at(writer, header_start_bit, candidate_count, 16);
+    
     
     if (!bitwriter_write_to_file(writer, file_to_write)) {
         fprintf(stderr, "Failed to write header to file\n");
@@ -234,7 +235,7 @@ void populate_header(BestPathView best_path, const uint8_t* block,
     bitwriter_print_state(writer);
 #endif
 
-    bitwriter_reset_positions(writer);
+    bitwriter_reset_positions(writer); // as we have written the buffer in the file. So we can reset it. 
     free_seq_freq_map(&seq_map);
     free(candidates);
 }
