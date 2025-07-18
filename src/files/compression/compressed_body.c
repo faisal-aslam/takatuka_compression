@@ -49,24 +49,31 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
                    node->length_of_RLE);
 #endif
 
-            SAFE_BITWRITE(writer, 1, 1, file_to_write);
+            SAFE_BITWRITE(writer, 1, 1, file_to_write, "c_flag");
 #ifdef DEBUG
             printf("[DEBUG] ➤ Written 1 bit: 1 (compressed flag)\n");
             bitwriter_print_state(writer);
 #endif
-            SAFE_BITWRITE(writer, node->repeat_seq_length, 3, file_to_write);
+            SAFE_BITWRITE(writer, 3, 2, file_to_write, "code_class"); //In case of RLE code_class is (11)_2=3
+#ifdef DEBUG
+            printf("[DEBUG] ➤ Written 2 bits: code class = %u\n", 3);
+            bitwriter_print_state(writer);
+#endif
+
+
+            SAFE_BITWRITE(writer, node->repeat_seq_length, 3, file_to_write, "seq_len");
 #ifdef DEBUG
             printf("[DEBUG] ➤ Written 3 bits: RLE repeat length = %u\n", node->repeat_seq_length);
             bitwriter_print_state(writer);
 #endif
-            SAFE_BITWRITE(writer, node->length_of_RLE, 8, file_to_write);
+            SAFE_BITWRITE(writer, node->length_of_RLE, 8, file_to_write, "len_of_RLE");
 #ifdef DEBUG
             printf("[DEBUG] ➤ Written 8 bits: RLE count = %u\n", node->length_of_RLE);
             bitwriter_print_state(writer);
 #endif
 
             for (uint8_t j = 0; j < node->repeat_seq_length; ++j) {
-                SAFE_BITWRITE(writer, seq[j], 8, file_to_write);
+                SAFE_BITWRITE(writer, seq[j], 8, file_to_write, "");
 #ifdef DEBUG
                 printf("[DEBUG] ➤ Written 8 bits: RLE pattern byte %02X\n", seq[j]);
                 bitwriter_print_state(writer);
@@ -78,17 +85,17 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
             printf("[DEBUG] Writing compressed sequence (code=%u, class=%u)\n", code, code_class);
 #endif
 
-            SAFE_BITWRITE(writer, 1, 1, file_to_write);
+            SAFE_BITWRITE(writer, 1, 1, file_to_write, "c_flag");
 #ifdef DEBUG
             printf("[DEBUG] ➤ Written 1 bit: 1 (compressed flag)\n");
             bitwriter_print_state(writer);
 #endif
-            SAFE_BITWRITE(writer, code_class, 2, file_to_write);
+            SAFE_BITWRITE(writer, code_class, 2, file_to_write, "code_class");
 #ifdef DEBUG
             printf("[DEBUG] ➤ Written 2 bits: code class = %u\n", code_class);
             bitwriter_print_state(writer);
 #endif
-            SAFE_BITWRITE(writer, code, get_code_class_size(code_class), file_to_write);
+            SAFE_BITWRITE(writer, code, get_code_class_size(code_class), file_to_write, "code");
 #ifdef DEBUG
             printf("[DEBUG] ➤ Written %u bits: code = %u\n", get_code_class_size(code_class), code);
             bitwriter_print_state(writer);
@@ -99,12 +106,12 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
             printf("[DEBUG] Writing uncompressed bytes (len=%u)\n", len);
 #endif
             for (uint8_t j = 0; j < len; ++j) {
-                SAFE_BITWRITE(writer, 0, 1, file_to_write);
+                SAFE_BITWRITE(writer, 0, 1, file_to_write, "seq_len");
 #ifdef DEBUG
                 printf("[DEBUG] ➤ Written 1 bit: 0 (uncompressed flag)\n");
                 bitwriter_print_state(writer);
 #endif
-                SAFE_BITWRITE(writer, seq[j], 8, file_to_write);
+                SAFE_BITWRITE(writer, seq[j], 8, file_to_write, "");
 #ifdef DEBUG
                 printf("[DEBUG] ➤ Written 8 bits: raw byte %02X\n", seq[j]);
                 bitwriter_print_state(writer);

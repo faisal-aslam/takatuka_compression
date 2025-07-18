@@ -11,29 +11,63 @@ void bitwriter_init(BitWriter* bw, uint8_t* buffer, size_t size) {
     memset(buffer, 0, size);
 }
 
-bool bitwriter_write(BitWriter* bw, uint32_t value, uint8_t num_bits) {
+bool bitwriter_write(BitWriter* bw, uint32_t value, uint8_t num_bits
+#ifdef DEBUG
+                     , const char* label
+#endif
+) {
     if (num_bits > 32 || bw->overflow) return false;
+
+#ifdef DEBUG
+    FILE* log = fopen("log.txt", "a");
+    if (log) {
+        if (label) {
+            fprintf(log, "[BitWriter] %s: ", label);
+        } else {
+            fprintf(log, "[BitWriter] ");
+        }
+        fprintf(log, "Writing %u bits: ", num_bits);
+    }
+#endif
 
     for (int i = num_bits - 1; i >= 0; --i) {
         if (bw->byte_pos >= bw->buffer_size) {
             bw->overflow = true;
+#ifdef DEBUG
+            if (log) {
+                fprintf(log, " (OVERFLOW)\n");
+                fclose(log);
+            }
+#endif
             return false;
         }
 
         uint8_t bit = (value >> i) & 1;
-        
-        bw->buffer[bw->byte_pos] &= ~(1 << (7 - bw->bit_pos)); // Clear the bit
+
+        bw->buffer[bw->byte_pos] &= ~(1 << (7 - bw->bit_pos)); // Clear bit position
         bw->buffer[bw->byte_pos] |=  (bit << (7 - bw->bit_pos)); // Set if needed
 
-        bw->bit_pos++;
+#ifdef DEBUG
+        if (log) fprintf(log, "%d", bit);
+#endif
 
+        bw->bit_pos++;
         if (bw->bit_pos == 8) {
             bw->bit_pos = 0;
             bw->byte_pos++;
         }
     }
+
+#ifdef DEBUG
+    if (log) {
+        fprintf(log, "\n");
+        fclose(log);
+    }
+#endif
+
     return true;
 }
+
 
 void bitwriter_flush(BitWriter* bw) {
   //

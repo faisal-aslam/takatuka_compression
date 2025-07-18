@@ -54,7 +54,7 @@ void populate_header(BestPathView best_path, const uint8_t* block,
 #endif
 
     // Reserve first two bytes for number of codes
-    SAFE_BITWRITE(writer, 0, 16, file_to_write); // placeholder
+    SAFE_BITWRITE(writer, 0, 16, file_to_write, "header_length"); // placeholder
     size_t header_start_bit = writer->byte_pos * 8 + writer->bit_pos - 16;
 
 #ifdef DEBUG
@@ -184,20 +184,20 @@ void populate_header(BestPathView best_path, const uint8_t* block,
         printf("\n");
 #endif
 
-        SAFE_BITWRITE(writer, code_class, 2, file_to_write);
+        SAFE_BITWRITE(writer, code_class, 2, file_to_write, "code_class");
 #ifdef DEBUG
         printf("[DEBUG] ➤ Written 2 bits: code_class = %u\n", code_class);
         bitwriter_print_state(writer);
 #endif
 
-        SAFE_BITWRITE(writer, cand->length, 8, file_to_write);
+        SAFE_BITWRITE(writer, cand->length, 8, file_to_write, "seq_len");
 #ifdef DEBUG
         printf("[DEBUG] ➤ Written 8 bits: length = %u\n", cand->length);
         bitwriter_print_state(writer);
 #endif
 
         uint8_t code_bits = get_code_class_size(code_class);
-        SAFE_BITWRITE(writer, assigned[code_class], code_bits, file_to_write);
+        SAFE_BITWRITE(writer, assigned[code_class], code_bits, file_to_write, "code_bits");
 #ifdef DEBUG
         printf("[DEBUG] ➤ Written %u bits: code index in class[%u] = %u\n", 
                code_bits, code_class, assigned[code_class]);
@@ -205,7 +205,7 @@ void populate_header(BestPathView best_path, const uint8_t* block,
 #endif
 
         for (uint8_t j = 0; j < cand->length; ++j) {
-            SAFE_BITWRITE(writer, cand->sequence[j], 8, file_to_write);
+            SAFE_BITWRITE(writer, cand->sequence[j], 8, file_to_write, "");
 #ifdef DEBUG
             printf("[DEBUG] ➤ Written byte #%u: %02X\n", j, cand->sequence[j]);
             bitwriter_print_state(writer);

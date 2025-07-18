@@ -36,6 +36,10 @@ void read_body_using_decoder_map(BitReader *reader, const char *decompress_file_
             // Uncompressed single byte
             uint32_t byte;
             if (!bitreader_read(reader, &byte, 8)) {
+                if (reader->bit_pos == 0 && reader->byte_pos >= reader->buffer_size) {
+                    // Graceful EOF: don't throw error
+                    break;
+                }
                 fprintf(stderr, "Unexpected EOF while reading uncompressed byte\n");
                 exit(EXIT_FAILURE);
             }

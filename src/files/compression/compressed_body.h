@@ -9,7 +9,24 @@
 #include <string.h>
 
 // Unified safe writing macro for both header and body
-#define SAFE_BITWRITE(bw, value, bits, file)                                                                           \
+#ifdef DEBUG
+#define SAFE_BITWRITE(bw, value, bits, file, bitstr)                                                                   \
+    do {                                                                                                               \
+        if (!bitwriter_write(bw, value, bits, bitstr)) {                                                               \
+            bitwriter_flush(bw);                                                                                       \
+            if (!bitwriter_write_to_file(bw, file)) {                                                                  \
+                fprintf(stderr, "Failed to write buffer to file\n");                                                   \
+                exit(EXIT_FAILURE);                                                                                    \
+            }                                                                                                          \
+            bitwriter_reset(bw);                                                                                       \
+            if (!bitwriter_write(bw, value, bits, bitstr)) {                                                           \
+                fprintf(stderr, "bitwriter_write failed after flush (DEBUG)\n");                                       \
+                exit(EXIT_FAILURE);                                                                                    \
+            }                                                                                                          \
+        }                                                                                                              \
+    } while (0)
+#else
+#define SAFE_BITWRITE(bw, value, bits, file, bitstr_unused)                                                            \
     do {                                                                                                               \
         if (!bitwriter_write(bw, value, bits)) {                                                                       \
             bitwriter_flush(bw);                                                                                       \
@@ -24,6 +41,8 @@
             }                                                                                                          \
         }                                                                                                              \
     } while (0)
+#endif
+
 
 /**
  * @brief Processes BestPathView and writes compressed data to output file
