@@ -234,7 +234,7 @@ void populate_header(BestPathView best_path, const uint8_t* block,
     bitwriter_print_state(writer);
 #endif
 
-    bitwriter_reset(writer);
+    bitwriter_reset_positions(writer);
     free_seq_freq_map(&seq_map);
     free(candidates);
 }

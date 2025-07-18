@@ -87,3 +87,10 @@ void bitwriter_reset(BitWriter* bw) {
     bw->overflow = false;
     memset(bw->buffer, 0, bw->buffer_size);
 }
+
+
+void bitwriter_reset_positions(BitWriter* bw) {
+    bw->byte_pos = 0;
+    bw->bit_pos = 0;
+    bw->overflow = false;
+}
