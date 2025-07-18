@@ -1298,4 +1298,45 @@ RFC 2616                        HTTP/1.1                       June 1999
    publicly available and adequate for independent implementation, and
    conform to the purpose of content coding defined in this section.
 
+3.6 Transfer Codings
 
+   Transfer-coding values are used to indicate an encoding
+   transformation that has been, can be, or may need to be applied to an
+   entity-body in order to ensure "safe transport" through the network.
+   This differs from a content coding in that the transfer-coding is a
+   property of the message, not of the original entity.
+
+       transfer-coding         = "chunked" | transfer-extension
+       transfer-extension      = token *( ";" parameter )
+
+   Parameters are in  the form of attribute/value pairs.
+
+       parameter               = attribute "=" value
+       attribute               = token
+       value                   = token | quoted-string
+
+   All transfer-coding values are case-insensitive. HTTP/1.1 uses
+   transfer-coding values in the TE header field (section 14.39) and in
+   the Transfer-Encoding header field (section 14.41).
+
+   Whenever a transfer-coding is applied to a message-body, the set of
+   transfer-codings MUST include "chunked", unless the message is
+   terminated by closing the connection. When the "chunked" transfer-
+   coding is used, it MUST be the last transfer-coding applied to the
+   message-body. The "chunked" transfer-coding MUST NOT be applied more
+   than once to a message-body. These rules allow the recipient to
+   determine the transfer-length of the message (section 4.4).
+
+   Transfer-codings are analogous to the Content-Transfer-Encoding
+   values of MIME [7], which were designed to enable safe transport of
+   binary data over a 7-bit transport service. However, safe transport
+   has a different focus for an 8bit-clean transfer protocol. In HTTP,
+   the only unsafe characteristic of message-bodies is the difficulty in
+   determining the exact body length (section 7.2.2), or the desire to
+   encrypt data over a shared transport.
+
+
+
+Fielding, et al.            Standards Track                    [Page 24]
+
+RFC 2616                        HTTP/1.1        
