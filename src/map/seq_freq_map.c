@@ -21,7 +21,7 @@ void free_seq_freq_map(SeqFreqMap *map) {
     map->used = 0;
 }
 
-uint32_t seq_freq_increment(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index) {
+uint32_t seq_freq_increment(SeqFreqMap *map, const uint8_t *seq, uint8_t len) {
     uint32_t idx = 0;
     uint64_t hash = XXH3_64bits(seq, len);
     idx = hash % map->capacity;
@@ -80,7 +80,7 @@ uint32_t seq_freq_set(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t
 }
 
 
-uint32_t seq_freq_decrement(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index) {
+uint32_t seq_freq_decrement(SeqFreqMap *map, const uint8_t *seq, uint8_t len) {
     uint64_t hash = XXH3_64bits(seq, len);
     uint32_t idx = hash % map->capacity;
     uint32_t orig_idx = idx;
@@ -111,7 +111,7 @@ uint32_t seq_freq_decrement(SeqFreqMap *map, const uint8_t *seq, uint8_t len, ui
     return map->entries[idx].frequency;
 }
 
-uint32_t seq_freq_get(const SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t hash_index) {
+uint32_t seq_freq_get(const SeqFreqMap *map, const uint8_t *seq, uint8_t len) {
     uint64_t hash = XXH3_64bits(seq, len);
     uint32_t idx = hash % map->capacity;
     uint32_t orig_idx = idx;
