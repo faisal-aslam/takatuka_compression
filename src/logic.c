@@ -48,7 +48,7 @@ static void RLE_logic(const uint8_t *block, uint32_t block_index, uint32_t block
         // wait for the right level to create node.
         // do not create any RLE nodes before reaching that level.
         // remember data of RLE node to be created later on on the appropriate level.
-        rle_info.next_RLE_level = get_last_level_index() + rle_info.length_of_RLE -1;
+        rle_info.next_RLE_level = current_level + rle_info.length_of_RLE -1;
         rle_info.RLE_offset = block_index;
         return;
     }
@@ -95,9 +95,10 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #endif
         }
         RLE_logic(block, block_index, block_size);
-
+    }
 #ifdef DEBUG
         visualize_graph(block); // create graph in DOT for visualization.
 #endif
-    }
+        find_shortest_path_to_sink(block);
+    
 }

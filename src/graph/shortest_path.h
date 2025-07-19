@@ -1,7 +1,6 @@
 #pragma once
 #include <stdint.h>
 #include "graph.h"
-#include "sequence_repository_freq.h"
 #include <limits.h>
 #include <stdio.h>
 
@@ -21,7 +20,7 @@ typedef struct {
 
 extern Path path_state;
 extern long total_input_size;
-extern SequenceRepository useless_repo;
+
 // Finds and prints the shortest path from any last-level node to root (node_id = 0)
 void find_shortest_path_to_sink(const uint8_t* block);
 

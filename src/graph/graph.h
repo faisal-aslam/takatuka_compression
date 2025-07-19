@@ -15,21 +15,16 @@
 #include "graph_visualizer.h"
 #include <stdio.h>
 #include <stdbool.h>
-#include "../map/sequence_repository_freq.h"
 
 #define MAX_LEVELS BLOCK_SIZE
 #define MAX_WEIGHTS SEQ_LENGTH_LIMIT
-
-extern SequenceRepository exist_repo[MAX_LEVELS];
 
 
 typedef struct {
     uint32_t node_id;
     uint32_t offset;    
-    uint16_t node_level;
-    uint16_t min_depth;
+    uint16_t node_level;    
     uint8_t sequence_length;
-    uint8_t is_useless;
     uint8_t is_RLE;
     uint8_t repeat_seq_length;
     uint8_t length_of_RLE;
@@ -40,7 +35,6 @@ typedef struct {
     uint32_t first_node_of_level[MAX_LEVELS];    
     GraphNode nodes[MAX_GRAPH_NODES];
     uint16_t total_levels;
-    uint16_t level_min_depth[MAX_LEVELS]; // computed during compaction
 } Graph;
 
 extern Graph graph; //always use graph.c definiton.
@@ -131,11 +125,7 @@ static inline uint32_t get_level_end_id(uint16_t level) {
     if (level == graph.total_levels - 1) {
         return graph.size;
     }
-    uint32_t first_node_of_next_level = UINT32_MAX;
-    while(first_node_of_next_level == UINT32_MAX) {
-        first_node_of_next_level = graph.first_node_of_level[++level];
-    }
-    return first_node_of_next_level;
+    return graph.first_node_of_level[level+1];
 }
 
 static inline uint16_t get_last_level_index(void)  {
@@ -178,7 +168,7 @@ uint8_t get_parent_nodes_count(GraphNode* node) {
         return 0;
     }
     uint8_t parents_count = total_nodes_at_level(get_parent_level(node));
-    if (parents_count > SEQ_LENGTH_LIMIT) {
+    if (parents_count > SEQ_LENGTH_LIMIT+1) {
         fprintf(stderr, "Illegal number of parent nodes, at node=%d, node_level=%d\n", node->node_id, node->node_level);        
         abort();
     }
