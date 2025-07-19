@@ -1,10 +1,10 @@
 #include "logic.h"
 #include "compress.h"
 #include "decompress.h"
-#include "graph/graph.h"
-#include "graph/graph_visualizer.h"
-#include "graph/shortest_path.h"
-#include "sequence_repository_useless.h"
+#include "graph.h"
+#include "graph_visualizer.h"
+#include "shortest_path.h"
+#include "seq_freq_map.h"
 #include "timer.h"
 #include <assert.h>
 #include <stdlib.h>
@@ -67,6 +67,7 @@ static void RLE_logic(const uint8_t *block, uint32_t block_index, uint32_t block
 void process_block(const uint8_t *block, uint32_t block_size) {
 
     init_graph();
+    init_seq_freq_map();
     create_root();
 
 #ifdef DEBUG
@@ -86,6 +87,9 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         for (uint8_t seq_len = 1; seq_len <= max_sequence; seq_len++) {
             start = block_index - seq_len + 1;
             current_node = create_node(start, seq_len);
+            if (seq_len > 1) {
+                seq_freq_increment(&block[current_node->offset], seq_len);
+            }
 #ifdef DEBUG
             print_graph_node(current_node); // print the newly create node.
 #endif
