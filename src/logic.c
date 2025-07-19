@@ -10,8 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-SequenceRepository useless_repo;
-
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
@@ -36,7 +34,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 
     init_graph();
     create_root();
-    seq_repo_init(&useless_repo, INITIAL_CAPACITY);
+    //seq_repo_init(&useless_repo, INITIAL_CAPACITY);
 
     uint8_t levels_to_keep[block_size + 1];
     memset(levels_to_keep, 0, (block_size + 1) * sizeof(uint8_t));
@@ -69,20 +67,8 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         for (uint8_t seq_len = 1; seq_len <= max_sequence; seq_len++) {            
             start = block_index - seq_len + 1;
             current_node = create_node(start, seq_len);
-            current_node->is_useless = 1; // Assume useless initially
             if (seq_len > 1) {
-                uint32_t node_id = seq_repo_get_node_id(&useless_repo, &block[start], seq_len);
-                if (node_id != UINT32_MAX) { // we have found this sequence before.
-                    GraphNode *old_node = get_graph_node(node_id);
-                    old_node->is_useless = 0;     // Mark existing node as useful
-                    current_node->is_useless = 0; // Mark current node as useful
-                    seq_repo_add(&useless_repo, &block[start], seq_len,
-                                 current_node->node_id); // store new id for
-                                                         // future nodes.
-                }
-            } else { // map does not have any record of this
-                     // sequence. Add it.
-                seq_repo_add(&useless_repo, &block[start], seq_len, current_node->node_id);
+                uint32_t node_id = 0;//seq_repo_get_node_id(&useless_repo, &block[start], seq_len);                
             }
 #ifdef DEBUG
             print_graph_node(current_node); // print the newly create node.
@@ -91,8 +77,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         if (current_level == next_RLE_level) {
             current_node = create_node(RLE_offset, length_of_RLE);
             current_node->is_RLE = 1;
-            current_node->repeat_seq_length = repeat_seq_length;
-            current_node->is_useless = 0; // mark it useful
+            current_node->repeat_seq_length = repeat_seq_length;            
             current_node->length_of_RLE = length_of_RLE;
 #ifdef DEBUG
             print_graph_node(current_node); // print the RLE node.

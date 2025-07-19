@@ -1,129 +1,124 @@
+//seq_freq_map.c
+
 #include "seq_freq_map.h"
 #include "xxhash.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
 #include "general_map.h"
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 
+#define META_ENCODE(freq, len)  (((uint32_t)(len) << 24) | ((freq) & 0xFFFFFF))
+#define META_GET_FREQ(meta)     ((meta) & 0xFFFFFF)
+#define META_GET_LEN(meta)      ((uint8_t)((meta) >> 24))
 
-void init_seq_freq_map(SeqFreqMap *map, uint32_t capacity) {
-    map->capacity = capacity;
-    map->used = 0;
-    map->entries = calloc(capacity, sizeof(SeqFreqEntry));
+typedef struct {
+    const uint8_t *sequence;  // 8 bytes: external pointer
+    uint32_t meta;            // 4 bytes: upper 8 bits = length, lower 24 bits = frequency
+} SeqFreqEntry;
+
+typedef struct SeqFreqMap {
+    SeqFreqEntry entries[SEQ_MAP_CAPACITY];
+} SeqFreqMap;
+
+SeqFreqMap seqMap;  // Singleton instance
+
+void init_seq_freq_map(void) {
+    memset(&seqMap, 0, sizeof(SeqFreqMap));
 }
 
-void free_seq_freq_map(SeqFreqMap *map) {
-    free(map->entries);
-    map->entries = NULL;
-    map->capacity = 0;
-    map->used = 0;
-}
+static inline uint32_t find_slot(const uint8_t *seq, uint8_t len, uint64_t hash, int *found) {
+    uint32_t idx = hash % SEQ_MAP_CAPACITY;
+    uint32_t start_idx = idx;
 
-uint32_t seq_freq_increment(SeqFreqMap *map, const uint8_t *seq, uint8_t len) {
-    uint32_t idx = 0;
-    uint64_t hash = XXH3_64bits(seq, len);
-    idx = hash % map->capacity;
-    uint32_t orig_idx = idx;
+    do {
+        const SeqFreqEntry *entry = &seqMap.entries[idx];
 
-    while (map->entries[idx].is_used &&
-           !(map->entries[idx].length == len &&
-             sequences_equal(map->entries[idx].sequence, seq, len))) {
-        idx = (idx + 1) % map->capacity;
-        if (idx == orig_idx) {
-            fprintf(stderr, "No space left in sequence frequency map\n");
-            abort();
+        if (entry->sequence == NULL) {
+            *found = 0;
+            return idx;
         }
-    }
 
-    if (!map->entries[idx].is_used) {
-        map->entries[idx].sequence = seq;
-        map->entries[idx].length = len;
-        map->entries[idx].frequency = 1;
-        map->entries[idx].hash = hash;
-        map->entries[idx].is_used = true;
-        map->used++;
+        if (META_GET_LEN(entry->meta) == len &&
+            sequences_equal(entry->sequence, seq, len)) {
+            *found = 1;
+            return idx;
+        }
+
+        idx = (idx + 1) % SEQ_MAP_CAPACITY;
+    } while (idx != start_idx);
+
+    fprintf(stderr, "No free slot in SeqFreqMap\n");
+    abort();
+}
+
+uint32_t seq_freq_increment(const uint8_t *seq, uint8_t len) {
+    uint64_t hash = XXH3_64bits(seq, len);
+    int found;
+    uint32_t idx = find_slot(seq, len, hash, &found);
+
+    SeqFreqEntry *entry = &seqMap.entries[idx];
+
+    if (found) {
+        uint32_t freq = META_GET_FREQ(entry->meta) + 1;
+        entry->meta = META_ENCODE(freq, len);
+        return freq;
+    } else {
+        entry->sequence = seq;
+        entry->meta = META_ENCODE(1, len);
         return 1;
-    } else {
-        return ++map->entries[idx].frequency;
     }
 }
 
-uint32_t seq_freq_set(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t freq) {
-    uint64_t hash = XXH3_64bits(seq, len);
-    uint32_t idx = hash % map->capacity;
-    uint32_t orig_idx = idx;
-
-    while (map->entries[idx].is_used &&
-           !(map->entries[idx].length == len &&
-             sequences_equal(map->entries[idx].sequence, seq, len))) {
-        idx = (idx + 1) % map->capacity;
-        if (idx == orig_idx) {
-            fprintf(stderr, "No space left in sequence frequency map\n");
-            abort();
-        }
-    }
-
-    if (!map->entries[idx].is_used) {
-        map->entries[idx].sequence = seq;
-        map->entries[idx].length = len;
-        map->entries[idx].frequency = freq;
-        map->entries[idx].hash = hash;
-        map->entries[idx].is_used = true;
-        map->used++;
-        return freq;
-    } else {
-        map->entries[idx].frequency = freq;
-        return freq;
-    }
-}
-
-
-uint32_t seq_freq_decrement(SeqFreqMap *map, const uint8_t *seq, uint8_t len) {
-    uint64_t hash = XXH3_64bits(seq, len);
-    uint32_t idx = hash % map->capacity;
-    uint32_t orig_idx = idx;
-
-    while (map->entries[idx].is_used &&
-           !(map->entries[idx].length == len &&
-             sequences_equal(map->entries[idx].sequence, seq, len))) {
-        idx = (idx + 1) % map->capacity;
-        if (idx == orig_idx) {
-            fprintf(stderr, "Sequence not found for decrement\n");
-            abort();
-        }
-    }
-
-    if (!map->entries[idx].is_used || map->entries[idx].frequency == 0) {
-        fprintf(stderr, "Invalid decrement\n");
+uint32_t seq_freq_set(const uint8_t *seq, uint8_t len, uint32_t freq) {
+    if (freq > 0xFFFFFF) {
+        fprintf(stderr, "Frequency exceeds 24-bit limit\n");
         abort();
     }
 
-    map->entries[idx].frequency--;
+    uint64_t hash = XXH3_64bits(seq, len);
+    int found;
+    uint32_t idx = find_slot(seq, len, hash, &found);
 
-    if (map->entries[idx].frequency == 0) {
-        map->entries[idx].is_used = false;
-        map->used--;
-        return 0;
-    }
-
-    return map->entries[idx].frequency;
+    SeqFreqEntry *entry = &seqMap.entries[idx];
+    entry->sequence = seq;
+    entry->meta = META_ENCODE(freq, len);
+    return freq;
 }
 
-uint32_t seq_freq_get(const SeqFreqMap *map, const uint8_t *seq, uint8_t len) {
+uint32_t seq_freq_decrement(const uint8_t *seq, uint8_t len) {
     uint64_t hash = XXH3_64bits(seq, len);
-    uint32_t idx = hash % map->capacity;
-    uint32_t orig_idx = idx;
+    int found;
+    uint32_t idx = find_slot(seq, len, hash, &found);
 
-    while (map->entries[idx].is_used) {
-        if (map->entries[idx].length == len &&
-            sequences_equal(map->entries[idx].sequence, seq, len)) {
-            return map->entries[idx].frequency;
-        }
-        idx = (idx + 1) % map->capacity;
-        if (idx == orig_idx) break;
+    if (!found) {
+        fprintf(stderr, "Sequence not found for decrement\n");
+        abort();
     }
 
-    return 0;
+    SeqFreqEntry *entry = &seqMap.entries[idx];
+    uint32_t freq = META_GET_FREQ(entry->meta);
+
+    if (freq == 0) {
+        fprintf(stderr, "Invalid decrement — frequency already 0\n");
+        abort();
+    }
+
+    freq--;
+
+    if (freq == 0) {
+        entry->sequence = NULL;
+        entry->meta = 0;
+        return 0;
+    } else {
+        entry->meta = META_ENCODE(freq, len);
+        return freq;
+    }
+}
+
+uint32_t seq_freq_get(const uint8_t *seq, uint8_t len) {
+    uint64_t hash = XXH3_64bits(seq, len);
+    int found;
+    uint32_t idx = find_slot(seq, len, hash, &found);
+
+    return found ? META_GET_FREQ(seqMap.entries[idx].meta) : 0;
 }

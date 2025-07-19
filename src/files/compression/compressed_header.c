@@ -13,7 +13,6 @@
 #include "compressed_body.h"
 
 #define HEADER_BUFFER_SIZE 4096
-static SeqFreqMap seq_map;
 
 CodeMap code_map;
  
@@ -25,8 +24,8 @@ static inline bool should_skip_node(const GraphNode* node, uint32_t freq) {
 }
 
 static inline uint8_t sequence_seen(const uint8_t *block, uint8_t length, uint32_t freq) {
-    if (seq_freq_get(&seq_map, block, length) >= 1) return 1;
-    seq_freq_set(&seq_map, block, length, freq); //set it for future use.
+    if (seq_freq_get(block, length) >= 1) return 1;
+    seq_freq_set(block, length, freq); //set it for future use.
     return 0;
 }
 
@@ -45,7 +44,7 @@ int compare_candidates_desc(const void* a, const void* b) {
 
 void populate_header(BestPathView best_path, const uint8_t* block, 
                     FILE* file_to_write, BitWriter* writer) {
-    init_seq_freq_map(&seq_map, best_path.path_size * 2);
+    init_seq_freq_map();
 
 #ifdef DEBUG
     printf("[DEBUG] Initialized sequence frequency map with capacity: %u\n", best_path.path_size * 2);
@@ -133,7 +132,6 @@ void populate_header(BestPathView best_path, const uint8_t* block,
             exit(EXIT_FAILURE);
         }
         bitwriter_reset(writer);
-        free_seq_freq_map(&seq_map);
         free(candidates);
         return;
     }
@@ -236,6 +234,5 @@ void populate_header(BestPathView best_path, const uint8_t* block,
 #endif
 
     bitwriter_reset_positions(writer); // as we have written the buffer in the file. So we can reset it. 
-    free_seq_freq_map(&seq_map);
     free(candidates);
 }

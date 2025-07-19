@@ -1,29 +1,21 @@
+//seq_freq_map.h
+
 #pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
 #include "constants.h"
 
-typedef struct {
-    const uint8_t *sequence;  // Points to external memory
-    uint8_t length;
-    uint32_t frequency;
-    uint64_t hash;
-    bool is_used;
-} SeqFreqEntry;
+#define SEQ_MAP_CAPACITY ((TOTAL_GRAPH_NODES(SEQ_LENGTH_LIMIT, BLOCK_SIZE) * 3) / 2) // Fixed capacity, no reallocs
 
-typedef struct {
-    SeqFreqEntry *entries;
-    uint32_t capacity;
-    uint32_t used;
-} SeqFreqMap;
+// Singleton instance (optional for external access, can be removed if full encapsulation is desired)
+extern struct SeqFreqMap seqMap;
 
-void init_seq_freq_map(SeqFreqMap *map, uint32_t capacity);
-void free_seq_freq_map(SeqFreqMap *map);
+// Public API (all use singleton internally)
+void init_seq_freq_map(void);
 
-uint32_t seq_freq_increment(SeqFreqMap *map, const uint8_t *seq, uint8_t len);
-uint32_t seq_freq_decrement(SeqFreqMap *map, const uint8_t *seq, uint8_t len);
-uint32_t seq_freq_get(const SeqFreqMap *map, const uint8_t *seq, uint8_t len);
-uint32_t seq_freq_set(SeqFreqMap *map, const uint8_t *seq, uint8_t len, uint32_t freq);
-
+uint32_t seq_freq_increment(const uint8_t *seq, uint8_t len);
+uint32_t seq_freq_decrement(const uint8_t *seq, uint8_t len);
+uint32_t seq_freq_get(const uint8_t *seq, uint8_t len);
+uint32_t seq_freq_set(const uint8_t *seq, uint8_t len, uint32_t freq);
 

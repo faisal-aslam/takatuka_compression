@@ -15,7 +15,6 @@ typedef struct {
 
 
 Path path_state;
-static SeqFreqMap map;
 
 
 /**
@@ -176,7 +175,7 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
 
     path_state.path_total_cost[PATH_CURRENT] -= path_state.cost_stack[PATH_CURRENT][path_state.path_size[PATH_CURRENT]];
     if (node->sequence_length > 1 && !node->is_RLE) {
-            uint32_t new_freq = seq_freq_decrement(&map, &block[node->offset], node->sequence_length);
+            uint32_t new_freq = seq_freq_decrement(&block[node->offset], node->sequence_length);
             if (new_freq == 1) {
                 path_state.freq_eq_1_count++;
             } else if (new_freq == 0) {
@@ -184,7 +183,7 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
             }
 #ifdef DEBUG
             if (node->sequence_length > 1) {
-                uint32_t freq = seq_freq_get(&map, &block[node->offset], node->sequence_length);
+                uint32_t freq = seq_freq_get(&block[node->offset], node->sequence_length);
                 printf("DECR: node_id=%u, new_freq=%u, seq=", node->node_id, freq);
                 print_node_sequence(node, block);
 
@@ -209,7 +208,7 @@ static inline void process_node(const uint8_t* block, GraphNode* node) {
 
     uint32_t freq = 1;
     if (node->sequence_length > 1 && !node->is_RLE) {
-        freq = seq_freq_increment(&map, &block[node->offset], node->sequence_length);
+        freq = seq_freq_increment(&block[node->offset], node->sequence_length);
         //printf("\n node_id=%u, freq=%d \n", node->node_id, freq);
         if (freq == 1) {
                 path_state.freq_eq_1_count++;
@@ -318,7 +317,7 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     uint32_t push_count = 0;
     uint32_t node_of_last_level_served = 0;
     path_init();      // Reset path state
-    init_seq_freq_map(&map, stack_size);
+    init_seq_freq_map();
     initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
@@ -386,7 +385,6 @@ void find_shortest_path_to_sink(const uint8_t *block) {
 
 
 void free_path_state() {
-    // Only if path_state has dynamic allocations
-    free_seq_freq_map(&map);  // Example if map needs freeing
+    // Only if path_state has dynamic allocations    
     memset(&path_state, 0, sizeof(Path));
 }
