@@ -2,7 +2,6 @@
 SRCS = \
     src/decompress/decompress.c \
     src/map/xxhash.c \
-    src/map/sequence_repository.c \
     src/map/seq_freq_map.c \
     src/files/compression/compress.c \
     src/time.c \
