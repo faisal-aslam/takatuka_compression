@@ -19,6 +19,9 @@
 #define SEQ_LENGTH_LIMIT 128 //a.k.a k
 #define BLOCK_SIZE 64000
 
+_Static_assert(SEQ_LENGTH_LIMIT <= 254, "SEQ_LENGTH_LIMIT must be ≤ 254");
+_Static_assert(BLOCK_SIZE <= 65535, "BLOCK_SIZE must be ≤ 65,535");
+
 #define MAX_GRAPH_NODES TOTAL_GRAPH_NODES(SEQ_LENGTH_LIMIT, BLOCK_SIZE)
 
 #define TOTAL_GROUPS 4
