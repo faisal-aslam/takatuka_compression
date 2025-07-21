@@ -3,8 +3,8 @@
 #include "decompress.h"
 #include "graph.h"
 #include "graph_visualizer.h"
-#include "shortest_path.h"
 #include "seq_freq_map.h"
+#include "shortest_path.h"
 #include "timer.h"
 #include <assert.h>
 #include <stdlib.h>
@@ -42,17 +42,16 @@ static inline GraphNode *create_node(uint32_t start, uint8_t length) {
 static void RLE_logic(const uint8_t *block, uint32_t block_index, uint32_t block_size) {
     // Create RLE node, if any. There could be at most one RLE node per level.
     uint16_t current_level = get_last_level_index();
-    if (rle_info.next_RLE_level < current_level &&
-        is_RLE_sequence(&rle_info.repeat_seq_length, &rle_info.length_of_RLE, MIN(block_size, 255), block_index,
-                        block)) {
+    if (rle_info.next_RLE_level < current_level && is_RLE_sequence(&rle_info.repeat_seq_length, &rle_info.length_of_RLE,
+                                                                   MIN(block_size, 255), block_index, block)) {
         // wait for the right level to create node.
         // do not create any RLE nodes before reaching that level.
         // remember data of RLE node to be created later on on the appropriate level.
-        rle_info.next_RLE_level = current_level + rle_info.length_of_RLE -1;
+        rle_info.next_RLE_level = current_level + rle_info.length_of_RLE - 1;
         rle_info.RLE_offset = block_index;
         return;
     }
-    GraphNode* current_node;
+    GraphNode *current_node;
     if (current_level == rle_info.next_RLE_level) {
         current_node = create_node(rle_info.RLE_offset, rle_info.length_of_RLE);
         current_node->is_RLE = 1;
@@ -77,6 +76,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         GraphNode *current_node = NULL;
         create_graph_level(); // create new level of the graph
         uint16_t current_level = get_last_level_index();
+
         if (current_level >= MAX_LEVELS) {
             fprintf(stderr, "Number of levels are more than allowed\n");
             abort();
@@ -96,9 +96,9 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         }
         RLE_logic(block, block_index, block_size);
     }
-#ifdef DEBUG
-        visualize_graph(block); // create graph in DOT for visualization.
-#endif
-        find_shortest_path_to_sink(block);
     
+#ifdef DEBUG
+    visualize_graph(block); // create graph in DOT for visualization.
+#endif
+    // find_shortest_path_to_sink(block);
 }

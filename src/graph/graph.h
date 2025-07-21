@@ -16,7 +16,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#define MAX_LEVELS BLOCK_SIZE
+#define MAX_LEVELS (BLOCK_SIZE+1) //one extra for the root level.
 #define MAX_WEIGHTS SEQ_LENGTH_LIMIT
 
 
@@ -47,7 +47,7 @@ static inline uint32_t get_level_end_id(uint16_t level);
 static inline uint16_t get_last_level_index(void); 
 static inline GraphNode* get_graph_node(uint32_t node_id);
 static inline GraphNode* get_next_node(void);
-static inline void create_graph_level(void);
+static inline uint8_t create_graph_level(void);
 static inline uint32_t get_graph_size(void);
 static inline GraphNode* get_parent_nodes(GraphNode* node);
 static inline uint16_t get_parent_level(GraphNode* node);
@@ -136,7 +136,7 @@ static inline uint16_t get_parent_level(GraphNode* node) {
     uint16_t parent_level =  node->node_level-node->sequence_length; 
     if (!node || parent_level == UINT16_MAX ||  parent_level > MAX_LEVELS) {
         fprintf(stderr, "illegal parent level");
-        exit(1);
+        abort();
     }
     return parent_level;
 }
@@ -151,11 +151,13 @@ static inline GraphNode* get_graph_node(uint32_t node_id) {
 }
 
 
-static inline void create_graph_level(void) {
+static inline uint8_t create_graph_level(void) {
     if (graph.total_levels < MAX_LEVELS) {
         graph.first_node_of_level[graph.total_levels] = graph.size;
         graph.total_levels++;
+        return 1;
     }
+    return 0;
 }
 
 

@@ -1,7 +1,10 @@
 #pragma once
 
 #define TOTAL_GRAPH_NODES(SEQ_LIMIT, LEVELS) \
-    (1 + ((SEQ_LIMIT) * ((SEQ_LIMIT) + 1)) / 2 + ((LEVELS) - (SEQ_LIMIT)) * (SEQ_LIMIT))
+    (1 /* root */ + \
+    (((SEQ_LIMIT) * ((SEQ_LIMIT) + 1)) / 2 + (SEQ_LIMIT)) /* levels 1 to SEQ_LIMIT */ + \
+    ((LEVELS) > (SEQ_LIMIT) ? ((LEVELS) - (SEQ_LIMIT)) * ((SEQ_LIMIT) + 1) : 0) /* levels > SEQ_LIMIT */ )
+
 
 #include <stdlib.h>
 #ifndef MIN
