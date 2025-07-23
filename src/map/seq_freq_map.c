@@ -7,21 +7,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define META_ENCODE(freq, len, usefull)  (((uint32_t)(len) << 24) | ((uint32_t)(usefull) << 16) | ((freq) & 0xFFFF))
-#define META_GET_FREQ(meta)     ((meta) & 0xFFFF)
-#define META_GET_USELESS(meta)  ((uint8_t)((meta) >> 16))
+#define META_ENCODE(freq, len)  (((uint32_t)(len) << 24) | ((freq) & 0xFFFFFF))
+#define META_GET_FREQ(meta)     ((meta) & 0xFFFFFF)
 #define META_GET_LEN(meta)      ((uint8_t)((meta) >> 24))
 
 typedef struct {
     const uint8_t *sequence;  // 8 bytes: external pointer
-    uint32_t meta;            // 4 bytes: upper 8 bits = length, next 8 bits = usefull, lower 16 bits = frequency
+    uint32_t meta;            // 4 bytes: upper 8 bits = length, lower 24 bits = frequency
 } SeqFreqEntry;
 
 typedef struct SeqFreqMap {
     SeqFreqEntry entries[SEQ_MAP_CAPACITY];
 } SeqFreqMap;
 
-SeqFreqMap seqMap;  // Singleton instance
+SeqFreqMap seqMap;
 
 void init_seq_freq_map(void) {
     memset(&seqMap, 0, sizeof(SeqFreqMap));
@@ -61,19 +60,18 @@ uint32_t seq_freq_increment(const uint8_t *seq, uint8_t len) {
 
     if (found) {
         uint32_t freq = META_GET_FREQ(entry->meta) + 1;
-        uint8_t usefull = META_GET_USELESS(entry->meta);
-        entry->meta = META_ENCODE(freq, len, usefull);
+        entry->meta = META_ENCODE(freq, len);
         return freq;
     } else {
         entry->sequence = seq;
-        entry->meta = META_ENCODE(1, len, 0); // Initialize usefull to 0
+        entry->meta = META_ENCODE(1, len);
         return 1;
     }
 }
 
 uint32_t seq_freq_set(const uint8_t *seq, uint8_t len, uint32_t freq) {
-    if (freq > 0xFFFF) {
-        fprintf(stderr, "Frequency exceeds 16-bit limit\n");
+    if (freq > 0xFFFFFF) {
+        fprintf(stderr, "Frequency exceeds 24-bit limit\n");
         abort();
     }
 
@@ -82,9 +80,8 @@ uint32_t seq_freq_set(const uint8_t *seq, uint8_t len, uint32_t freq) {
     uint32_t idx = find_slot(seq, len, hash, &found);
 
     SeqFreqEntry *entry = &seqMap.entries[idx];
-    uint8_t usefull = found ? META_GET_USELESS(entry->meta) : 0;
     entry->sequence = seq;
-    entry->meta = META_ENCODE(freq, len, usefull);
+    entry->meta = META_ENCODE(freq, len);
     return freq;
 }
 
@@ -107,14 +104,13 @@ uint32_t seq_freq_decrement(const uint8_t *seq, uint8_t len) {
     }
 
     freq--;
-    uint8_t usefull = META_GET_USELESS(entry->meta);
 
     if (freq == 0) {
         entry->sequence = NULL;
         entry->meta = 0;
         return 0;
     } else {
-        entry->meta = META_ENCODE(freq, len, usefull);
+        entry->meta = META_ENCODE(freq, len);
         return freq;
     }
 }
@@ -125,27 +121,4 @@ uint32_t seq_freq_get(const uint8_t *seq, uint8_t len) {
     uint32_t idx = find_slot(seq, len, hash, &found);
 
     return found ? META_GET_FREQ(seqMap.entries[idx].meta) : 0;
-}
-
-uint8_t seq_usefull_get(const uint8_t *seq, uint8_t len) {
-    uint64_t hash = XXH3_64bits_withSeed(seq, len, 0);
-    int found;
-    uint32_t idx = find_slot(seq, len, hash, &found);
-
-    return found ? META_GET_USELESS(seqMap.entries[idx].meta) : 0;
-}
-
-void seq_usefull_set(const uint8_t *seq, uint8_t len, uint8_t usefull) {
-    uint64_t hash = XXH3_64bits_withSeed(seq, len, 0);
-    int found;
-    uint32_t idx = find_slot(seq, len, hash, &found);
-
-    if (!found) {
-        fprintf(stderr, "Sequence not found for setting usefull value\n");
-        abort();
-    }
-
-    SeqFreqEntry *entry = &seqMap.entries[idx];
-    uint32_t freq = META_GET_FREQ(entry->meta);
-    entry->meta = META_ENCODE(freq, len, usefull);
 }
