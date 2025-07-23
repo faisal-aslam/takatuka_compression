@@ -23,7 +23,8 @@
 typedef struct {
     uint32_t node_id;
     uint32_t offset;    
-    uint16_t node_level;    
+    uint16_t node_level;
+    uint8_t useless;
     uint8_t sequence_length;
     uint8_t is_RLE;
     uint8_t repeat_seq_length;

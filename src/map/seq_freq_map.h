@@ -14,3 +14,4 @@ uint32_t seq_freq_increment(const uint8_t *seq, uint8_t len);
 uint32_t seq_freq_decrement(const uint8_t *seq, uint8_t len);
 uint32_t seq_freq_get(const uint8_t *seq, uint8_t len);
 uint32_t seq_freq_set(const uint8_t *seq, uint8_t len, uint32_t freq);
+uint32_t seq_freq_one_count(void);

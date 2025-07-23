@@ -14,8 +14,6 @@ typedef struct {
     double path_per_node_costs[2][MAX_LEVELS];     // per-node cost
     int32_t path_size[2];                 // size of each path
     double path_total_cost[2];                  // total cost
-    uint32_t freq_eq_1_count; //only for the current path. A guard not to copy a bad path to current path.
-    uint16_t code_per_node[MAX_LEVELS]; //the code assigned to the best path.
 } Path;
 
 extern Path path_state;

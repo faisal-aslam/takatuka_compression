@@ -11,6 +11,8 @@
 #define META_GET_FREQ(meta)     ((meta) & 0xFFFFFF)
 #define META_GET_LEN(meta)      ((uint8_t)((meta) >> 24))
 
+static uint32_t freq_one_count = 0;
+
 typedef struct {
     const uint8_t *sequence;  // 8 bytes: external pointer
     uint32_t meta;            // 4 bytes: upper 8 bits = length, lower 24 bits = frequency
@@ -24,6 +26,7 @@ SeqFreqMap seqMap;
 
 void init_seq_freq_map(void) {
     memset(&seqMap, 0, sizeof(SeqFreqMap));
+    freq_one_count = 0;
 }
 
 static inline uint32_t find_slot(const uint8_t *seq, uint8_t len, uint64_t hash, int *found) {
@@ -59,12 +62,16 @@ uint32_t seq_freq_increment(const uint8_t *seq, uint8_t len) {
     SeqFreqEntry *entry = &seqMap.entries[idx];
 
     if (found) {
-        uint32_t freq = META_GET_FREQ(entry->meta) + 1;
-        entry->meta = META_ENCODE(freq, len);
-        return freq;
+        uint32_t old_freq = META_GET_FREQ(entry->meta);
+        uint32_t new_freq = old_freq + 1;
+        entry->meta = META_ENCODE(new_freq, len);
+
+        if (old_freq == 1) freq_one_count--;  // went from 1 to >1
+        return new_freq;
     } else {
         entry->sequence = seq;
         entry->meta = META_ENCODE(1, len);
+        freq_one_count++;
         return 1;
     }
 }
@@ -80,10 +87,18 @@ uint32_t seq_freq_set(const uint8_t *seq, uint8_t len, uint32_t freq) {
     uint32_t idx = find_slot(seq, len, hash, &found);
 
     SeqFreqEntry *entry = &seqMap.entries[idx];
+    uint32_t old_freq = found ? META_GET_FREQ(entry->meta) : 0;
+
     entry->sequence = seq;
     entry->meta = META_ENCODE(freq, len);
+
+    if (old_freq == 1 && freq != 1) freq_one_count--;
+    else if (old_freq != 1 && freq == 1) freq_one_count++;
+    else if (!found && freq == 1) freq_one_count++;
+
     return freq;
 }
+
 
 uint32_t seq_freq_decrement(const uint8_t *seq, uint8_t len) {
     uint64_t hash = XXH3_64bits_withSeed(seq, len, 0);
@@ -96,24 +111,31 @@ uint32_t seq_freq_decrement(const uint8_t *seq, uint8_t len) {
     }
 
     SeqFreqEntry *entry = &seqMap.entries[idx];
-    uint32_t freq = META_GET_FREQ(entry->meta);
+    uint32_t old_freq = META_GET_FREQ(entry->meta);
 
-    if (freq == 0) {
+    if (old_freq == 0) {
         fprintf(stderr, "Invalid decrement — frequency already 0\n");
         abort();
     }
 
-    freq--;
+    uint32_t new_freq = old_freq - 1;
 
-    if (freq == 0) {
+    if (old_freq == 1) {
+        freq_one_count--;  // from 1 to 0
         entry->sequence = NULL;
         entry->meta = 0;
         return 0;
     } else {
-        entry->meta = META_ENCODE(freq, len);
-        return freq;
+        if (new_freq == 1) freq_one_count++;  // from >1 to 1
+        entry->meta = META_ENCODE(new_freq, len);
+        return new_freq;
     }
 }
+
+uint32_t seq_freq_one_count(void) {
+    return freq_one_count;
+}
+
 
 uint32_t seq_freq_get(const uint8_t *seq, uint8_t len) {
     uint64_t hash = XXH3_64bits_withSeed(seq, len, 0);
