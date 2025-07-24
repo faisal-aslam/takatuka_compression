@@ -6,6 +6,7 @@
 #include "seq_freq_map.h"
 #include "shortest_path.h"
 #include "timer.h"
+#include "top_savings.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,11 +50,12 @@ static inline uint8_t RLE_logic(const uint8_t *block, uint32_t block_index, uint
         // remember data of RLE node to be created later on, at the appropriate level.
         rle_info.next_RLE_level = current_level + rle_info.length_of_RLE - 1;
         rle_info.RLE_offset = block_index;
-        return;
+        return 0;
     }
     GraphNode *current_node;
     if (current_level == rle_info.next_RLE_level) {
         current_node = create_node(rle_info.RLE_offset, rle_info.length_of_RLE);
+        current_node->useless = 0;
         current_node->is_RLE = 1;
         current_node->repeat_seq_length = rle_info.repeat_seq_length;
         current_node->length_of_RLE = rle_info.length_of_RLE;
@@ -66,7 +68,7 @@ static inline uint8_t RLE_logic(const uint8_t *block, uint32_t block_index, uint
 }
 
 void process_block(const uint8_t *block, uint32_t block_size) {
-
+    init_top_savings();
     init_graph();
     init_seq_freq_map();
     create_root();
@@ -86,25 +88,28 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         uint8_t max_sequence = MIN(current_level, MAX_WEIGHTS);
         uint8_t start;
         uint8_t created_rle_node = RLE_logic(block, block_index, block_size);
-        if (created_rle_node){
+        if (created_rle_node) {
             max_sequence = 1;
         }
         // Make sequences of specific sizes.
         for (uint8_t seq_len = 1; seq_len <= max_sequence; seq_len++) {
             start = block_index - seq_len + 1;
             current_node = create_node(start, seq_len);
+            current_node->useless = 1;
             if (seq_len > 1) {
-                seq_freq_increment(&block[current_node->offset], seq_len);
+                uint32_t freq = seq_freq_increment(&block[current_node->offset], seq_len);
+                try_insert_top_saving(&block[current_node->offset], seq_len, freq, current_node->node_id);
             }
 #ifdef DEBUG
             print_graph_node(current_node); // print the newly create node.
 #endif
         }
-        
     }
-    
+
 #ifdef DEBUG
     visualize_graph(block); // create graph in DOT for visualization.
 #endif
+    print_top_savings(); // Optional: view results
+
     find_shortest_path_to_sink(block);
 }
