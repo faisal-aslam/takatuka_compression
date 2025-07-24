@@ -95,3 +95,15 @@ void print_top_savings(void) {
         printf("\"\n");
     }
 }
+
+
+int get_top_saving_node_ids(uint32_t *out_ids, int max_count) {
+    int total = 0;
+    for (int i = 0; i < heap.size && total < max_count; i++) {
+        const TopSavingNode *n = &heap.nodes[i];
+        for (int j = 0; j < n->node_count && total < max_count; j++) {
+            out_ids[total++] = n->node_ids[j];
+        }
+    }
+    return total;
+}

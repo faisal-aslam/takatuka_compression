@@ -66,7 +66,17 @@ static inline uint8_t RLE_logic(const uint8_t *block, uint32_t block_index, uint
     }
     return 0;
 }
+static void mark_best_saving_useful(const uint8_t* block) {
+#define MAX_USEFUL_IDS 10000
+    uint32_t useful_ids[MAX_USEFUL_IDS];
 
+    int count = get_top_saving_node_ids(useful_ids, MAX_USEFUL_IDS);
+    for (int i = 0; i < count; i++) {
+        GraphNode *node = get_graph_node(useful_ids[i]);
+        print_node_sequence(node, block);
+        node->useless = 0;
+    }
+}
 void process_block(const uint8_t *block, uint32_t block_size) {
     init_top_savings();
     init_graph();
@@ -95,10 +105,11 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         for (uint8_t seq_len = 1; seq_len <= max_sequence; seq_len++) {
             start = block_index - seq_len + 1;
             current_node = create_node(start, seq_len);
-            current_node->useless = 1;
+            
             if (seq_len > 1) {
-                uint32_t freq = seq_freq_increment(&block[current_node->offset], seq_len);
+                uint32_t freq = seq_freq_increment(&block[current_node->offset], seq_len);                
                 try_insert_top_saving(&block[current_node->offset], seq_len, freq, current_node->node_id);
+                current_node->useless = 1;
             }
 #ifdef DEBUG
             print_graph_node(current_node); // print the newly create node.
@@ -109,6 +120,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #ifdef DEBUG
     visualize_graph(block); // create graph in DOT for visualization.
 #endif
+    mark_best_saving_useful(block);
     print_top_savings(); // Optional: view results
 
     find_shortest_path_to_sink(block);
