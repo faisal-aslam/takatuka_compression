@@ -39,14 +39,14 @@ static inline GraphNode *create_node(uint32_t start, uint8_t length) {
     return node;
 }
 
-static void RLE_logic(const uint8_t *block, uint32_t block_index, uint32_t block_size) {
+static inline uint8_t RLE_logic(const uint8_t *block, uint32_t block_index, uint32_t block_size) {
     // Create RLE node, if any. There could be at most one RLE node per level.
     uint16_t current_level = get_last_level_index();
     if (rle_info.next_RLE_level < current_level && is_RLE_sequence(&rle_info.repeat_seq_length, &rle_info.length_of_RLE,
                                                                    MIN(block_size, 255), block_index, block)) {
         // wait for the right level to create node.
         // do not create any RLE nodes before reaching that level.
-        // remember data of RLE node to be created later on on the appropriate level.
+        // remember data of RLE node to be created later on, at the appropriate level.
         rle_info.next_RLE_level = current_level + rle_info.length_of_RLE - 1;
         rle_info.RLE_offset = block_index;
         return;
@@ -60,7 +60,9 @@ static void RLE_logic(const uint8_t *block, uint32_t block_index, uint32_t block
 #ifdef DEBUG
         print_graph_node(current_node); // print the RLE node.
 #endif
+        return 1;
     }
+    return 0;
 }
 
 void process_block(const uint8_t *block, uint32_t block_size) {
@@ -83,6 +85,10 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         }
         uint8_t max_sequence = MIN(current_level, MAX_WEIGHTS);
         uint8_t start;
+        uint8_t created_rle_node = RLE_logic(block, block_index, block_size);
+        if (created_rle_node){
+            max_sequence = 1;
+        }
         // Make sequences of specific sizes.
         for (uint8_t seq_len = 1; seq_len <= max_sequence; seq_len++) {
             start = block_index - seq_len + 1;
@@ -94,7 +100,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
             print_graph_node(current_node); // print the newly create node.
 #endif
         }
-        RLE_logic(block, block_index, block_size);
+        
     }
     
 #ifdef DEBUG

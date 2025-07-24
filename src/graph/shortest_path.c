@@ -201,6 +201,9 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
     int32_t index = ++path_state.path_size[PATH_CURRENT];
 #ifdef DEBUG
     printf("Push node %u, stack_size=%u\n", node->node_id, index);
+    if (node->node_id == 22) {
+        printf("Stop here \n");
+    }
 #endif    
     CHECK_INDEX(index, "process_node");
     path_state.path_stack[PATH_CURRENT][index] = node->node_id;
@@ -217,9 +220,9 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
 
     double added_cost = calc_cost(node, freq);
     if (node->node_id == 0) added_cost = 0;
-    path_state.cost_stack[PATH_CURRENT][path_state.path_size[PATH_CURRENT]] = added_cost;
+    path_state.cost_stack[PATH_CURRENT][index] = added_cost;
     path_state.path_total_cost[PATH_CURRENT] += added_cost;
-    path_state.path_freqs[PATH_CURRENT][path_state.path_size[PATH_CURRENT]] = freq;
+    path_state.path_freqs[PATH_CURRENT][index] = freq;
     path_state.path_per_node_costs[PATH_CURRENT][index] = added_cost;
 }
 
@@ -266,8 +269,8 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNo
         }
         // Passed all pruning checks, push to stack
         stack[++(*top)] = (StackItem){.node_id = parent->node_id, .node_id_popped = 0};
-        if (*top < 0 || *top >= MIN(total_input_size + 1, BLOCK_SIZE)) { 
-            fprintf(stderr, "ERROR: DFS stack top %d out of bounds [0..%ld]\n", *top, MIN(total_input_size + 1, BLOCK_SIZE)-1);
+        if (*top < 0 || *top >= MIN(total_input_size*2+1, BLOCK_SIZE*2+1)) { 
+            fprintf(stderr, "ERROR: DFS stack top %d out of bounds [0..%ld]\n", *top, MIN(total_input_size*2+1, BLOCK_SIZE*2+1)-1);
             abort();
         }
 
@@ -277,7 +280,7 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNo
 static void set_useless(const uint8_t *block) {
     for (int i = 1; i < get_graph_size(); i++) {
         GraphNode *node = get_graph_node(i);
-        if (node->sequence_length > 1) {
+        if (node->sequence_length > 1 && !node->is_RLE) {
             uint32_t freq = seq_freq_get(&block[node->offset], node->sequence_length);
             if (freq == 1) {
                 node->useless = 1;
@@ -288,11 +291,13 @@ static void set_useless(const uint8_t *block) {
 static inline uint8_t start_fresh_from_another_leaf(int *top, StackItem *main_stack, uint16_t last_level,
                                                     uint32_t node_of_last_level_served, uint32_t *push_count) {
     *top = -1;                                                                     // stack is empty again. Start fresh.
+    init_seq_freq_map(); //reset maps
     initialize_leaf_nodes(main_stack, top, last_level, node_of_last_level_served); // start again from the next leaf.
     if (*top == -1) return 0; // all last level nodes has been served.
     *push_count = 0;
     path_state.path_size[PATH_CURRENT] = -1; // remove current path but keep the best path.
     path_state.path_total_cost[PATH_CURRENT] = 0;
+    
 
     return 1;
 }
@@ -306,8 +311,8 @@ static inline uint8_t start_fresh_from_another_leaf(int *top, StackItem *main_st
  * each node using COST Macro.
  */
 void find_shortest_path_to_sink(const uint8_t *block) {
-    //set_useless(block);
-    long stack_size = MIN(total_input_size + 1, BLOCK_SIZE); // note: there is one extra level with no data. Count it!
+    set_useless(block);
+    uint32_t stack_size = MIN(total_input_size*2+1, BLOCK_SIZE*2+1); // note: there is one extra level with no data. Count it!
     long max_push = 10 * get_graph_size();
     StackItem main_stack[stack_size];
     int top = -1;
@@ -321,10 +326,10 @@ void find_shortest_path_to_sink(const uint8_t *block) {
     initialize_leaf_nodes(main_stack, &top, last_level, 0);
 
     while (top >= 0) {
-        /*if (push_count > max_push && best_count >= 1 &&
+        if (push_count > max_push && best_count >= 1 &&
             !start_fresh_from_another_leaf(&top, main_stack, last_level, node_of_last_level_served, &push_count)) {
             break;
-        }*/
+        }
         StackItem current = main_stack[top--];
 
         if (current.node_id == UINT32_MAX) {
