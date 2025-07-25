@@ -7,7 +7,6 @@ SRCS = \
     src/time.c \
     src/graph/shortest_path.c \
     src/graph/graph.c \
-    src/graph/top_savings.c \
     src/graph/graph_visualizer.c \
     src/files/best_path_view.c \
     src/files/compression/compressed_header.c \
