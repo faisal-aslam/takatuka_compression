@@ -19,11 +19,12 @@
 #define MAX_LEVELS (BLOCK_SIZE+1) //one extra for the root level.
 #define MAX_WEIGHTS SEQ_LENGTH_LIMIT
 
-
 typedef struct {
     uint32_t node_id;
-    uint32_t offset;    
+    uint32_t offset;
+    uint16_t frequency;
     uint16_t node_level;
+    uint16_t min_depth;
     uint8_t useless;
     uint8_t sequence_length;
     uint8_t is_RLE;
@@ -33,9 +34,10 @@ typedef struct {
 
 typedef struct {    
     uint32_t size;
-    uint32_t first_node_of_level[MAX_LEVELS];    
+    uint32_t first_node_of_level[MAX_LEVELS];
     GraphNode nodes[MAX_GRAPH_NODES];
     uint16_t total_levels;
+    uint16_t level_min_depth[MAX_LEVELS];
 } Graph;
 
 extern Graph graph; //always use graph.c definiton.
@@ -57,7 +59,7 @@ void print_graph_node(GraphNode *node);
 void print_node_sequence(GraphNode *node, const uint8_t* block);
 void print_all_nodes(const uint8_t* block);
 void mass_increment_levels(int add_levels);
-void compact_graph(const uint8_t* block, uint8_t* levels_to_keep);
+void compact_graph(const uint8_t* block);
 
 /**
  * @brief Detects Run-Length Encodable (RLE) sequences within a data block
