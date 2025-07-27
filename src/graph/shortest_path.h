@@ -20,7 +20,7 @@ extern Path path_state;
 extern long total_input_size;
 
 // Finds and prints the shortest path from any last-level node to root (node_id = 0)
-void find_shortest_path_to_sink(const uint8_t* block);
+void find_shortest_path_to_sink(const uint8_t* block, uint16_t starting_level);
 
 void free_path_state();
 

@@ -10,8 +10,11 @@
 
 void init_seq_freq_map(void);
 
-uint32_t seq_freq_increment(const uint8_t *seq, uint8_t len);
+
 uint32_t seq_freq_decrement(const uint8_t *seq, uint8_t len);
-uint32_t seq_freq_get(const uint8_t *seq, uint8_t len);
-uint32_t seq_freq_set(const uint8_t *seq, uint8_t len, uint32_t freq);
+uint32_t seq_freq_increment(const uint8_t *seq, uint8_t len, uint32_t node_id);
+uint32_t seq_freq_set(const uint8_t *seq, uint8_t len, uint32_t freq, uint32_t node_id);
+bool seq_freq_get(const uint8_t *seq, uint8_t len, uint32_t *out_freq, uint32_t *out_node_id);
+uint32_t seq_freq_get_with_index(const uint8_t *seq, uint8_t len, uint32_t *out_freq, uint32_t *out_node_id);
+uint32_t seq_freq_increment_with_index(uint32_t idx, uint32_t node_id);
 uint32_t seq_freq_one_count(void);

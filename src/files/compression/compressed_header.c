@@ -23,9 +23,11 @@ static inline bool should_skip_node(const GraphNode* node, uint32_t freq) {
            (node->node_id == 0);
 }
 
-static inline uint8_t sequence_seen(const uint8_t *block, uint8_t length, uint32_t freq) {
-    if (seq_freq_get(block, length) >= 1) return 1;
-    seq_freq_set(block, length, freq); //set it for future use.
+static inline uint8_t sequence_seen(const uint8_t *block, uint8_t length, uint32_t freq2) {
+    uint32_t freq, node_id;
+    seq_freq_get(block, length, &freq, &node_id);
+    if (freq >= 1) return 1;
+    seq_freq_set(block, length, freq2, 0); //set it for future use.
     return 0;
 }
 

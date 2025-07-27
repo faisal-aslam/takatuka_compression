@@ -12,7 +12,8 @@ static const char* LEVEL_COLORS[] = {
 };
 
 static inline uint8_t useful_node(GraphNode* node, const uint8_t *block) {
-    uint32_t freq = seq_freq_get(&block[node->offset], node->sequence_length); 
+    uint32_t freq, node_id;
+    seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id); 
     if (node->sequence_length > 1 && freq == 1) return 0; //not useful.
     return 1;
 }
@@ -42,10 +43,12 @@ static void print_node(FILE* output, const GraphNode* node, const uint8_t *block
 
     fprintf(output, "    %d [label=\"%d\\n", node->node_id, node->node_id);
     print_node_content(output, node, block);
+    uint32_t freq, node_id;
+    seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id); 
     if(!node->is_RLE) {
-        fprintf(output, "\n l=%u", node->node_level);
+        fprintf(output, "\n l=%u, f=%u", node->node_level, freq);
     } else {
-        fprintf(output, "\n l=%u, \nRLE", node->node_level);
+        fprintf(output, "\n l=%u, f=%u, \nRLE", node->node_level, freq);
     }
     fprintf(output, "\", shape=box, style=filled, fillcolor=\"%s\", fontcolor=\"%s\"];\n", 
             fillcolor, fontcolor);

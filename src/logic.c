@@ -107,7 +107,18 @@ void process_block(const uint8_t *block, uint32_t block_size) {
             current_node = create_node(start, seq_len);
 
             if (seq_len > 1) {
-                uint32_t freq = seq_freq_increment(&block[current_node->offset], seq_len);
+                uint32_t freq, old_node_id;
+                uint32_t index = seq_freq_get_with_index(&block[current_node->offset], seq_len, &freq, &old_node_id);
+                if (index != UINT32_MAX) { //found, same sequence already in the map.
+                    GraphNode *old_node = get_graph_node(old_node_id); //get the old node.
+                    if (old_node->node_level <= get_parent_level(current_node)) {
+                        seq_freq_increment_with_index(index, current_node->node_id); // only increment freq if not overlapping
+                        
+                    }
+                } else {
+                    seq_freq_increment(&block[current_node->offset], seq_len, current_node->node_id); //if not in the map then add it.
+                }
+                
                 // try_insert_top_saving(&block[current_node->offset], seq_len, freq, current_node->node_id);
                 // current_node->useless = 1;
             }
@@ -124,5 +135,5 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     // mark_best_saving_useful(block);
     // print_top_savings(); // Optional: view results
 
-    find_shortest_path_to_sink(block);
+    find_shortest_path_to_sink(block, 4);
 }

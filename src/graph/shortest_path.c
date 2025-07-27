@@ -2,6 +2,7 @@
 
 #include "shortest_path.h"
 #include "seq_freq_map.h"
+#include <stdbool.h>
 
 int prune_count = 0;
 
@@ -179,7 +180,8 @@ static inline void backtrack_node(uint32_t node_id, const uint8_t *block) {
     if (node->sequence_length > 1 && !node->is_RLE) {
         uint32_t new_freq = seq_freq_decrement(&block[node->offset], node->sequence_length);        
 #ifdef DEBUG
-        uint32_t freq = seq_freq_get(&block[node->offset], node->sequence_length);
+        uint32_t freq, node_id;
+        seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
         printf("DECR: node_id=%u, new_freq=%u, seq=", node->node_id, freq);
         print_node_sequence(node, block);        
 #endif
@@ -210,7 +212,7 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
 
     uint32_t freq = 1;
     if (node->sequence_length > 1 && !node->is_RLE) {
-        freq = seq_freq_increment(&block[node->offset], node->sequence_length);
+        freq = seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
         // printf("\n node_id=%u, freq=%d \n", node->node_id, freq);
 #ifdef DEBUG
         printf("INCR: node_id=%u, freq=%u, level=%u, seq=", node->node_id, freq, node->node_level);
@@ -229,11 +231,10 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
 /**
  * Initializes the DFS stack with all valid leaf nodes.
  */
-static inline void initialize_leaf_nodes(StackItem *stack, int *top, uint16_t last_level, uint32_t first_node_start) {
+static inline void initialize_leaf_nodes(StackItem *stack, int *top, uint16_t last_level) {
     uint32_t start = get_level_start_id(last_level);
-    uint32_t end = get_level_end_id(last_level);
-    if (start + first_node_start >= end) return;
-    for (uint32_t i = start + first_node_start; i < end; i++) {
+    uint32_t end = get_level_end_id(last_level);    
+    for (uint32_t i = start; i < end; i++) {
         GraphNode *node = get_graph_node(i);
         if (node) {
             stack[++(*top)] = (StackItem){.node_id = i, .node_id_popped = 0};
@@ -281,25 +282,13 @@ static void set_useless(const uint8_t *block) {
     for (int i = 1; i < get_graph_size(); i++) {
         GraphNode *node = get_graph_node(i);
         if (node->sequence_length > 1 && !node->is_RLE) {
-            uint32_t freq = seq_freq_get(&block[node->offset], node->sequence_length);
+            uint32_t freq, node_id;
+            seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
             if (freq == 1) {
                 node->useless = 1;
             }
         }
     }
-}
-static inline uint8_t start_fresh_from_another_leaf(int *top, StackItem *main_stack, uint16_t last_level,
-                                                    uint32_t node_of_last_level_served, uint32_t *push_count) {
-    *top = -1;                                                                     // stack is empty again. Start fresh.
-    init_seq_freq_map(); //reset maps
-    initialize_leaf_nodes(main_stack, top, last_level, node_of_last_level_served); // start again from the next leaf.
-    if (*top == -1) return 0; // all last level nodes has been served.
-    *push_count = 0;
-    path_state.path_size[PATH_CURRENT] = -1; // remove current path but keep the best path.
-    path_state.path_total_cost[PATH_CURRENT] = 0;
-    
-
-    return 1;
 }
 
 /**
@@ -308,28 +297,22 @@ static inline uint8_t start_fresh_from_another_leaf(int *top, StackItem *main_st
  * == 0) in a DAG (Directed Acyclic Graph) representing a compression graph.
  *
  * The path cost is computed based on the frequency and length of sequences at
- * each node using COST Macro.
+ * each node using calc_cost function.
  */
-void find_shortest_path_to_sink(const uint8_t *block) {
+void find_shortest_path_to_sink(const uint8_t *block, uint16_t starting_level) {
     set_useless(block);
     uint32_t stack_size = MIN(total_input_size*2+1, BLOCK_SIZE*2+1); // note: there is one extra level with no data. Count it!
-    long max_push = 10 * get_graph_size();
     StackItem main_stack[stack_size];
-    int top = -1;
-    uint16_t last_level = get_last_level_index();
+    int top = -1;    
+  
     uint32_t back_track_count = 0;
     uint32_t best_count = 0;
     uint32_t push_count = 0;
-    uint32_t node_of_last_level_served = 0;
     path_init(); // Reset path state
-    init_seq_freq_map();
-    initialize_leaf_nodes(main_stack, &top, last_level, 0);
+    //init_seq_freq_map();
+    initialize_leaf_nodes(main_stack, &top, starting_level);
 
     while (top >= 0) {
-        if (push_count > max_push && best_count >= 1 &&
-            !start_fresh_from_another_leaf(&top, main_stack, last_level, node_of_last_level_served, &push_count)) {
-            break;
-        }
         StackItem current = main_stack[top--];
 
         if (current.node_id == UINT32_MAX) {
@@ -340,9 +323,6 @@ void find_shortest_path_to_sink(const uint8_t *block) {
         }
         GraphNode *node = get_graph_node(current.node_id);
         if (node->useless) continue;
-        if (node->node_id >= get_level_start_id(last_level)) { // encountered a leaf node.
-            node_of_last_level_served++;
-        }
 
         // The following pruning is very useful for speed up.
         // In it, we do not explore paths which are worse.

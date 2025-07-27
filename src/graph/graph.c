@@ -16,7 +16,8 @@ Graph graph; // Actual single definition
 
 static inline void set_useless(GraphNode *node, const uint8_t *block) {
     if (node->sequence_length > 1 && !node->is_RLE) {
-        uint16_t freq = (uint16_t)seq_freq_get(&block[node->offset], node->sequence_length);
+        uint32_t freq, node_id;
+        seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
         if (freq <= 1) {
             node->useless = 1;
         } else {
@@ -186,7 +187,7 @@ uint8_t is_RLE_sequence(uint8_t *repeat_seq_length, uint8_t *length_of_RLE, uint
             int base = (max_valid_repeats - 1) * pattern_len;
             int next = base + pattern_len;
 
-            if (next + pattern_len > block_size - offset) {
+            if (next + pattern_len > ((int)block_size - offset)) {
                 break;
             }
 
