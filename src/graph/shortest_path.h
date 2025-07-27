@@ -12,8 +12,9 @@ typedef struct {
     int32_t cost_stack[2][MAX_LEVELS];    // cost per node
     uint32_t path_freqs[2][MAX_LEVELS];   // frequencies per node
     double path_per_node_costs[2][MAX_LEVELS];     // per-node cost
-    int32_t path_size[2];                 // size of each path
+    uint32_t path_size[2];                 // size of each path
     double path_total_cost[2];                  // total cost
+    uint32_t path_total_freq[2];
 } Path;
 
 extern Path path_state;

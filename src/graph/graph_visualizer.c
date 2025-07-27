@@ -4,6 +4,8 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include "seq_freq_map.h"
+
 
 static const char* LEVEL_COLORS[] = {
     "#CBA6F7", "#FFCDD2", "#F8BBD0", "#E1BEE7", "#D1C4E9",
@@ -11,12 +13,6 @@ static const char* LEVEL_COLORS[] = {
     "#DCEDC8", "#FFF9C4", "#FFE0B2", "#FFCCBC", "#D7CCC8"
 };
 
-static inline uint8_t useful_node(GraphNode* node, const uint8_t *block) {
-    uint32_t freq, node_id;
-    seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id); 
-    if (node->sequence_length > 1 && freq == 1) return 0; //not useful.
-    return 1;
-}
 
 static void print_node_content(FILE* output, const GraphNode* node, const uint8_t* block) {
     if (node->sequence_length == 0) {
@@ -62,7 +58,7 @@ static void print_links(FILE* output, const GraphNode* node, const uint8_t* bloc
 
     for (uint16_t i = 0; i < parent_count; i++) {
         GraphNode* parent = &parent_nodes[i];
-        if (!useful_node(parent, block)) continue;    
+        if (parent->useless) continue;    
         fprintf(output, "    %u -> %u;\n", node->node_id, parent->node_id);
         break; // Show only one parent per node
     }
@@ -84,7 +80,7 @@ void visualize_graph(const uint8_t* block) {
     fprintf(output, "  // Nodes\n");
     for (uint32_t i = 0; i < get_graph_size(); i++) {
         GraphNode* node = get_graph_node(i);        
-        if (node && useful_node(node, block)) {
+        if (node && !node->useless) {
             
             print_node(output, node, block);
         }
@@ -100,7 +96,7 @@ void visualize_graph(const uint8_t* block) {
         // Check if this level has any nodes
         for (uint32_t i = 0; i < get_graph_size(); i++) {
             GraphNode* node = get_graph_node(i);            
-            if (node && node->node_level == level && useful_node(node, block)) {
+            if (node && node->node_level == level && !node->useless) {
                 level_has_nodes = true;
                 break;
             }
@@ -115,7 +111,7 @@ void visualize_graph(const uint8_t* block) {
         for (uint32_t i = 0; i < get_graph_size(); i++) {
             GraphNode *node = get_graph_node(i);
           
-            if (node && node->node_level == level && useful_node(node, block)) {
+            if (node && node->node_level == level && !node->useless) {
                 fprintf(output, "    %d;\n", node->node_id);
             }
         }
@@ -128,7 +124,7 @@ void visualize_graph(const uint8_t* block) {
     for (uint32_t i = 0; i < get_graph_size(); i++) {
         GraphNode* node = get_graph_node(i);
         
-        if (node && node->node_id != 0 && useful_node(node, block)) {
+        if (node && node->node_id != 0 && !node->useless) {
             print_links(output, node, block);
         }
     }

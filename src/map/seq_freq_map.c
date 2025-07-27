@@ -191,3 +191,55 @@ uint32_t seq_freq_increment_with_index(uint32_t idx, uint32_t node_id) {
 
     return new_freq;
 }
+
+
+uint32_t seq_freq_decrement_with_index(uint32_t idx) {
+    if (idx >= SEQ_MAP_CAPACITY || seqMap.entries[idx].sequence == NULL) {
+        fprintf(stderr, "Invalid or empty index in seq_freq_decrement_with_index\n");
+        abort();
+    }
+
+    SeqFreqEntry *entry = &seqMap.entries[idx];
+    uint32_t old_freq = META_GET_FREQ(entry->meta);
+
+    if (old_freq == 0) {
+        fprintf(stderr, "Invalid decrement — frequency already 0\n");
+        abort();
+    }
+
+    uint8_t len = META_GET_LEN(entry->meta);
+    uint32_t new_freq = old_freq - 1;
+
+    if (old_freq == 1) {
+        freq_one_count--;  // from 1 to 0
+        entry->sequence = NULL;
+        entry->meta = 0;
+        entry->node_id = 0;
+        return 0;
+    } else {
+        if (new_freq == 1) freq_one_count++;  // from >1 to 1
+        entry->meta = META_ENCODE(new_freq, len);
+        return new_freq;
+    }
+}
+
+
+uint32_t seq_freq_set_existing(uint32_t idx, uint32_t freq, uint32_t node_id) {
+    if (idx >= SEQ_MAP_CAPACITY || seqMap.entries[idx].sequence == NULL) {
+        fprintf(stderr, "Invalid or empty index in seq_freq_set_existing\n");
+        abort();
+    }
+
+    SeqFreqEntry *entry = &seqMap.entries[idx];
+    uint32_t old_freq = META_GET_FREQ(entry->meta);
+    uint8_t len = META_GET_LEN(entry->meta);
+
+    entry->meta = META_ENCODE(freq, len);
+    entry->node_id = node_id;
+
+    // update freq_one_count accurately
+    if (old_freq == 1 && freq != 1) freq_one_count--;
+    else if (old_freq != 1 && freq == 1) freq_one_count++;
+
+    return freq;
+}

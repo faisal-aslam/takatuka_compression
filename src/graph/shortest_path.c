@@ -80,23 +80,32 @@ static inline void path_init() {
     path_state.path_total_cost[PATH_BEST] = INT32_MAX;
     path_state.path_size[PATH_CURRENT] = -1;
     path_state.path_size[PATH_BEST] = -1;
+    path_state.path_total_freq[PATH_BEST] = 0;
+    path_state.path_total_freq[PATH_CURRENT] = 0;
 }
 
 /**
  * Updates the best path if the current path is better.
  */
 static inline uint8_t update_best_path() {
-    uint8_t ret;
-    if (seq_freq_one_count() > 0) {
-        ret = 0;
-    } else if (path_state.path_total_cost[PATH_CURRENT] < path_state.path_total_cost[PATH_BEST] ||
-               (path_state.path_total_cost[PATH_CURRENT] == path_state.path_total_cost[PATH_BEST] &&
-                path_state.path_size[PATH_CURRENT] < path_state.path_size[PATH_BEST])) {
+    uint8_t ret = 0;
 
-        int32_t size = path_state.path_size[PATH_CURRENT] + 1;
+    int32_t cost_current = path_state.path_total_cost[PATH_CURRENT];
+    int32_t cost_best = path_state.path_total_cost[PATH_BEST];
+    int32_t size_current = path_state.path_size[PATH_CURRENT];
+    int32_t size_best = path_state.path_size[PATH_BEST];
+    uint32_t freq_current = path_state.path_total_freq[PATH_CURRENT];
+    uint32_t freq_best = path_state.path_total_freq[PATH_BEST];
+
+    if (cost_current < cost_best || (cost_current == cost_best && size_current < size_best) ||
+        (cost_current == cost_best && size_current == size_best && freq_current > freq_best)) {
+
+        int32_t size = size_current + 1;
         CHECK_INDEX(size - 1, "update_best_path copy");
-        path_state.path_total_cost[PATH_BEST] = path_state.path_total_cost[PATH_CURRENT];
-        path_state.path_size[PATH_BEST] = path_state.path_size[PATH_CURRENT];
+
+        path_state.path_total_cost[PATH_BEST] = cost_current;
+        path_state.path_size[PATH_BEST] = size_current;
+        path_state.path_total_freq[PATH_BEST] = freq_current;
 
         memcpy(path_state.path_stack[PATH_BEST], path_state.path_stack[PATH_CURRENT], size * sizeof(uint32_t));
         memcpy(path_state.cost_stack[PATH_BEST], path_state.cost_stack[PATH_CURRENT], size * sizeof(int32_t));
@@ -105,9 +114,8 @@ static inline uint8_t update_best_path() {
                size * sizeof(double));
 
         ret = 1;
-    } else {
-        ret = 0;
     }
+
     return ret;
 }
 
@@ -128,7 +136,8 @@ static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t
     const double *per_node_costs = path_state.path_per_node_costs[idx];
 
     printf("\n=== %s PATH ===\n", isCurrent ? "CURRENT" : "BEST");
-    printf("Path size = %d, Total cost = %.2lf\n", size + 1, total_cost);
+    printf("Path size = %d, Total cost = %.2lf, Total freq=%u \n", size + 1, total_cost,
+           path_state.path_total_freq[idx]);
     printf("Node chain (node_id, level):\n");
 
     for (int32_t i = size; i >= 0; i--) {
@@ -178,12 +187,13 @@ static inline void backtrack_node(uint32_t node_id, const uint8_t *block) {
     path_state.path_total_cost[PATH_CURRENT] -= path_state.cost_stack[PATH_CURRENT][index];
 
     if (node->sequence_length > 1 && !node->is_RLE) {
-        uint32_t new_freq = seq_freq_decrement(&block[node->offset], node->sequence_length);        
+        uint32_t new_freq = seq_freq_decrement(&block[node->offset], node->sequence_length);
+        path_state.path_total_freq[PATH_CURRENT] -= new_freq + 1; // remove what it was before the decrement.
 #ifdef DEBUG
         uint32_t freq, node_id;
         seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
         printf("DECR: node_id=%u, new_freq=%u, seq=", node->node_id, freq);
-        print_node_sequence(node, block);        
+        print_node_sequence(node, block);
 #endif
     }
 
@@ -191,7 +201,6 @@ static inline void backtrack_node(uint32_t node_id, const uint8_t *block) {
 #ifdef DEBUG
     printf("backtrack node %u, stack_size=%u\n", node->node_id, path_state.path_size[PATH_CURRENT]);
 #endif
-
 }
 
 /**
@@ -206,17 +215,17 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
     if (node->node_id == 22) {
         printf("Stop here \n");
     }
-#endif    
+#endif
     CHECK_INDEX(index, "process_node");
     path_state.path_stack[PATH_CURRENT][index] = node->node_id;
 
-    uint32_t freq = 1;
+    uint32_t freq = 0;
     if (node->sequence_length > 1 && !node->is_RLE) {
         freq = seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
         // printf("\n node_id=%u, freq=%d \n", node->node_id, freq);
 #ifdef DEBUG
         printf("INCR: node_id=%u, freq=%u, level=%u, seq=", node->node_id, freq, node->node_level);
-        print_node_sequence(node, block);        
+        print_node_sequence(node, block);
 #endif
     }
 
@@ -226,14 +235,63 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
     path_state.path_total_cost[PATH_CURRENT] += added_cost;
     path_state.path_freqs[PATH_CURRENT][index] = freq;
     path_state.path_per_node_costs[PATH_CURRENT][index] = added_cost;
+    path_state.path_total_freq[PATH_CURRENT] += freq;
 }
 
+static void decrement_freq(uint16_t last_level, const uint8_t *block) {
+    GraphNode *current_node;
+    for (uint32_t id = 0; id < get_graph_size(); id++) {
+        current_node = get_graph_node(id);
+        if (current_node->sequence_length > 1 && !current_node->is_RLE) {
+            uint32_t freq, old_node_id;
+            uint32_t index = seq_freq_get_with_index(&block[current_node->offset], current_node->sequence_length, &freq,
+                                                     &old_node_id);
+            if (index != UINT32_MAX) {
+                continue;
+            }
+            if (old_node_id > current_node->node_id) {
+                seq_freq_set_existing(index, freq - 1, current_node->node_id);
+            } else {
+                GraphNode *old_node = get_graph_node(old_node_id); // get the old node.
+                if (old_node->node_level <= get_parent_level(current_node)) {
+                    seq_freq_set_existing(index, freq - 1, current_node->node_id);
+                }
+            }
+        }
+
+        if (current_node->node_level > last_level) {
+            break;
+        }
+    }
+}
+
+static void bookkeeping_best_path(uint16_t last_level, const uint8_t *block) {
+    // Step 1. Mark all nodes useless.
+    GraphNode *node;
+    for (uint32_t id = 0; id < get_graph_size(); id++) {
+        node = get_graph_node(id);
+        if (node->node_level > last_level) {
+            break;
+        }
+        node->useless = 1; // it is useless.
+    }
+    // only nodes in the best path are marked useful
+    for (uint32_t i = 0; i <= path_state.path_size[PATH_BEST]; i++) {
+        node = get_graph_node(path_state.path_stack[PATH_BEST][i]);
+        printf("\n Marking useful %u\n", node->node_id);
+        node->useless = 0;
+        if (node->sequence_length > 1 && !node->is_RLE) {
+            seq_freq_increment(&block[node->offset], node->sequence_length,
+                               node->node_id); // increment their frequencies.
+        }
+    }
+}
 /**
  * Initializes the DFS stack with all valid leaf nodes.
  */
 static inline void initialize_leaf_nodes(StackItem *stack, int *top, uint16_t last_level) {
     uint32_t start = get_level_start_id(last_level);
-    uint32_t end = get_level_end_id(last_level);    
+    uint32_t end = get_level_end_id(last_level);
     for (uint32_t i = start; i < end; i++) {
         GraphNode *node = get_graph_node(i);
         if (node) {
@@ -262,7 +320,8 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNo
 
     for (uint8_t i = 0; i < parent_count; i++) {
         GraphNode *parent = &parents[i];
-        if (should_prune(parent) /*&& (node->node_level < get_last_level_index()-1 && parent->min_depth == node->min_depth)*/) {
+        if (should_prune(
+                parent) /*&& (node->node_level < get_last_level_index()-1 && parent->min_depth == node->min_depth)*/) {
 #ifdef DEBUG
             printf("Prune by cost: parent node_id=%u\n", parent->node_id);
 #endif
@@ -270,23 +329,10 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNo
         }
         // Passed all pruning checks, push to stack
         stack[++(*top)] = (StackItem){.node_id = parent->node_id, .node_id_popped = 0};
-        if (*top < 0 || *top >= MIN(total_input_size*2+1, BLOCK_SIZE*2+1)) { 
-            fprintf(stderr, "ERROR: DFS stack top %d out of bounds [0..%ld]\n", *top, MIN(total_input_size*2+1, BLOCK_SIZE*2+1)-1);
+        if (*top < 0 || *top >= MIN(total_input_size * 2 + 1, BLOCK_SIZE * 2 + 1)) {
+            fprintf(stderr, "ERROR: DFS stack top %d out of bounds [0..%ld]\n", *top,
+                    MIN(total_input_size * 2 + 1, BLOCK_SIZE * 2 + 1) - 1);
             abort();
-        }
-
-    }
-}
-
-static void set_useless(const uint8_t *block) {
-    for (int i = 1; i < get_graph_size(); i++) {
-        GraphNode *node = get_graph_node(i);
-        if (node->sequence_length > 1 && !node->is_RLE) {
-            uint32_t freq, node_id;
-            seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
-            if (freq == 1) {
-                node->useless = 1;
-            }
         }
     }
 }
@@ -300,17 +346,19 @@ static void set_useless(const uint8_t *block) {
  * each node using calc_cost function.
  */
 void find_shortest_path_to_sink(const uint8_t *block, uint16_t starting_level) {
-    set_useless(block);
-    uint32_t stack_size = MIN(total_input_size*2+1, BLOCK_SIZE*2+1); // note: there is one extra level with no data. Count it!
+
+    uint32_t stack_size = TOTAL_GRAPH_NODES(SEQ_LENGTH_LIMIT, starting_level + 1) *
+                          2; // note: there is one extra level with no data. Count it!
     StackItem main_stack[stack_size];
-    int top = -1;    
-  
+    int top = -1;
+
     uint32_t back_track_count = 0;
     uint32_t best_count = 0;
     uint32_t push_count = 0;
     path_init(); // Reset path state
-    //init_seq_freq_map();
+
     initialize_leaf_nodes(main_stack, &top, starting_level);
+    decrement_freq(starting_level, block);
 
     while (top >= 0) {
         StackItem current = main_stack[top--];
@@ -352,6 +400,7 @@ void find_shortest_path_to_sink(const uint8_t *block, uint16_t starting_level) {
                 printf("Saved the path %d with cost: %lf\n", best_count, path_state.path_total_cost[PATH_CURRENT]);
                 printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count,
                        back_track_count, push_count);
+                print_path(0, 1, block);
                 push_count = 0;
                 back_track_count = 0;
                 prune_count = 0;
@@ -367,6 +416,7 @@ void find_shortest_path_to_sink(const uint8_t *block, uint16_t starting_level) {
     // Final output
     // #ifdef DEBUG
     print_path(0, 1, block);
+    bookkeeping_best_path(starting_level, block);
     // #endif
     // free_path_state();
 }
