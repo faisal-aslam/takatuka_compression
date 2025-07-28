@@ -42,6 +42,7 @@ void compact_graph(const uint8_t *block) {
 
     for (uint32_t read_idx = 0; read_idx < graph.size; read_idx++) {
         GraphNode *node = &graph.nodes[read_idx];
+        set_useless(node, block);
 #ifdef DEBUG
         printf("\nCompacting node=%u\n", node->node_id);
 #endif
@@ -60,9 +61,7 @@ void compact_graph(const uint8_t *block) {
             current_level = node->node_level;
             level_start = write_idx;
         }
-
-        // Skip nodes from excluded levels. Skip useless nodes too, unless we force-include them.
-        set_useless(node, block);
+        
         if (node->useless) {
 #ifdef DEBUG
             printf("\nNode Excluded=%u, level=%u\n", node->node_id, node->node_level);

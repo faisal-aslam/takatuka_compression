@@ -180,12 +180,10 @@ static inline void backtrack_node(uint32_t node_id, const uint8_t *block) {
     path_state.path_total_cost[PATH_CURRENT] -= path_state.cost_stack[PATH_CURRENT][index];
 
     if (node->sequence_length > 1 && !node->is_RLE) {
-        uint32_t new_freq = seq_freq_decrement(&block[node->offset], node->sequence_length);
-        path_state.path_total_freq[PATH_CURRENT] -= new_freq + 1; // remove what it was before the decrement.
+        uint32_t new_freq = node->frequency;
+        path_state.path_total_freq[PATH_CURRENT] -= new_freq;
 #ifdef DEBUG
-        uint32_t freq, node_id;
-        seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
-        printf("DECR: node_id=%u, new_freq=%u, seq=", node->node_id, freq);
+        printf("DECR: node_id=%u, new_freq=%u, seq=", node->node_id, new_freq);
         print_node_sequence(node, block);
 #endif
     }
@@ -204,22 +202,16 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
 
     int32_t index = ++path_state.path_size[PATH_CURRENT];
 #ifdef DEBUG
-    printf("Push node %u, stack_size=%u\n", node->node_id, index);
-    if (node->node_id == 22) {
-        printf("Stop here \n");
-    }
+    printf("Push node %u, stack_size=%u, seq=\n", node->node_id, index);
+    print_node_sequence(node, block);
 #endif
     CHECK_INDEX(index, "process_node");
     path_state.path_stack[PATH_CURRENT][index] = node->node_id;
 
     uint32_t freq = 0;
     if (node->sequence_length > 1 && !node->is_RLE) {
-        freq = seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
+        freq = node->frequency;
         // printf("\n node_id=%u, freq=%d \n", node->node_id, freq);
-#ifdef DEBUG
-        printf("INCR: node_id=%u, freq=%u, level=%u, seq=", node->node_id, freq, node->node_level);
-        print_node_sequence(node, block);
-#endif
     }
 
     double added_cost = calc_savings(node, freq);
