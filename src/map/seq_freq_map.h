@@ -20,3 +20,4 @@ uint32_t seq_freq_increment_with_index(uint32_t idx, uint32_t node_id);
 uint32_t seq_freq_decrement_with_index(uint32_t idx);
 uint32_t seq_freq_one_count(void);
 uint32_t seq_freq_set_existing(uint32_t idx, uint32_t freq, uint32_t node_id);
+void seq_freq_map_print(void);

@@ -243,3 +243,23 @@ uint32_t seq_freq_set_existing(uint32_t idx, uint32_t freq, uint32_t node_id) {
 
     return freq;
 }
+
+
+void seq_freq_map_print(void) {
+    printf("---- SeqFreqMap Contents ----\n");
+    for (uint32_t i = 0; i < SEQ_MAP_CAPACITY; i++) {
+        const SeqFreqEntry *entry = &seqMap.entries[i];
+        if (entry->sequence != NULL) {
+            uint8_t len = META_GET_LEN(entry->meta);
+            uint32_t freq = META_GET_FREQ(entry->meta);
+            if (freq <= 1) continue;
+
+            printf("[%04u] freq=%u, len=%u, node_id=%u, seq=", i, freq, len, entry->node_id);
+            for (uint8_t j = 0; j < len; j++) {
+                printf("%c", entry->sequence[j]);
+            }
+            printf("\n");
+        }
+    }
+    printf("-----------------------------\n");
+}
