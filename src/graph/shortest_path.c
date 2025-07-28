@@ -408,10 +408,10 @@ void find_shortest_path_to_sink(const uint8_t *block, uint16_t starting_level) {
         // Explore parents
         add_parent_nodes_to_stack(main_stack, &top, node, block);
     }
-    printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count,
-           back_track_count, push_count);
     // Final output
 #ifdef DEBUG
+    printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count,
+           back_track_count, push_count);
     print_path(0, 1, block);
 #endif
     bookkeeping_best_path(starting_level, block);

@@ -229,7 +229,7 @@ void print_node_sequence(GraphNode *node, const uint8_t *block) {
     for (int i = 0; i < node->sequence_length; i++) {
         printf("%c", block[node->offset + i]);
         if (i + 1 < node->sequence_length) {
-            printf(",");
+            //printf(",");
         }
     }
     printf("\n");
