@@ -50,13 +50,13 @@ PROFILE_COMPRESS_TARGET := compress-profile
 include used_sources.mk
 
 COMPRESS_SRCS := $(filter-out $(SRC_DIR)/decompress/decompress.c, $(SRCS))
-DECOMPRESS_SRCS := $(SRC_DIR)/decompress/decompress.c
+
 
 # ===== Object Files =====
 COMPRESS_RELEASE_OBJS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/release/%.o,$(COMPRESS_SRCS))
 COMPRESS_DEBUG_OBJS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/debug/%.o,$(COMPRESS_SRCS))
 COMPRESS_PROFILE_OBJS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/profile/%.o,$(COMPRESS_SRCS))
-DECOMPRESS_OBJ := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/release/%.o,$(DECOMPRESS_SRCS))
+
 
 # ===== Dependency Files =====
 DEPS := $(COMPRESS_RELEASE_OBJS:.o=.d) $(COMPRESS_DEBUG_OBJS:.o=.d) \
@@ -82,10 +82,9 @@ compress: $(COMPRESS_RELEASE_OBJS)
 	@echo "Built compression tool: ./$(COMPRESS_TARGET)"
 	@size $(COMPRESS_TARGET)
 
-decompress: $(DECOMPRESS_OBJ)
-	$(CC) $(LDFLAGS_RELEASE) -o $(DECOMPRESS_TARGET) $^ -lm
-	@echo "Built decompression tool: ./$(DECOMPRESS_TARGET)"
-	@size $(DECOMPRESS_TARGET)
+decompress:
+	$(MAKE) -C $(SRC_DIR)/files/decompression
+
 
 $(DEBUG_COMPRESS_TARGET): $(COMPRESS_DEBUG_OBJS)
 	$(CC) $(LDFLAGS_DEBUG) -o $@ $^ -lm

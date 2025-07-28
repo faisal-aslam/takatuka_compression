@@ -1,9 +1,13 @@
-# Decompress-specific optimizations
+# src/files/decompression/Makefile
+
 CC = gcc
+
 CFLAGS = -O3 -march=native -flto -fomit-frame-pointer \
          -funroll-loops -fprefetch-loop-arrays \
          -fno-stack-protector -D_FORTIFY_SOURCE=0 \
-         -I../..
+         -I../../files \
+		 -I../../files/compression \
+         -I../../files/decompression
 
 LDFLAGS = -flto -Wl,-O3 -Wl,--as-needed
 
@@ -18,13 +22,14 @@ ifneq ($(SSE4),)
     CFLAGS += -msse4.2
 endif
 
-SRC = decompress.c
+include decompress_sources.mk
+
 TARGET = decompress
 
 all: $(TARGET)
 
-$(TARGET): $(SRC)
-	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+$(TARGET): $(SRCS)
+	$(CC) $(CFLAGS) $(SRCS) -o $(TARGET) $(LDFLAGS)
 
 clean:
 	rm -f $(TARGET) *.o

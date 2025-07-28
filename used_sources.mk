@@ -14,10 +14,5 @@ SRCS = \
     src/files/compression/code_map.c \
     src/files/code_classes.c \
     src/files/compression/bit_writer.c \
-    src/files/decompression/bit_reader.c \
-    src/files/decompression/decompress.c \
-    src/files/decompression/decoder_map.c \
-    src/files/decompression/decompress_header.c \
-    src/files/decompression/decompress_body.c \
     src/logic.c \
     src/main.c

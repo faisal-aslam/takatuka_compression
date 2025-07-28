@@ -3,6 +3,4 @@
 #pragma once
 // Rest of header content
 
-#include "best_path_view.h"
-
-void read_compressed_file(const char* filename, const uint8_t* block) ;
+void read_compressed_file(const char* input_file_name, const char* output_file_name);
