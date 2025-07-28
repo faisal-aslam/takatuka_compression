@@ -21,11 +21,11 @@ typedef struct {
 Path path_state;
 
 /**
- * @brief Calculates the storage saving 
+ * @brief Calculates the storage saving
  *
  * @param node Pointer to graph node being evaluated
  * @param frequency Frequency count of this sequence in the data
- * @return double Storage saving in bytes 
+ * @return double Storage saving in bytes
  */
 static inline double calc_savings(GraphNode *node, uint32_t frequency) {
 
@@ -38,8 +38,8 @@ static inline double calc_savings(GraphNode *node, uint32_t frequency) {
     // Handle RLE case first (uses different saving model)
     if (node->is_RLE) {
         // RLE saving: pattern length + 1 byte for repeat count
-        double ret = (node->length_of_RLE / node->repeat_seq_length)*2;
-        return (ret*ret*ret);
+        double ret = (node->length_of_RLE / node->repeat_seq_length) * 2;
+        return (ret * ret * ret);
     }
 
     // Main saving calculation branches
@@ -141,12 +141,12 @@ void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block
         const uint32_t freq = freqs[i];
         const double saving = per_node_savings[i];
 
-        printf(" -> ");
-        if (node->is_RLE) {
-            printf("RLE=YES ");
-        }
+        //printf(" -> ");
+        //if (node->is_RLE) {
+          //  printf("RLE=YES ");
+        //}
 
-        printf("| id=%u len=%u freq=%u saving=%.2f | ", node->node_id, len, freq, saving);
+        //printf("| id=%u len=%u freq=%u saving=%.2f | ", node->node_id, len, freq, saving);
 
         print_node_sequence(node, block);
 
@@ -173,7 +173,6 @@ static inline void backtrack_node(uint32_t node_id, const uint8_t *block) {
     path_state.path_per_node_savings[PATH_CURRENT][index] = 0;
     path_state.path_freqs[PATH_CURRENT][index] = 0;
     path_state.path_size[PATH_CURRENT]--;
-
 
 #ifdef DEBUG
     printf("backtrack node %u, stack_size=%u\n", node->node_id, path_state.path_size[PATH_CURRENT]);
@@ -216,7 +215,7 @@ static void decrement_freq(uint16_t last_level, const uint8_t *block) {
             uint32_t freq, old_node_id;
             uint32_t index = seq_freq_get_with_index(&block[current_node->offset], current_node->sequence_length, &freq,
                                                      &old_node_id);
-            if (index == UINT32_MAX) { //not found.
+            if (index == UINT32_MAX) { // not found.
                 continue;
             }
             if (old_node_id > current_node->node_id) {
@@ -253,8 +252,11 @@ static void bookkeeping_best_path(uint16_t last_level, const uint8_t *block) {
 #endif
         node->useless = 0;
         if (node->sequence_length > 1 && !node->is_RLE) {
-            seq_freq_increment(&block[node->offset], node->sequence_length,
-                               node->node_id); // increment their frequencies.
+            uint32_t freq, node_id;
+            uint32_t index = seq_freq_get_with_index(&block[node->offset], node->sequence_length, &freq, &node_id);
+            if (index != UINT32_MAX) {
+                seq_freq_set_existing(index, freq + 1, node->node_id);
+            }
         }
     }
 }
@@ -328,8 +330,8 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     uint32_t best_count = 0;
     uint32_t push_count = 0;
     decrement_freq(starting_level, block);
-    path_init(); // Reset path state    
-    
+    path_init(); // Reset path state
+
     initialize_leaf_nodes(main_stack, &top, starting_level);
     while (top >= 0) {
         StackItem current = main_stack[top--];

@@ -231,7 +231,6 @@ void print_node_sequence(GraphNode *node, const uint8_t *block) {
             //printf(",");
         }
     }
-    printf("\n");
 }
 
 void print_graph_node(GraphNode *node) {
