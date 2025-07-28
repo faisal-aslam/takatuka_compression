@@ -24,7 +24,7 @@ endif
 
 include decompress_sources.mk
 
-TARGET = decompress
+TARGET := $(abspath ../../../decompress)
 
 all: $(TARGET)
 
