@@ -71,8 +71,11 @@ all: compress decompress
 release: compress decompress
 	@echo "Built release versions: ./$(COMPRESS_TARGET) and ./$(DECOMPRESS_TARGET)"
 
-debug: $(DEBUG_COMPRESS_TARGET) decompress
-	@echo "Built debug version: ./$(DEBUG_COMPRESS_TARGET) and ./$(DECOMPRESS_TARGET)"
+debug: $(DEBUG_COMPRESS_TARGET) decompress-debug
+	@echo "Built debug version: ./$(DEBUG_COMPRESS_TARGET) and ./decompress-debug"
+
+decompress-debug:
+	$(MAKE) -C $(SRC_DIR)/files/decompression DEBUG=1
 
 profile: $(PROFILE_COMPRESS_TARGET)
 	@echo "Built profiling version: ./$(PROFILE_COMPRESS_TARGET) (use with gprof)"

@@ -134,14 +134,13 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #endif
 
     uint16_t last_level = get_last_level_index();
+    uint16_t level;
     if (last_level >= 4) {
-        for (uint16_t level = 4; level <= last_level; level += 4) {
+        for (level = 4; level <= last_level; level += 4) {
             find_shortest_path_to_sink(block, level);
-            // seq_freq_map_print();
-
-#ifdef DEBUG
-            visualize_graph(block); // create graph in DOT for visualization.
-#endif
+        }
+        if (level-4 < last_level) {
+            find_shortest_path_to_sink(block, last_level);
         }
     } else {
         find_shortest_path_to_sink(block, last_level);
