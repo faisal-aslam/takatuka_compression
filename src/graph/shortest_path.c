@@ -70,7 +70,7 @@ static inline void path_init() {
     path_state.path_size[PATH_CURRENT] = -1;
     path_state.path_size[PATH_BEST] = -1;
     path_state.path_total_cost[PATH_CURRENT] = 0;
-    path_state.path_total_cost[PATH_BEST] = 0;
+    path_state.path_total_cost[PATH_BEST] = -1;
     path_state.path_size[PATH_CURRENT] = -1;
     path_state.path_size[PATH_BEST] = -1;
     path_state.path_total_freq[PATH_BEST] = 0;
@@ -118,7 +118,7 @@ static inline uint8_t update_best_path() {
  * @param shouldPrintData If true, prints sequence details as well
  * @param block Pointer to input block (for sequence data)
  */
-static void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block) {
+void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block) {
     const int idx = isCurrent ? PATH_CURRENT : PATH_BEST;
     const int32_t size = path_state.path_size[idx];
     CHECK_INDEX(size, "print_path");

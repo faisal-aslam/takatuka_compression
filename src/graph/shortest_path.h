@@ -25,3 +25,5 @@ void find_shortest_path_to_sink(const uint8_t* block, uint16_t starting_level);
 
 void free_path_state();
 
+void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block);
+
