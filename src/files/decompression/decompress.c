@@ -39,10 +39,11 @@ void read_compressed_file(const char* input_file_name, const char* output_file_n
     }
     BitReader reader;
     bitreader_attach_file(&reader, file, HEADER_BUFFER_SIZE);
-
+    
     read_header_and_create_decoder_map(&reader);   // shared reader + buffer
+    printf("Read header \n");
     read_body_using_decoder_map(&reader, output_file_name);          // reuses buffer + position
-
+    printf("Read body \n");
     bitreader_close(&reader);    
     fclose(file);
 }
