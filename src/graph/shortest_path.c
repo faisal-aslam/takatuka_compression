@@ -37,7 +37,7 @@ Path path_state;
  * @param frequency Frequency count of this sequence in the data
  * @return double Storage cost in bytes (always >= 0)
  */
-static inline double calc_cost(GraphNode *node, uint32_t frequency) {
+static inline double calc_savings(GraphNode *node, uint32_t frequency) {
 
     // Branchless design for common cases - reduces pipeline stalls
     const uint8_t len = node->sequence_length;
@@ -48,24 +48,17 @@ static inline double calc_cost(GraphNode *node, uint32_t frequency) {
     // Handle RLE case first (uses different cost model)
     if (node->is_RLE) {
         // RLE cost: pattern length + 1 byte for repeat count
-        return node->repeat_seq_length + 1;
+        return (node->length_of_RLE / node->repeat_seq_length) * 2;
     }
 
     // Main cost calculation branches
     if (len <= 1) {
         // Cases: 0 bytes = 0 cost, 1 byte = 1 cost
-        base_cost = len;
+        base_cost = 0;
     } else {
         // Multi-byte case: 1 byte if repeated, n+1 bytes if unique
-        base_cost = (frequency > 1) ? 1 : (len + 1);
+        base_cost = frequency * node->sequence_length * node->sequence_length;
     }
-
-// Debug verification (compiled out in release builds)
-#ifdef DEBUG
-    if (base_cost == 0 && len != 0) {
-        printf("WARNING: Zero cost for non-zero length node %u\n", node->node_id);
-    }
-#endif
 
     return base_cost;
 }
@@ -77,7 +70,7 @@ static inline void path_init() {
     path_state.path_size[PATH_CURRENT] = -1;
     path_state.path_size[PATH_BEST] = -1;
     path_state.path_total_cost[PATH_CURRENT] = 0;
-    path_state.path_total_cost[PATH_BEST] = INT32_MAX;
+    path_state.path_total_cost[PATH_BEST] = 0;
     path_state.path_size[PATH_CURRENT] = -1;
     path_state.path_size[PATH_BEST] = -1;
     path_state.path_total_freq[PATH_BEST] = 0;
@@ -97,7 +90,7 @@ static inline uint8_t update_best_path() {
     uint32_t freq_current = path_state.path_total_freq[PATH_CURRENT];
     uint32_t freq_best = path_state.path_total_freq[PATH_BEST];
 
-    if (cost_current < cost_best || (cost_current == cost_best && size_current < size_best) ||
+    if (cost_current > cost_best || (cost_current == cost_best && size_current < size_best) ||
         (cost_current == cost_best && size_current == size_best && freq_current > freq_best)) {
 
         int32_t size = size_current + 1;
@@ -229,7 +222,7 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
 #endif
     }
 
-    double added_cost = calc_cost(node, freq);
+    double added_cost = calc_savings(node, freq);
     if (node->node_id == 0) added_cost = 0;
     path_state.cost_stack[PATH_CURRENT][index] = added_cost;
     path_state.path_total_cost[PATH_CURRENT] += added_cost;
@@ -278,7 +271,9 @@ static void bookkeeping_best_path(uint16_t last_level, const uint8_t *block) {
     // only nodes in the best path are marked useful
     for (uint32_t i = 0; i <= path_state.path_size[PATH_BEST]; i++) {
         node = get_graph_node(path_state.path_stack[PATH_BEST][i]);
+#ifdef DEBUG
         printf("\n Marking useful %u\n", node->node_id);
+#endif
         node->useless = 0;
         if (node->sequence_length > 1 && !node->is_RLE) {
             seq_freq_increment(&block[node->offset], node->sequence_length,
@@ -397,10 +392,12 @@ void find_shortest_path_to_sink(const uint8_t *block, uint16_t starting_level) {
 #endif
             if (update_best_path()) {
                 best_count++;
+#ifdef DEBUG
                 printf("Saved the path %d with cost: %lf\n", best_count, path_state.path_total_cost[PATH_CURRENT]);
                 printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count,
                        back_track_count, push_count);
                 print_path(0, 1, block);
+#endif
                 push_count = 0;
                 back_track_count = 0;
                 prune_count = 0;
@@ -414,10 +411,11 @@ void find_shortest_path_to_sink(const uint8_t *block, uint16_t starting_level) {
     printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count,
            back_track_count, push_count);
     // Final output
-    // #ifdef DEBUG
+#ifdef DEBUG
     print_path(0, 1, block);
+#endif
     bookkeeping_best_path(starting_level, block);
-    // #endif
+
     // free_path_state();
 }
 
