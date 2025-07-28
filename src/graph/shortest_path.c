@@ -38,7 +38,8 @@ static inline double calc_savings(GraphNode *node, uint32_t frequency) {
     // Handle RLE case first (uses different saving model)
     if (node->is_RLE) {
         // RLE saving: pattern length + 1 byte for repeat count
-        return (node->length_of_RLE / node->repeat_seq_length) * 2;
+        double ret = (node->length_of_RLE / node->repeat_seq_length)*2;
+        return (ret*ret*ret);
     }
 
     // Main saving calculation branches
@@ -47,7 +48,7 @@ static inline double calc_savings(GraphNode *node, uint32_t frequency) {
         base_saving = 0;
     } else {
         // Multi-byte case: savings is based on length and frequency.
-        base_saving = frequency * node->sequence_length * node->sequence_length;
+        base_saving = frequency * node->sequence_length * node->sequence_length * node->sequence_length;
     }
 
     return base_saving;
@@ -58,8 +59,8 @@ static inline double calc_savings(GraphNode *node, uint32_t frequency) {
  */
 static inline void path_init() {
     memset(&path_state, 0, sizeof(Path));
-    path_state.path_size[PATH_CURRENT] = 0;
-    path_state.path_size[PATH_BEST] = 0;
+    path_state.path_size[PATH_CURRENT] = -1;
+    path_state.path_size[PATH_BEST] = -1;
     path_state.path_total_saving[PATH_CURRENT] = 0;
     path_state.path_total_saving[PATH_BEST] = -1;
     path_state.path_total_freq[PATH_BEST] = 0;
@@ -172,7 +173,7 @@ static inline void backtrack_node(uint32_t node_id, const uint8_t *block) {
     path_state.path_per_node_savings[PATH_CURRENT][index] = 0;
     path_state.path_freqs[PATH_CURRENT][index] = 0;
     path_state.path_size[PATH_CURRENT]--;
-    assert(path_state.path_size[PATH_CURRENT] >= 0);
+
 
 #ifdef DEBUG
     printf("backtrack node %u, stack_size=%u\n", node->node_id, path_state.path_size[PATH_CURRENT]);
@@ -187,7 +188,7 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
 
     int32_t index = ++path_state.path_size[PATH_CURRENT];
 #ifdef DEBUG
-    printf("Push node %u, stack_size=%u, seq=\n", node->node_id, index);
+    printf("Push node %u, stack_size=%u, seq=", node->node_id, index);
     print_node_sequence(node, block);
 #endif
     CHECK_INDEX(index, "process_node");
@@ -326,11 +327,10 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     uint32_t back_track_count = 0;
     uint32_t best_count = 0;
     uint32_t push_count = 0;
-    path_init(); // Reset path state
-
-    initialize_leaf_nodes(main_stack, &top, starting_level);
     decrement_freq(starting_level, block);
-
+    path_init(); // Reset path state    
+    
+    initialize_leaf_nodes(main_stack, &top, starting_level);
     while (top >= 0) {
         StackItem current = main_stack[top--];
 

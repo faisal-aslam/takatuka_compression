@@ -129,11 +129,12 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     if (last_level >= 4) {
         for (level = 4; level <= last_level; level += 4) {            
             find_best_saving_path(block, level);
+            printf("Processed level %u\n", level);
 #ifdef DEBUG
             printf("Processed level %u\n", level);
             print_path(0, 1, block);
 #endif      
-            break;
+            
         }
         if (level-4 < last_level) {            
             find_best_saving_path(block, last_level);
@@ -145,5 +146,6 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     } else {
         find_best_saving_path(block, last_level);
     }
+    print_path(0, 1, block);
     write_compressed_output("out.bin", block);
 }
