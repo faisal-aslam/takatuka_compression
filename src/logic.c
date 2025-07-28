@@ -66,17 +66,7 @@ static inline uint8_t RLE_logic(const uint8_t *block, uint32_t block_index, uint
     }
     return 0;
 }
-/*static void mark_best_saving_useful(const uint8_t* block) {
-#define MAX_USEFUL_IDS 10000
-    uint32_t useful_ids[MAX_USEFUL_IDS];
 
-    int count = get_top_saving_node_ids(useful_ids, MAX_USEFUL_IDS);
-    for (int i = 0; i < count; i++) {
-        GraphNode *node = get_graph_node(useful_ids[i]);
-        print_node_sequence(node, block);
-        node->useless = 0;
-    }
-}*/
 void process_block(const uint8_t *block, uint32_t block_size) {
     // init_top_savings();
     init_graph();
@@ -132,26 +122,28 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #ifdef DEBUG
     visualize_graph(block); // create graph in DOT for visualization.
 #endif
+    //if(1) return;
 
     uint16_t last_level = get_last_level_index();
     uint16_t level;
     if (last_level >= 4) {
         for (level = 4; level <= last_level; level += 4) {            
-            find_shortest_path_to_sink(block, level);
+            find_best_saving_path(block, level);
 #ifdef DEBUG
             printf("Processed level %u\n", level);
             print_path(0, 1, block);
-#endif            
+#endif      
+            break;
         }
         if (level-4 < last_level) {            
-            find_shortest_path_to_sink(block, last_level);
+            find_best_saving_path(block, last_level);
 #ifdef DEBUG
             printf("Processed level %u\n", last_level);
             print_path(0, 1, block);
 #endif            
         }
     } else {
-        find_shortest_path_to_sink(block, last_level);
+        find_best_saving_path(block, last_level);
     }
     write_compressed_output("out.bin", block);
 }
