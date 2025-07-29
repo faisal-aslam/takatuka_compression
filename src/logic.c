@@ -98,12 +98,16 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 
             if (seq_len > 1) {
                 uint32_t freq, old_node_id;
+                current_node->useless = 1; //by default the node is useless.
                 uint32_t index = seq_freq_get_with_index(&block[current_node->offset], seq_len, &freq, &old_node_id);
                 if (index != UINT32_MAX) {                             // found, same sequence already in the map.
                     GraphNode *old_node = get_graph_node(old_node_id); // get the old node.
-                    if (old_node->node_level <= get_parent_level(current_node)) {
-                        seq_freq_increment_with_index(index,
-                                                      current_node->node_id); // only increment freq if not overlapping
+                    //as exist multiple times in the graph so mark the old and new node both useful now.
+                    current_node->useless = 0;
+                    old_node->useless = 0;
+                    // only increment freq if not overlapping
+                    if (old_node->node_level <= get_parent_level(current_node)) {                        
+                        seq_freq_increment_with_index(index, current_node->node_id); 
                     }
                 } else {
                     seq_freq_increment(&block[current_node->offset], seq_len,
@@ -147,7 +151,11 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     } else {
         find_best_saving_path(block, last_level);
     }
+    
     final_book_keeping(block);
+#ifdef DEBUG
+    visualize_graph(block); // create graph in DOT for visualization.
+#endif
     print_path(0, 1, block);
     write_compressed_output("out.bin", block);
 }

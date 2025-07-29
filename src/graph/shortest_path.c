@@ -160,8 +160,8 @@ void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block
  * Handles backtracking by removing the node from current path,
  * decreasing its frequency if needed, and updating savings.
  */
-static inline void backtrack_node(uint32_t node_id, const uint8_t *block) {
-    GraphNode *node = get_graph_node(node_id);
+static inline void backtrack_node() {
+    
 
     int32_t index = path_state.path_size[PATH_CURRENT];
     CHECK_INDEX(index, "backtrack_node");
@@ -174,9 +174,6 @@ static inline void backtrack_node(uint32_t node_id, const uint8_t *block) {
     path_state.path_freqs[PATH_CURRENT][index] = 0;
     path_state.path_size[PATH_CURRENT]--;
 
-#ifdef DEBUG
-    printf("backtrack node %u, path_size=%u\n", node->node_id, path_state.path_size[PATH_CURRENT]);
-#endif
 }
 
 /**
@@ -331,7 +328,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
 
         if (current.node_id == UINT32_MAX) {
             // Backtrack marker encountered
-            backtrack_node(current.node_id_popped, block);
+            backtrack_node();
             back_track_count++;
             continue;
         }

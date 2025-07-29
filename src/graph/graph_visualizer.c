@@ -50,7 +50,7 @@ static void print_node(FILE* output, const GraphNode* node, const uint8_t *block
             fillcolor, fontcolor);
 }
 
-static void print_links(FILE* output, const GraphNode* node, const uint8_t* block) {
+static void print_links(FILE* output, const GraphNode* node) {
     if (node->node_id == 0 ) return;
 
     uint16_t parent_count = get_parent_nodes_count((GraphNode*)node);
@@ -125,7 +125,7 @@ void visualize_graph(const uint8_t* block) {
         GraphNode* node = get_graph_node(i);
         
         if (node && node->node_id != 0 && !node->useless) {
-            print_links(output, node, block);
+            print_links(output, node);
         }
     }
 
