@@ -225,13 +225,6 @@ static void bookkeeping_best_path(uint16_t last_level, const uint8_t *block) {
         printf("\n Marking useful %u\n", node->node_id);
 #endif
         node->useless = 0;
-        if (node->sequence_length > 1 && !node->is_RLE) {
-            uint32_t freq, node_id;
-            uint32_t index = seq_freq_get_with_index(&block[node->offset], node->sequence_length, &freq, &node_id);
-            if (index != UINT32_MAX) {
-                seq_freq_set_existing(index, freq + 1, node->node_id);
-            }
-        }
     }
 }
 /**
