@@ -26,3 +26,4 @@ void free_path_state();
 
 void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block);
 
+void final_book_keeping(const uint8_t* block);

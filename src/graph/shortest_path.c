@@ -386,6 +386,34 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     // free_path_state();
 }
 
+void final_book_keeping(const uint8_t* block) {
+    init_seq_freq_map();
+    GraphNode *node;
+    const uint32_t* path = path_state.path_stack[PATH_BEST];
+    uint32_t path_len = path_state.path_size[PATH_BEST];
+
+    // Pass 1: Count sequence frequencies
+    for (uint32_t i = 0; i <= path_len; i++) {
+        node = get_graph_node(path[i]);
+        if (node->sequence_length > 1 && !node->is_RLE) {
+            seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
+        }
+    }
+
+    // Pass 2: Store frequencies per node
+    for (uint32_t i = 0; i <= path_len; i++) {
+        node = get_graph_node(path[i]);
+        if (node->sequence_length > 1 && !node->is_RLE) {
+            uint32_t freq, node_id_unused;
+            seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id_unused);
+            path_state.path_freqs[PATH_BEST][i] = freq;
+        } else {
+            path_state.path_freqs[PATH_BEST][i] = 1; // or other sentinel if needed
+        }
+    }
+}
+
+
 void free_path_state() {
     // Only if path_state has dynamic allocations
     memset(&path_state, 0, sizeof(Path));

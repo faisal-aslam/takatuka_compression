@@ -147,6 +147,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     } else {
         find_best_saving_path(block, last_level);
     }
+    final_book_keeping(block);
     print_path(0, 1, block);
     write_compressed_output("out.bin", block);
 }
