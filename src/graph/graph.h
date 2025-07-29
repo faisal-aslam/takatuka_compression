@@ -22,7 +22,6 @@
 typedef struct {
     uint32_t node_id;
     uint32_t offset;
-    uint16_t frequency;
     uint16_t node_level;
     uint16_t min_depth;
     uint8_t useless;

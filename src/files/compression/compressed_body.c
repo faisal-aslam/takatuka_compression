@@ -124,7 +124,7 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
     printf("[DEBUG] Body writing complete, flushing...\n");
 #endif
 
-    bitwriter_flush(writer);
+
     if (!bitwriter_write_to_file(writer, file_to_write)) {
         fprintf(stderr, "Failed to write final body data to file\n");
         exit(EXIT_FAILURE);

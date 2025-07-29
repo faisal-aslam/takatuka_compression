@@ -69,9 +69,6 @@ bool bitwriter_write(BitWriter* bw, uint32_t value, uint8_t num_bits
 }
 
 
-void bitwriter_flush(BitWriter* bw) {
-  //
-}
 
 size_t bitwriter_bytes_written(const BitWriter* bw) {
     return bw->byte_pos + (bw->bit_pos != 0 ? 1 : 0);

@@ -14,7 +14,6 @@ typedef struct {
 } BitWriter;
 
 void bitwriter_init(BitWriter* bw, uint8_t* buffer, size_t size);
-void bitwriter_flush(BitWriter* bw);
 size_t bitwriter_bytes_written(const BitWriter* bw);
 bool bitwriter_write_to_file(const BitWriter* bw, FILE* fp);
 void bitwriter_print_state(const BitWriter* bw);

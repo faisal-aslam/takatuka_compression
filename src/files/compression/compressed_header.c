@@ -128,7 +128,7 @@ void populate_header(BestPathView best_path, const uint8_t* block,
 #ifdef DEBUG
         printf("[DEBUG] No candidates found for header\n");
 #endif
-        bitwriter_flush(writer);
+        
         if (!bitwriter_write_to_file(writer, file_to_write)) {
             fprintf(stderr, "Failed to write empty header\n");
             exit(EXIT_FAILURE);
@@ -222,7 +222,7 @@ void populate_header(BestPathView best_path, const uint8_t* block,
 #endif
 
     bitwriter_overwrite_at(writer, header_start_bit, candidate_count, 16);    
-    bitwriter_flush(writer);
+   
     
     
     if (!bitwriter_write_to_file(writer, file_to_write)) {

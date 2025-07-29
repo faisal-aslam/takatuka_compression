@@ -13,7 +13,6 @@
 #define SAFE_BITWRITE(bw, value, bits, file, bitstr)                                                                   \
     do {                                                                                                               \
         if (!bitwriter_write(bw, value, bits, bitstr)) {                                                               \
-            bitwriter_flush(bw);                                                                                       \
             if (!bitwriter_write_to_file(bw, file)) {                                                                  \
                 fprintf(stderr, "Failed to write buffer to file\n");                                                   \
                 exit(EXIT_FAILURE);                                                                                    \
@@ -29,7 +28,6 @@
 #define SAFE_BITWRITE(bw, value, bits, file, bitstr_unused)                                                            \
     do {                                                                                                               \
         if (!bitwriter_write(bw, value, bits)) {                                                                       \
-            bitwriter_flush(bw);                                                                                       \
             if (!bitwriter_write_to_file(bw, file)) {                                                                  \
                 fprintf(stderr, "Failed to write buffer to file\n");                                                   \
                 exit(EXIT_FAILURE);                                                                                    \
@@ -42,6 +40,7 @@
         }                                                                                                              \
     } while (0)
 #endif
+
 
 
 /**

@@ -20,8 +20,6 @@ static inline void set_useless(GraphNode *node, const uint8_t *block) {
         seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
         if (freq <= 1) {
             node->useless = 1;
-        } else {
-            node->frequency = freq;
         }
     }
 }

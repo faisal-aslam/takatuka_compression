@@ -189,14 +189,14 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
 #ifdef DEBUG
     printf("Push node %u, stack_size=%u, seq=", node->node_id, index);
     print_node_sequence(node, block);
+    printf("\n");
 #endif
     CHECK_INDEX(index, "process_node");
     path_state.path_stack[PATH_CURRENT][index] = node->node_id;
 
-    uint32_t freq = 0;
-    if (node->sequence_length > 1 && !node->is_RLE) {
-        freq = node->frequency;
-        // printf("\n node_id=%u, freq=%d \n", node->node_id, freq);
+    uint32_t freq = 0, node_id;
+    if (node->sequence_length > 1 && !node->is_RLE) {        
+        seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);        
     }
 
     double added_saving = calc_savings(node, freq);
@@ -270,6 +270,10 @@ static inline void initialize_leaf_nodes(StackItem *stack, int *top, uint16_t la
         GraphNode *node = get_graph_node(i);
         if (node) {
             stack[++(*top)] = (StackItem){.node_id = i, .node_id_popped = 0};
+#ifdef DEBUG
+            printf("Leafs: at stack position %d, we put the node %u\n", *top, node->node_id);
+            print_graph_node(node);
+#endif            
         }
     }
 }
@@ -303,6 +307,10 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNo
         }
         // Passed all pruning checks, push to stack
         stack[++(*top)] = (StackItem){.node_id = parent->node_id, .node_id_popped = 0};
+#ifdef DEBUG
+        printf(" Added parent at %i \n", *top);
+        print_graph_node(node);
+#endif        
         if (*top < 0 || *top >= MIN(total_input_size * 2 + 1, BLOCK_SIZE * 2 + 1)) {
             fprintf(stderr, "ERROR: DFS stack top %d out of bounds [0..%ld]\n", *top,
                     MIN(total_input_size * 2 + 1, BLOCK_SIZE * 2 + 1) - 1);
