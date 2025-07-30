@@ -86,7 +86,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
             abort();
         }
         uint8_t max_sequence = MIN(current_level, MAX_WEIGHTS);
-        uint8_t start;
+        uint32_t start;
         uint8_t created_rle_node = RLE_logic(block, block_index, block_size);
         if (created_rle_node) {
             max_sequence = 1;
