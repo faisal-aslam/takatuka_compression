@@ -113,9 +113,6 @@ void process_block(const uint8_t *block, uint32_t block_size) {
                     seq_freq_increment(&block[current_node->offset], seq_len,
                                        current_node->node_id); // if not in the map then add it.
                 }
-
-                // try_insert_top_saving(&block[current_node->offset], seq_len, freq, current_node->node_id);
-                // current_node->useless = 1;
             }
 #ifdef DEBUG
             print_graph_node(current_node); // print the newly create node.
@@ -126,7 +123,6 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #ifdef DEBUG
     visualize_graph(block); // create graph in DOT for visualization.
 #endif
-    // if(1) return;
 
     uint16_t last_level = get_last_level_index();
     uint16_t level;
