@@ -3,6 +3,7 @@
 #include "shortest_path.h"
 #include "seq_freq_map.h"
 #include <stdbool.h>
+#include <math.h>
 
 int prune_count = 0;
 

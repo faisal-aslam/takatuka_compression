@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h> // for file size
+#include <string.h>  // for memset
+
 
 long total_input_size;
 
