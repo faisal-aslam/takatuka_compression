@@ -48,8 +48,7 @@ static inline double calc_savings(GraphNode *node, uint32_t frequency) {
         base_saving = 0;
     } else {
         // Multi-byte case: savings is based on length and frequency.
-        base_saving = frequency * node->sequence_length * sqrt((double)node->sequence_length);
-
+        base_saving = (frequency - 1) * node->sequence_length * sqrt((double)node->sequence_length);
     }
 
     return base_saving;
@@ -162,7 +161,6 @@ void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block
  * decreasing its frequency if needed, and updating savings.
  */
 static inline void backtrack_node() {
-    
 
     int32_t index = path_state.path_size[PATH_CURRENT];
     CHECK_INDEX(index, "backtrack_node");
@@ -174,7 +172,6 @@ static inline void backtrack_node() {
     path_state.path_per_node_savings[PATH_CURRENT][index] = 0;
     path_state.path_freqs[PATH_CURRENT][index] = 0;
     path_state.path_size[PATH_CURRENT]--;
-
 }
 
 /**
@@ -193,8 +190,8 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
     path_state.path_stack[PATH_CURRENT][index] = node->node_id;
 
     uint32_t freq = 0, node_id;
-    if (node->sequence_length > 1 && !node->is_RLE) {        
-        seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);        
+    if (node->sequence_length > 1 && !node->is_RLE) {
+        seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
     }
 
     double added_saving = calc_savings(node, freq);
@@ -205,24 +202,36 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
     path_state.path_total_freq[PATH_CURRENT] += freq;
 }
 
-
 static void bookkeeping_best_path(uint16_t last_level, const uint8_t *block) {
     // Step 1. Mark all nodes useless.
     GraphNode *node;
-    for (uint32_t id = 0; id < get_graph_size(); id++) {
+    uint32_t start_id = get_level_start_id(last_level - MAX_BRUTE_FORCE_PATH);
+    uint32_t end_id = get_level_end_id(last_level);
+    for (uint32_t id = start_id; id < end_id; id++) {
         node = get_graph_node(id);
-        if (node->node_level > last_level) {
-            break;
+        if (!node->useless) {
+            node->useless = 1; // mark it useless.
+            if (node->sequence_length > 1 && !node->is_RLE) {
+                uint32_t freq, node_id;
+                uint32_t index = seq_freq_get_with_index(&block[node->offset], node->sequence_length, &freq, &node_id);
+                if (freq > 1) {
+                    seq_freq_set_existing(index, freq - 1, node_id);
+                }
+            }
         }
-        node->useless = 1; // it is useless.
     }
     // only nodes in the best path are marked useful
     for (uint32_t i = 0; i <= path_state.path_size[PATH_BEST]; i++) {
-        node = get_graph_node(path_state.path_stack[PATH_BEST][i]);
+        uint32_t node_id = path_state.path_stack[PATH_BEST][i];
+        if (node_id < start_id) continue;
+        node = get_graph_node(node_id);
 #ifdef DEBUG
-        printf("\n Marking useful %u\n", node->node_id);
+        printf("\n Marking useful %u\n", node_id);
 #endif
         node->useless = 0;
+        if (node->sequence_length > 1 && !node->is_RLE) {
+            seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
+        }
     }
 }
 /**
@@ -238,7 +247,7 @@ static inline void initialize_leaf_nodes(StackItem *stack, int *top, uint16_t la
 #ifdef DEBUG
             printf("Leafs: at stack position %d, we put the node %u\n", *top, node->node_id);
             print_graph_node(node);
-#endif            
+#endif
         }
     }
 }
@@ -275,7 +284,7 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNo
 #ifdef DEBUG
         printf(" Added parent at %i \n", *top);
         print_graph_node(parent);
-#endif        
+#endif
         if (*top < 0 || *top >= MIN(total_input_size * 2 + 1, BLOCK_SIZE * 2 + 1)) {
             fprintf(stderr, "ERROR: DFS stack top %d out of bounds [0..%ld]\n", *top,
                     MIN(total_input_size * 2 + 1, BLOCK_SIZE * 2 + 1) - 1);
@@ -295,8 +304,8 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNo
 void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
 
     // note: there is one extra level with no data. Count it!
-    uint32_t stack_size = TOTAL_GRAPH_NODES(SEQ_LENGTH_LIMIT+1, starting_level + 1) * 2; 
-    
+    uint32_t stack_size = TOTAL_GRAPH_NODES(SEQ_LENGTH_LIMIT + 1, starting_level + 1) * 2;
+
     StackItem main_stack[stack_size];
     int top = -1;
 
@@ -310,8 +319,9 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     while (top >= 0) {
         StackItem current = main_stack[top--];
 #ifdef DEBUG
-        printf("pop stack node_id=%u, from top=%d, node_id_popped=%u\n", current.node_id, top+1, current.node_id_popped);
-#endif        
+        printf("pop stack node_id=%u, from top=%d, node_id_popped=%u\n", current.node_id, top + 1,
+               current.node_id_popped);
+#endif
 
         if (current.node_id == UINT32_MAX) {
             // Backtrack marker encountered
@@ -339,8 +349,8 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
         // Push backtrack marker
         main_stack[++top] = (StackItem){.node_id = UINT32_MAX, .node_id_popped = current.node_id};
 #ifdef DEBUG
-            printf("Push in stack position %d backrack for node=%u\n", top, node->node_id);
-#endif            
+        printf("Push in stack position %d backrack for node=%u\n", top, node->node_id);
+#endif
 
         // If reached root node (ID 0), check and update best path
         if (current.node_id == 0) {
@@ -377,10 +387,10 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     // free_path_state();
 }
 
-void final_book_keeping(const uint8_t* block) {
+void final_book_keeping(const uint8_t *block) {
     init_seq_freq_map();
     GraphNode *node;
-    const uint32_t* path = path_state.path_stack[PATH_BEST];
+    const uint32_t *path = path_state.path_stack[PATH_BEST];
     uint32_t path_len = path_state.path_size[PATH_BEST];
 
     // Pass 1: Count sequence frequencies
@@ -403,7 +413,6 @@ void final_book_keeping(const uint8_t* block) {
         }
     }
 }
-
 
 void free_path_state() {
     // Only if path_state has dynamic allocations

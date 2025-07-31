@@ -98,16 +98,16 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 
             if (seq_len > 1) {
                 uint32_t freq, old_node_id;
-                current_node->useless = 1; //by default the node is useless.
+                current_node->useless = 1; // by default the node is useless.
                 uint32_t index = seq_freq_get_with_index(&block[current_node->offset], seq_len, &freq, &old_node_id);
                 if (index != UINT32_MAX) {                             // found, same sequence already in the map.
                     GraphNode *old_node = get_graph_node(old_node_id); // get the old node.
-                    //as exist multiple times in the graph so mark the old and new node both useful now.
-                    current_node->useless = 0;
-                    old_node->useless = 0;
+                    // as exist multiple times in the graph so mark the old and new node both useful now.
                     // only increment freq if not overlapping
-                    if (old_node->node_level <= get_parent_level(current_node)) {                        
-                        seq_freq_increment_with_index(index, current_node->node_id); 
+                    if (old_node->node_level <= get_parent_level(current_node)) {
+                        seq_freq_increment_with_index(index, current_node->node_id);
+                        current_node->useless = 0;
+                        old_node->useless = 0;
                     }
                 } else {
                     seq_freq_increment(&block[current_node->offset], seq_len,
@@ -126,32 +126,31 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #ifdef DEBUG
     visualize_graph(block); // create graph in DOT for visualization.
 #endif
-    //if(1) return;
+    // if(1) return;
 
     uint16_t last_level = get_last_level_index();
     uint16_t level;
-    if (last_level >= 4) {
-        for (level = 4; level <= last_level; level += 4) {            
+    if (last_level >= MAX_BRUTE_FORCE_PATH) {
+        for (level = MAX_BRUTE_FORCE_PATH; level <= last_level; level += MAX_BRUTE_FORCE_PATH) {
             find_best_saving_path(block, level);
             printf("Processed level %u\n", level);
 #ifdef DEBUG
             printf("Processed level %u\n", level);
             print_path(0, 1, block);
-#endif      
-            
+#endif
         }
-        if (level-4 < last_level) {            
+        if (level - MAX_BRUTE_FORCE_PATH < last_level) {
             find_best_saving_path(block, last_level);
             printf("Processed level %u\n", level);
 #ifdef DEBUG
             printf("Processed level %u\n", last_level);
             print_path(0, 1, block);
-#endif            
+#endif
         }
     } else {
         find_best_saving_path(block, last_level);
     }
-    
+    print_path(0, 1, block);
     final_book_keeping(block);
 #ifdef DEBUG
     visualize_graph(block); // create graph in DOT for visualization.

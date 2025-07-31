@@ -20,6 +20,7 @@
 #define SEQ_LENGTH_START 2
 #define SEQ_LENGTH_LIMIT 128 //a.k.a k
 #define BLOCK_SIZE 64000
+#define MAX_BRUTE_FORCE_PATH 4
 
 _Static_assert(SEQ_LENGTH_LIMIT <= 254, "SEQ_LENGTH_LIMIT must be ≤ 254");
 _Static_assert(BLOCK_SIZE <= 65535, "BLOCK_SIZE must be ≤ 65,535");
