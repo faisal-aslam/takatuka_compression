@@ -1,12 +1,11 @@
 // main.c
 
-
-#include <stdlib.h>
-#include <stdio.h>
-#include "logic.h"
 #include "constants.h"
+#include "logic.h"
 #include "timer.h"
-#include <sys/stat.h>  // for file size
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h> // for file size
 
 long total_input_size;
 
@@ -42,13 +41,16 @@ int main(int argc, char *argv[]) {
     // Read and process blocks
     while (1) {
         size_t bytesRead = fread(block, 1, BLOCK_SIZE, file);
-        if (bytesRead == 0)
-            break;
+        if (bytesRead == 0) break;
+
+        // Clear unread tail in final block
+        if (bytesRead < BLOCK_SIZE) {
+            memset(block + bytesRead, 0, BLOCK_SIZE - bytesRead);
+        }
 
         process_block(block, (uint32_t)bytesRead);
         total_processed += bytesRead;
 
-        // Compute and print progress
         int percent = (int)(((double)total_processed / total_input_size) * 100.0);
         if (percent != last_percent) {
             printf("\rTotal Progress: %3d%%", percent);

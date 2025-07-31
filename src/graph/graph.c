@@ -14,16 +14,6 @@
 
 Graph graph; // Actual single definition
 
-static inline void set_useless(GraphNode *node, const uint8_t *block) {
-    if (node->sequence_length > 1 && !node->is_RLE) {
-        uint32_t freq, node_id;
-        seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
-        if (freq <= 1) {
-            node->useless = 1;
-        }
-    }
-}
-
 void compact_graph(const uint8_t *block) {
     assert(graph.size == 0 || (graph.nodes[0].node_id == 0 && !graph.nodes[0].useless));
 
@@ -40,7 +30,6 @@ void compact_graph(const uint8_t *block) {
 
     for (uint32_t read_idx = 0; read_idx < graph.size; read_idx++) {
         GraphNode *node = &graph.nodes[read_idx];
-        set_useless(node, block);
 #ifdef DEBUG
         printf("\nCompacting node=%u\n", node->node_id);
 #endif
@@ -59,7 +48,7 @@ void compact_graph(const uint8_t *block) {
             current_level = node->node_level;
             level_start = write_idx;
         }
-        
+
         if (node->useless) {
 #ifdef DEBUG
             printf("\nNode Excluded=%u, level=%u\n", node->node_id, node->node_level);
@@ -98,9 +87,9 @@ void compact_graph(const uint8_t *block) {
     // Finalize last level
     graph.first_node_of_level[current_level] = level_start;
 
-//#ifdef DEBUG
+    // #ifdef DEBUG
     printf("\nGraph size before compaction %u and after =%u\n", graph.size, write_idx);
-//#endif
+    // #endif
 
     graph.size = write_idx;
 }
@@ -183,8 +172,7 @@ uint8_t is_RLE_sequence(uint8_t *repeat_seq_length, uint8_t *length_of_RLE, uint
         while (valid) {
             int base = (max_valid_repeats - 1) * pattern_len;
             int next = base + pattern_len;
-
-            if (next + pattern_len > ((int)block_size - offset)) {
+            if ((uint32_t)(next + pattern_len) > (block_size - offset)) {
                 break;
             }
 
@@ -226,7 +214,7 @@ void print_node_sequence(GraphNode *node, const uint8_t *block) {
     for (int i = 0; i < node->sequence_length; i++) {
         printf("%c", block[node->offset + i]);
         if (i + 1 < node->sequence_length) {
-            //printf(",");
+            // printf(",");
         }
     }
 }
