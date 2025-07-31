@@ -20,6 +20,7 @@ typedef struct {
 } StackItem;
 
 Path path_state;
+static StackItem main_stack[MAX_GRAPH_NODES*2+1];
 
 /**
  * @brief Calculates the storage saving
@@ -303,11 +304,7 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNo
  * each node using calc_saving function.
  */
 void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
-
-    // note: there is one extra level with no data. Count it!
-    uint32_t stack_size = TOTAL_GRAPH_NODES(SEQ_LENGTH_LIMIT + 1, starting_level + 1) * 2;
-
-    StackItem main_stack[stack_size];
+  
     int top = -1;
 
     uint32_t back_track_count = 0;

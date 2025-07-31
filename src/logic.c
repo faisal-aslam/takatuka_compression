@@ -129,7 +129,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     if (last_level >= MAX_BRUTE_FORCE_PATH) {
         for (level = MAX_BRUTE_FORCE_PATH; level <= last_level; level += MAX_BRUTE_FORCE_PATH) {
             find_best_saving_path(block, level);
-            printf("Processed level %u\n", level);
+            //printf("Processed level %u\n", level);
 #ifdef DEBUG
             printf("Processed level %u\n", level);
             print_path(0, 1, block);
@@ -137,7 +137,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         }
         if (level - MAX_BRUTE_FORCE_PATH < last_level) {
             find_best_saving_path(block, last_level);
-            printf("Processed level %u\n", level);
+            //printf("Processed level %u\n", level);
 #ifdef DEBUG
             printf("Processed level %u\n", last_level);
             print_path(0, 1, block);
