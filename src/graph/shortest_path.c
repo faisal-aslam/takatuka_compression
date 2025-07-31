@@ -48,7 +48,8 @@ static inline double calc_savings(GraphNode *node, uint32_t frequency) {
         base_saving = 0;
     } else {
         // Multi-byte case: savings is based on length and frequency.
-        base_saving = frequency * node->sequence_length * node->sequence_length;
+        base_saving = frequency * node->sequence_length * sqrt((double)node->sequence_length);
+
     }
 
     return base_saving;
