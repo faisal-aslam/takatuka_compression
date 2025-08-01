@@ -49,11 +49,12 @@ static inline uint32_t get_level_end_id(uint16_t level);
 static inline uint16_t get_last_level_index(void); 
 static inline GraphNode* get_graph_node(uint32_t node_id);
 static inline GraphNode* get_next_node(void);
-static inline uint8_t create_graph_level(void);
+static inline uint16_t create_graph_level(void);
 static inline uint32_t get_graph_size(void);
 static inline GraphNode* get_parent_nodes(GraphNode* node);
 static inline uint16_t get_parent_level(GraphNode* node);
 static inline void reset_graph(void);
+static inline uint8_t get_parent_nodes_count_by_level_and_length(uint16_t level, uint8_t seq_length);
 void print_graph_node(GraphNode *node);
 void print_node_sequence(GraphNode *node, const uint8_t* block);
 void print_all_nodes(const uint8_t* block);
@@ -136,6 +137,7 @@ static inline uint16_t get_last_level_index(void)  {
 
 static inline uint16_t get_parent_level(GraphNode* node) {    
     uint16_t parent_level =  node->node_level-node->sequence_length; 
+
     if (!node || parent_level == UINT16_MAX ||  parent_level > MAX_LEVELS) {
         fprintf(stderr, "illegal parent level");
         abort();
@@ -153,17 +155,42 @@ static inline GraphNode* get_graph_node(uint32_t node_id) {
 }
 
 
-static inline uint8_t create_graph_level(void) {
+static inline uint16_t create_graph_level(void) {
     if (graph.total_levels < MAX_LEVELS) {
         graph.first_node_of_level[graph.total_levels] = graph.size;
         graph.total_levels++;
-        return 1;
+        return graph.total_levels-1;
     }
+    fprintf(stderr, "Illegal level created \n");
+    abort();
     return 0;
 }
 
+static inline uint8_t get_parent_nodes_count_by_level_and_length(uint16_t level, uint8_t seq_length) {
+    // Ensure the level is valid and large enough for a sequence of length `seq_length`
+    if (level == 0 || seq_length == 0 || seq_length > level) {
+        return 0;
+    }
+
+    uint16_t parent_level = level - seq_length;
+
+    if (parent_level >= graph.total_levels) {
+        return 0;
+    }
+
+    uint32_t count = total_nodes_at_level(parent_level);
+
+    if (count > SEQ_LENGTH_LIMIT + 1) {
+        fprintf(stderr, "Illegal number of parent nodes at hypothetical level=%u (seq_length=%u)\n",
+                level, seq_length);
+        abort();
+    }
+
+    return (uint8_t)count;
+}
 
 static inline uint32_t total_nodes_at_level(uint16_t level) {
+
     return (get_level_end_id(level) - get_level_start_id(level));
 }
 

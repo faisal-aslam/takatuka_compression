@@ -40,8 +40,7 @@ static inline GraphNode *create_node(uint32_t start, uint8_t length) {
     return node;
 }
 
-static inline uint8_t RLE_logic(const uint8_t *block, uint32_t block_index, uint32_t block_size) {
-    // Create RLE node, if any. There could be at most one RLE node per level.
+static inline uint8_t RLE_level(const uint8_t *block, uint32_t block_index, uint32_t block_size) {
     uint16_t current_level = get_last_level_index();
     if (rle_info.next_RLE_level < current_level && is_RLE_sequence(&rle_info.repeat_seq_length, &rle_info.length_of_RLE,
                                                                    MIN(block_size, 255), block_index, block)) {
@@ -50,8 +49,13 @@ static inline uint8_t RLE_logic(const uint8_t *block, uint32_t block_index, uint
         // remember data of RLE node to be created later on, at the appropriate level.
         rle_info.next_RLE_level = current_level + rle_info.length_of_RLE - 1;
         rle_info.RLE_offset = block_index;
-        return 0;
+        return 1;
     }
+    return 0;
+}
+static inline void set_RLE_data() {
+    // Create RLE node, if any. There could be at most one RLE node per level.
+    uint16_t current_level = get_last_level_index();
     GraphNode *current_node;
     if (current_level == rle_info.next_RLE_level) {
         current_node = create_node(rle_info.RLE_offset, rle_info.length_of_RLE);
@@ -59,12 +63,14 @@ static inline uint8_t RLE_logic(const uint8_t *block, uint32_t block_index, uint
         current_node->is_RLE = 1;
         current_node->repeat_seq_length = rle_info.repeat_seq_length;
         current_node->length_of_RLE = rle_info.length_of_RLE;
+        get_parent_nodes_count(current_node); //for testing
 #ifdef DEBUG
         print_graph_node(current_node); // print the RLE node.
 #endif
-        return 1;
+    } else {
+        fprintf(stderr, "Illegal set_RLE_data\n");
+        abort();
     }
-    return 0;
 }
 
 void process_block(const uint8_t *block, uint32_t block_size) {
@@ -78,21 +84,27 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #endif
     for (uint32_t block_index = 0; block_index < block_size; block_index++) {
         GraphNode *current_node = NULL;
-        create_graph_level(); // create new level of the graph
-        uint16_t current_level = get_last_level_index();
+        // create new level of the graph
+        uint16_t current_level = create_graph_level();
 
-        if (current_level >= MAX_LEVELS) {
-            fprintf(stderr, "Number of levels are more than allowed\n");
-            abort();
-        }
         uint8_t max_sequence = MIN(current_level, MAX_WEIGHTS);
         uint32_t start;
-        uint8_t created_rle_node = RLE_logic(block, block_index, block_size);
+        // special treatment of RLE nodes.
+        uint8_t created_rle_node = RLE_level(block, block_index, block_size);
         if (created_rle_node) {
-            max_sequence = 1;
+            while (current_level != rle_info.next_RLE_level) {
+                current_level = create_graph_level();
+                block_index++;
+            }
+            set_RLE_data();
+            continue;
         }
-        // Make sequences of specific sizes.
+        // Non-RLE nodes: Make sequences of specific sizes.
         for (uint8_t seq_len = 1; seq_len <= max_sequence; seq_len++) {
+            uint8_t parent_count = get_parent_nodes_count_by_level_and_length(current_level, seq_len);
+            if (parent_count == 0) {
+                continue;
+            } 
             start = block_index - seq_len + 1;
             current_node = create_node(start, seq_len);
 
@@ -129,7 +141,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     if (last_level >= MAX_BRUTE_FORCE_PATH) {
         for (level = MAX_BRUTE_FORCE_PATH; level <= last_level; level += MAX_BRUTE_FORCE_PATH) {
             find_best_saving_path(block, level);
-            //printf("Processed level %u\n", level);
+            // printf("Processed level %u\n", level);
 #ifdef DEBUG
             printf("Processed level %u\n", level);
             print_path(0, 1, block);
@@ -137,7 +149,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         }
         if (level - MAX_BRUTE_FORCE_PATH < last_level) {
             find_best_saving_path(block, last_level);
-            //printf("Processed level %u\n", level);
+            // printf("Processed level %u\n", level);
 #ifdef DEBUG
             printf("Processed level %u\n", last_level);
             print_path(0, 1, block);
