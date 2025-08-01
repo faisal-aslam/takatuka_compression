@@ -132,34 +132,13 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         }
     }
     printf("\n%lu: Done creating %u nodes\n", get_elapsed_ms(), graph.size);
-    compact_graph(block);
+    //compact_graph(block);
 #ifdef DEBUG
     visualize_graph(block); // create graph in DOT for visualization.
 #endif
 
-    uint16_t last_level = get_last_level_index();
-    uint16_t level;
-    if (last_level >= MAX_BRUTE_FORCE_PATH) {
-        for (level = MAX_BRUTE_FORCE_PATH; level <= last_level; level += MAX_BRUTE_FORCE_PATH) {
-            find_best_saving_path(block, level);
-            printf("%lu: Processed level %u\n", get_elapsed_ms(), level);
-#ifdef DEBUG
-            printf("Processed level %u\n", level);
-            print_path(0, 1, block);
-#endif
-        }
-        if (level - MAX_BRUTE_FORCE_PATH < last_level) {
-            find_best_saving_path(block, last_level);
-            printf("%lu: Processed level %u\n", get_elapsed_ms(), level);
-#ifdef DEBUG
-            printf("Processed level %u\n", last_level);
-            print_path(0, 1, block);
-#endif
-        }
-    } else {
-        find_best_saving_path(block, last_level);
-    }
-    print_path(0, 1, block);
+    uint16_t level = get_last_level_index();
+    find_best_saving_path(block, level);
     final_book_keeping(block);
 #ifdef DEBUG
     visualize_graph(block); // create graph in DOT for visualization.
