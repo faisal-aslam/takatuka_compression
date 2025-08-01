@@ -63,7 +63,7 @@ static inline void set_RLE_data() {
         current_node->is_RLE = 1;
         current_node->repeat_seq_length = rle_info.repeat_seq_length;
         current_node->length_of_RLE = rle_info.length_of_RLE;
-        get_parent_nodes_count(current_node); //for testing
+
 #ifdef DEBUG
         print_graph_node(current_node); // print the RLE node.
 #endif

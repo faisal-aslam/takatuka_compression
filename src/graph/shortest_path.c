@@ -112,6 +112,7 @@ static inline uint8_t update_best_path() {
 void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block) {
     const int idx = isCurrent ? PATH_CURRENT : PATH_BEST;
     const int32_t size = path_state.path_size[idx];
+    if (size < 0) return; //no path exist.
     CHECK_INDEX(size - 1, "print_path");
 
     const double total_saving = path_state.path_total_saving[idx];
@@ -314,6 +315,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     path_init(); // Reset path state
 
     initialize_leaf_nodes(main_stack, &top, starting_level);
+    if(top < 0) return; //no path exist.
     while (top >= 0) {
         StackItem current = main_stack[top--];
 #ifdef DEBUG

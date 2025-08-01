@@ -20,51 +20,52 @@ void compact_graph(const uint8_t *block) {
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
     uint32_t level_start = 0;
-    uint32_t max_level_processed = 0; // Track the highest level we actually process
-    // calculate_levels_to_keep(levels_to_keep);
-    //  Initialize root node
+    uint32_t max_level_processed = 0;
+    bool level_start_set = false;
+
+    // Initialize root node if exists
     if (graph.size > 0) {
         graph.nodes[0].min_depth = 0;
         graph.level_min_depth[0] = 0;
+        level_start_set = true;
     }
 
     for (uint32_t read_idx = 0; read_idx < graph.size; read_idx++) {
         GraphNode *node = &graph.nodes[read_idx];
-#ifdef DEBUG
-        printf("\nCompacting node=%u\n", node->node_id);
-#endif
-        // Level transition handling
-        if (node->node_level != current_level) {
-            // Finalize previous level
 
-            graph.first_node_of_level[current_level] = level_start;
-
-            // Update max processed level
-            if (current_level > max_level_processed) {
-                max_level_processed = current_level;
+        // When we encounter a new level
+        if (node->node_level > current_level) {
+            // First finalize the previous level
+            if (level_start_set) {
+                graph.first_node_of_level[current_level] = level_start;
             }
-
-            // Start new level
+            
+            // Handle any empty levels between current and node's level
+            for (uint32_t l = current_level + 1; l < node->node_level; l++) {
+                graph.first_node_of_level[l] = write_idx;  // Empty levels point to next valid position
+                graph.level_min_depth[l] = l > 0 ? graph.level_min_depth[l-1] : 0;
+            }
+            
             current_level = node->node_level;
             level_start = write_idx;
+            level_start_set = true;
         }
 
         if (node->useless) {
 #ifdef DEBUG
-            printf("\nNode Excluded=%u, level=%u\n", node->node_id, node->node_level);
+            printf("Node Excluded=%u, level=%u\n", node->node_id, node->node_level);
 #endif
-
             continue;
         }
 
-        // Copy node if needed and update properties
+        // Copy node if needed
         if (write_idx != read_idx) {
             graph.nodes[write_idx] = *node;
         }
         GraphNode *new_node = &graph.nodes[write_idx];
         new_node->node_id = write_idx;
 
-        // Calculate depth (root has depth 0)
+        // Calculate min depth (root has depth 0)
         if (write_idx != 0) {
             uint16_t parent_level = new_node->node_level - new_node->sequence_length;
             assert(parent_level < graph.total_levels);
@@ -77,22 +78,39 @@ void compact_graph(const uint8_t *block) {
         } else {
             graph.level_min_depth[current_level] = MIN(graph.level_min_depth[current_level], new_node->min_depth);
         }
+
 #ifdef DEBUG
-        printf("\nNode included=%u, level=%u\n", node->node_id, node->node_level);
+        printf("Node included=%u, level=%u\n", new_node->node_id, new_node->node_level);
 #endif
 
         write_idx++;
+        if (new_node->node_level > max_level_processed) {
+            max_level_processed = new_node->node_level;
+        }
     }
 
-    // Finalize last level
-    graph.first_node_of_level[current_level] = level_start;
+    // Finalize the last level we processed
+    if (level_start_set) {
+        graph.first_node_of_level[current_level] = level_start;
+    }
 
-    // #ifdef DEBUG
-    printf("\nGraph size before compaction %u and after =%u\n", graph.size, write_idx);
-    // #endif
+    // Handle any remaining empty levels at the end
+    for (uint32_t l = current_level + 1; l < graph.total_levels; l++) {
+        graph.first_node_of_level[l] = write_idx;
+        graph.level_min_depth[l] = l > 0 ? graph.level_min_depth[l-1] : 0;
+    }
 
     graph.size = write_idx;
+    graph.total_levels = max_level_processed + 1;
+
+#ifdef DEBUG
+    printf("Graph compaction complete. Final size: %u, levels: %u\n", graph.size, graph.total_levels);
+    for (uint32_t l = 0; l < graph.total_levels; l++) {
+        printf("Level %u starts at %u\n", l, graph.first_node_of_level[l]);
+    }
+#endif
 }
+
 
 void init_graph(void) {
     graph.size = 0;
