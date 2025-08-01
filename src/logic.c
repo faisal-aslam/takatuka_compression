@@ -78,7 +78,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     init_graph();
     init_seq_freq_map();
     create_root();
-
+    printf("%lu: Started processing nodes", get_elapsed_ms());
 #ifdef DEBUG
     print_graph_node(get_graph_node(0));
 #endif
@@ -104,7 +104,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
             uint8_t parent_count = get_parent_nodes_count_by_level_and_length(current_level, seq_len);
             if (parent_count == 0) {
                 continue;
-            } 
+            }
             start = block_index - seq_len + 1;
             current_node = create_node(start, seq_len);
 
@@ -131,7 +131,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #endif
         }
     }
-    printf("\nDone creating %u nodes\n", graph.size);
+    printf("\n%lu: Done creating %u nodes\n", get_elapsed_ms(), graph.size);
     compact_graph(block);
 #ifdef DEBUG
     visualize_graph(block); // create graph in DOT for visualization.
@@ -142,7 +142,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     if (last_level >= MAX_BRUTE_FORCE_PATH) {
         for (level = MAX_BRUTE_FORCE_PATH; level <= last_level; level += MAX_BRUTE_FORCE_PATH) {
             find_best_saving_path(block, level);
-             printf("Processed level %u\n", level);
+            printf("%lu: Processed level %u\n", get_elapsed_ms(), level);
 #ifdef DEBUG
             printf("Processed level %u\n", level);
             print_path(0, 1, block);
@@ -150,7 +150,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         }
         if (level - MAX_BRUTE_FORCE_PATH < last_level) {
             find_best_saving_path(block, last_level);
-             printf("Processed level %u\n", level);
+            printf("%lu: Processed level %u\n", get_elapsed_ms(), level);
 #ifdef DEBUG
             printf("Processed level %u\n", last_level);
             print_path(0, 1, block);

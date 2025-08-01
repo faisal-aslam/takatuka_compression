@@ -245,6 +245,9 @@ static inline void initialize_leaf_nodes(StackItem *stack, int *top, uint16_t la
     uint32_t end = get_level_end_id(last_level);
     for (uint32_t i = start; i < end; i++) {
         GraphNode *node = get_graph_node(i);
+        if (node->is_RLE) {
+            printf("Leaf level has RLE node\n");
+        }
         if (node) {
             stack[++(*top)] = (StackItem){.node_id = i, .node_id_popped = 0};
 #ifdef DEBUG
@@ -315,7 +318,10 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     path_init(); // Reset path state
 
     initialize_leaf_nodes(main_stack, &top, starting_level);
-    if(top < 0) return; //no path exist.
+    if(top < 0) {
+        printf("empty level\n");
+        return; //no path exist.
+    }
     while (top >= 0) {
         StackItem current = main_stack[top--];
 #ifdef DEBUG
