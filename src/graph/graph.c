@@ -15,102 +15,72 @@
 Graph graph; // Actual single definition
 
 void compact_graph(const uint8_t *block) {
-    assert(graph.size == 0 || (graph.nodes[0].node_id == 0 && !graph.nodes[0].useless));
+    if (graph.size == 0) return;
 
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
     uint32_t level_start = 0;
-    uint32_t max_level_processed = 0;
-    bool level_start_set = false;
+    uint16_t min_depth = 0;
 
-    // Initialize root node if exists
-    if (graph.size > 0) {
-        graph.nodes[0].min_depth = 0;
-        graph.level_min_depth[0] = 0;
-        level_start_set = true;
+    // Pre-process: mark all levels as invalid initially
+    for (uint32_t l = 0; l < graph.total_levels; l++) {
+        graph.first_node_of_level[l] = UINT32_MAX;
     }
 
-    for (uint32_t read_idx = 0; read_idx < graph.size; read_idx++) {
+    // Process root node
+    graph.nodes[0].min_depth = 0;
+    graph.level_min_depth[0] = 0;
+    graph.first_node_of_level[0] = 0;
+    write_idx = 1;
+
+    // Main compaction loop
+    for (uint32_t read_idx = 1; read_idx < graph.size; read_idx++) {
         GraphNode *node = &graph.nodes[read_idx];
+        
+        // Fast path: skip useless nodes immediately
+        if (node->useless) continue;
 
-        // When we encounter a new level
+        // Handle level transitions
         if (node->node_level > current_level) {
-            // First finalize the previous level
-            if (level_start_set) {
-                graph.first_node_of_level[current_level] = level_start;
+            // Update all empty levels between current and node's level
+            for (uint32_t l = current_level + 1; l <= node->node_level; l++) {
+                graph.first_node_of_level[l] = write_idx;
+                graph.level_min_depth[l] = min_depth;
             }
-            
-            // Handle any empty levels between current and node's level
-            for (uint32_t l = current_level + 1; l < node->node_level; l++) {
-                graph.first_node_of_level[l] = write_idx;  // Empty levels point to next valid position
-                graph.level_min_depth[l] = l > 0 ? graph.level_min_depth[l-1] : 0;
-            }
-            
             current_level = node->node_level;
-            level_start = write_idx;
-            level_start_set = true;
         }
 
-        if (node->useless) {
-#ifdef DEBUG
-            printf("Node Excluded=%u, level=%u\n", node->node_id, node->node_level);
-#endif
-            continue;
-        }
-
-        // Copy node if needed
-        if (write_idx != read_idx) {
-            graph.nodes[write_idx] = *node;
-        }
+        // Copy node (use memmove if overlapping is possible)
+        graph.nodes[write_idx] = *node;
         GraphNode *new_node = &graph.nodes[write_idx];
         new_node->node_id = write_idx;
 
-        // Calculate min depth (root has depth 0)
-        if (write_idx != 0) {
-            uint16_t parent_level = new_node->node_level - new_node->sequence_length;
-            assert(parent_level < graph.total_levels);
-            new_node->min_depth = graph.level_min_depth[parent_level] + 1;
-        }
+        // Calculate min depth (optimized parent access)
+        uint16_t parent_level = new_node->node_level - new_node->sequence_length;
+        new_node->min_depth = graph.level_min_depth[parent_level] + 1;
 
         // Update level's min depth
-        if (write_idx == level_start) {
-            graph.level_min_depth[current_level] = new_node->min_depth;
+        if (graph.first_node_of_level[current_level] == write_idx) {
+            min_depth = new_node->min_depth;
         } else {
-            graph.level_min_depth[current_level] = MIN(graph.level_min_depth[current_level], new_node->min_depth);
+            min_depth = MIN(min_depth, new_node->min_depth);
         }
-
-#ifdef DEBUG
-        printf("Node included=%u, level=%u\n", new_node->node_id, new_node->node_level);
-#endif
+        graph.level_min_depth[current_level] = min_depth;
 
         write_idx++;
-        if (new_node->node_level > max_level_processed) {
-            max_level_processed = new_node->node_level;
-        }
     }
 
-    // Finalize the last level we processed
-    if (level_start_set) {
-        graph.first_node_of_level[current_level] = level_start;
-    }
-
-    // Handle any remaining empty levels at the end
-    for (uint32_t l = current_level + 1; l < graph.total_levels; l++) {
-        graph.first_node_of_level[l] = write_idx;
-        graph.level_min_depth[l] = l > 0 ? graph.level_min_depth[l-1] : 0;
-    }
-
+    // Finalize graph metadata
+    printf("Done with graph compaction from %u to %u nodes\n", graph.size, write_idx);
     graph.size = write_idx;
-    graph.total_levels = max_level_processed + 1;
+    graph.total_levels = current_level + 1;
 
-#ifdef DEBUG
-    printf("Graph compaction complete. Final size: %u, levels: %u\n", graph.size, graph.total_levels);
-    for (uint32_t l = 0; l < graph.total_levels; l++) {
-        printf("Level %u starts at %u\n", l, graph.first_node_of_level[l]);
-    }
-#endif
+    /*// Fill any remaining empty levels at the end
+    for (uint32_t l = current_level + 1; l < MAX_LEVELS; l++) {
+        graph.first_node_of_level[l] = write_idx;
+        graph.level_min_depth[l] = min_depth;
+    }*/
 }
-
 
 void init_graph(void) {
     graph.size = 0;
