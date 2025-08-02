@@ -22,8 +22,8 @@
 typedef struct {
     uint32_t node_id;
     uint32_t offset;
+    uint32_t best_savings;
     uint16_t node_level;
-    uint16_t min_depth;
     uint8_t useless;
     uint8_t sequence_length;
     uint8_t is_RLE;
@@ -36,7 +36,6 @@ typedef struct {
     uint32_t first_node_of_level[MAX_LEVELS];
     GraphNode nodes[MAX_GRAPH_NODES];
     uint16_t total_levels;
-    uint16_t level_min_depth[MAX_LEVELS];
 } Graph;
 
 extern Graph graph; //always use graph.c definiton.

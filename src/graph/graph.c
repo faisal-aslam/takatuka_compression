@@ -28,8 +28,6 @@ void compact_graph(const uint8_t *block) {
     }
 
     // Process root node
-    graph.nodes[0].min_depth = 0;
-    graph.level_min_depth[0] = 0;
     graph.first_node_of_level[0] = 0;
     write_idx = 1;
 
@@ -45,7 +43,6 @@ void compact_graph(const uint8_t *block) {
             // Update all empty levels between current and node's level
             for (uint32_t l = current_level + 1; l <= node->node_level; l++) {
                 graph.first_node_of_level[l] = write_idx;
-                graph.level_min_depth[l] = min_depth;
             }
             current_level = node->node_level;
         }
@@ -57,15 +54,6 @@ void compact_graph(const uint8_t *block) {
 
         // Calculate min depth (optimized parent access)
         uint16_t parent_level = new_node->node_level - new_node->sequence_length;
-        new_node->min_depth = graph.level_min_depth[parent_level] + 1;
-
-        // Update level's min depth
-        if (graph.first_node_of_level[current_level] == write_idx) {
-            min_depth = new_node->min_depth;
-        } else {
-            min_depth = MIN(min_depth, new_node->min_depth);
-        }
-        graph.level_min_depth[current_level] = min_depth;
 
         write_idx++;
     }
@@ -75,11 +63,6 @@ void compact_graph(const uint8_t *block) {
     graph.size = write_idx;
     graph.total_levels = current_level + 1;
 
-    /*// Fill any remaining empty levels at the end
-    for (uint32_t l = current_level + 1; l < MAX_LEVELS; l++) {
-        graph.first_node_of_level[l] = write_idx;
-        graph.level_min_depth[l] = min_depth;
-    }*/
 }
 
 void init_graph(void) {
