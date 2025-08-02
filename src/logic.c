@@ -143,6 +143,6 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #ifdef DEBUG
     visualize_graph(block); // create graph in DOT for visualization.
 #endif
-    //print_path(0, 1, block);
+    print_path(0, 0, block);
     write_compressed_output("out.bin", block);
 }
