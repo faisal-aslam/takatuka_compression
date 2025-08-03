@@ -9,6 +9,7 @@ Path path_state;
 
 void compute_best_savings_all(const uint8_t *block, const uint32_t *max_saving_node_ids,
                               uint32_t *best_savings_node_ids) {
+    // Iterate over each level of the graph. Must start from level 0 for dynamic programming.
     for (uint16_t level = 0; level < graph.total_levels; level++) {
         uint32_t start = get_level_start_id(level);
         uint32_t end = get_level_end_id(level);
@@ -18,29 +19,35 @@ void compute_best_savings_all(const uint8_t *block, const uint32_t *max_saving_n
 
         for (uint32_t i = start; i < end; i++) {
             GraphNode *node = &graph.nodes[i];
+
             if (node->useless) {
                 node->best_savings = 0;
                 continue;
             }
 
-            uint32_t freq = 1, dummy_id; // default of freq is 1.
+            // Default frequency is 1 for RLE or short sequences
+            uint32_t freq = 1, dummy_id = 0;
             if (!node->is_RLE && node->sequence_length > 1) {
+                // Try to get actual frequency if applicable
                 seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_id);
             }
 
             double own_saving = calc_savings(node, freq);
             double inherited_saving = 0;
 
+            // Inherit saving from parent level's best node (if valid)
             if (level > 0) {
                 uint16_t parent_level = get_parent_level(node);
-                if (max_saving_node_ids[parent_level] != UINT32_MAX) {
+                if (parent_level < graph.total_levels && max_saving_node_ids[parent_level] != UINT32_MAX) {
                     GraphNode *parent = get_graph_node(max_saving_node_ids[parent_level]);
                     inherited_saving = parent->best_savings;
                 }
             }
 
+            // Save the total saving (own + inherited) in the node for future use by other levels.
             node->best_savings = (uint32_t)(own_saving + inherited_saving);
 
+            // Update best node at this level if it's better than the current best
             if ((double)node->best_savings > max_saving) {
                 max_saving = (double)node->best_savings;
                 best_savings_node_ids[level] = node->node_id;
