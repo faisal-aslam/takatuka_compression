@@ -132,17 +132,14 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         }
     }
     printf("\n%lu: Done creating %u nodes\n", get_elapsed_ms(), graph.size);
-    //compact_graph(block);
-#ifdef DEBUG
-    visualize_graph(block); // create graph in DOT for visualization.
-#endif
+    // compact_graph(block);
+
 
     uint16_t level = get_last_level_index();
     find_best_saving_path(block, level);
     final_book_keeping(block);
 #ifdef DEBUG
-    visualize_graph(block); // create graph in DOT for visualization.
+    print_path(0, 1, block);
 #endif
-   // print_path(0, 0, block);
     write_compressed_output("out.bin", block);
 }

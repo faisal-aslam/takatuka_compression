@@ -1,5 +1,6 @@
 #include "graph_visualizer.h"
 #include "graph.h"
+#include "shortest_path.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -42,9 +43,9 @@ static void print_node(FILE* output, const GraphNode* node, const uint8_t *block
     uint32_t freq, node_id;
     seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id); 
     if(!node->is_RLE) {
-        fprintf(output, "\n l=%u, f=%u", node->node_level, freq);
+        fprintf(output, "\n l=%u, f=%u, b=%u, m=%u", node->node_level, freq, node->best_savings, max_saving_node_ids[node->node_level]);
     } else {
-        fprintf(output, "\n l=%u, f=%u, \nRLE", node->node_level, freq);
+        fprintf(output, "\n l=%u, f=%u, b=%u, m=%u \nRLE", node->node_level, freq, node->best_savings, max_saving_node_ids[node->node_level]);
     }
     fprintf(output, "\", shape=box, style=filled, fillcolor=\"%s\", fontcolor=\"%s\"];\n", 
             fillcolor, fontcolor);

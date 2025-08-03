@@ -159,41 +159,81 @@ void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
 
         if (start == UINT32_MAX || start >= end) {
             max_ids[level] = UINT32_MAX; // No nodes in this level
+#ifdef DEBUG
+            printf("[Level %u] Empty or invalid range (start=%u, end=%u), skipping.\n", level, start, end);
+#endif
             continue;
         }
 
         double max_saving = -1.0;
         uint32_t best_node_id = UINT32_MAX;
 
+#ifdef DEBUG
+        printf("\n[Level %u] start=%u, end=%u\n", level, start, end);
+#endif
+
         for (uint32_t i = start; i < end; i++) {
             GraphNode *node = &graph.nodes[i];
-            if (node->useless) continue;
+            if (node->useless) {
+#ifdef DEBUG
+                printf("  Node %u: useless, skipping\n", node->node_id);
+#endif
+                continue;
+            }
 
-            uint32_t freq = 1;  // default dummy freq
+            uint32_t freq = 1;
             if (node->sequence_length > 1 && !node->is_RLE) {
                 uint32_t dummy_id;
-                if (!seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_id))
-                    freq = 1; // fallback if not found
+                if (!seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_id)) {
+                    freq = 1;
+#ifdef DEBUG
+                    printf("  Node %u: seq_freq not found, fallback freq = 1\n", node->node_id);
+#endif
+                }
             }
 
             double saving = calc_savings(node, freq);
+
+#ifdef DEBUG
+            printf("  Node %u: seq_len = %u, is_RLE = %u, freq = %u, saving = %0.2f\n",
+                   node->node_id, node->sequence_length, node->is_RLE, freq, saving);
+#endif
+
             if (saving > max_saving) {
                 max_saving = saving;
                 best_node_id = node->node_id;
+#ifdef DEBUG
+                printf("    --> New best node: %u with saving %0.2f\n", best_node_id, saving);
+#endif
             }
         }
 
         max_ids[level] = best_node_id;
 
-        // Boost selected node's freq to favor reuse
         if (best_node_id != UINT32_MAX) {
             GraphNode *node = get_graph_node(best_node_id);
+#ifdef DEBUG
+            printf("[Level %u] Best node selected: %u (saving %0.2f)\n", level, best_node_id, max_saving);
+#endif
             if (node->sequence_length > 1 && !node->is_RLE) {
                 uint32_t freq, node_id;
                 uint32_t index = seq_freq_get_with_index(&block[node->offset], node->sequence_length, &freq, &node_id);
-                if (index != UINT32_MAX)
+                if (index != UINT32_MAX) {
                     seq_freq_set_existing(index, freq + 3, node_id);
+#ifdef DEBUG
+                    printf("  Boosted frequency of node %u to %u at index %u\n", node_id, freq + 3, index);
+#endif
+                }
+#ifdef DEBUG
+                else {
+                    printf("  Could not boost frequency: node %u sequence not found in map.\n", node->node_id);
+                }
+#endif
             }
+        } else {
+#ifdef DEBUG
+            printf("[Level %u] No valid best node found.\n", level);
+#endif
         }
     }
 }
