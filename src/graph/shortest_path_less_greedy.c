@@ -84,6 +84,47 @@ void compute_best_savings_all(const uint8_t *block, const uint32_t *max_saving_n
     }
 }
 
+static inline void update_current_path(GraphNode *node, const uint8_t* block) {
+        int idx = ++path_state.path_size[PATH_CURRENT];
+        path_state.path_stack[PATH_CURRENT][idx] = node->node_id;
+        //add the last level seq in the map.
+        uint32_t freq = seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
+        double savings = calc_savings(node, freq);
+        path_state.path_per_node_savings[PATH_CURRENT][idx] = savings; 
+        path_state.path_freqs[PATH_CURRENT][idx] = freq;
+        path_state.path_total_saving[PATH_CURRENT] += savings;
+        path_state.path_total_freq[PATH_CURRENT] += freq;
+}
+
+
+
+/*
+Amont the nodes which are common in the given level and seq map, find the node with the higest saving. 
+*/
+static uint32_t find_best_in_map(uint16_t level, const uint8_t* block) {
+    uint32_t start_id_of_last_level = get_level_start_id(level);
+    uint32_t end_id_of_last_level = get_level_end_id(level);
+    uint32_t freq=0, map_node_id;
+    double best_savings = 0;
+    uint32_t best_saving_node_id = -1;
+    for (uint32_t id = start_id_of_last_level; id < end_id_of_last_level; id++) {
+        GraphNode* node = get_graph_node(id);
+        if(seq_freq_get(&block[node->offset], node->sequence_length, &freq, &map_node_id) && freq > 0) {
+            double savings = calc_savings(node, freq);
+            if (savings > best_savings) {
+                best_saving_node_id = node->node_id;
+                best_savings = savings;
+            }
+        }
+    }
+    return best_saving_node_id;
+}
+
+/**
+ * It will try all the nodes of the last level. The node it is trying at the moment is put in the hash. 
+ * For other level, first it will get the best saving node among the nodes of that level which are in the hash.
+ * if no such node is found then it will select the best saving node of that level.
+ */
 void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     
     uint32_t best_savings_node_ids[MAX_LEVELS];
@@ -98,32 +139,30 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     fflush(stdout);
     visualize_graph(block);
     fflush(stdout);
-    abort();
 #endif    // Step 2: Initialize best path
     path_init();
     uint16_t level = starting_level;
-
-    while (level < MAX_LEVELS) {
-        uint32_t node_id = best_savings_node_ids[level];
-        if (node_id == UINT32_MAX) break;
-
-        GraphNode *node = get_graph_node(node_id);
-        if (!node) break;
-
-        uint32_t freq = 1, dummy_id;
-        double saving = 0;
-        if (seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_id)) {
-            saving = calc_savings(node, freq);
-        }
-
-        int idx = ++path_state.path_size[PATH_BEST];
-        path_state.path_stack[PATH_BEST][idx] = node_id;
-        path_state.path_per_node_savings[PATH_BEST][idx] = saving;
-        path_state.path_freqs[PATH_BEST][idx] = freq;
-        path_state.path_total_saving[PATH_BEST] += saving;
-        path_state.path_total_freq[PATH_BEST] += freq;
-
-        if (node->node_id == 0) break; // root node reached
+    
+    uint32_t start_id_of_last_level = get_level_start_id(starting_level);
+    uint32_t end_id_of_last_level = get_level_end_id(starting_level);
+    for (uint32_t id = start_id_of_last_level; id < end_id_of_last_level; id++) {
+        //map is cleared before finding a path.
+        init_seq_freq_map(); 
+        //fetch the node of the last level
+        GraphNode* node = get_graph_node(id);
+        update_current_path(node, block);
+        //go to the parent level
         level = get_parent_level(node);
+         while (level < MAX_LEVELS) {
+            //first check if the map has a node with most savings.
+            uint32_t most_saving_node_id = find_best_in_map(level, block);
+            if (most_saving_node_id < 0) {
+                most_saving_node_id = best_savings_node_ids[level];
+            }
+            node = get_graph_node(most_saving_node_id);
+            update_current_path(node, block);
+            level = get_parent_level(node);
+         }
+         update_best_path();
     }
 }

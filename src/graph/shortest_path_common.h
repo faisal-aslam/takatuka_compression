@@ -215,7 +215,7 @@ void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
 #ifdef DEBUG
             printf("[Level %u] Best node selected: %u (saving %0.2f)\n", level, best_node_id, max_saving);
 #endif
-            if (node->sequence_length > 1 && !node->is_RLE) {
+            if (0 && node->sequence_length > 1 && !node->is_RLE) {
                 uint32_t freq, node_id;
                 uint32_t index = seq_freq_get_with_index(&block[node->offset], node->sequence_length, &freq, &node_id);
                 if (index != UINT32_MAX) {
@@ -236,4 +236,36 @@ void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
 #endif
         }
     }
+}
+
+
+/**
+ * Updates the best path if the current path is better.
+ */
+static inline uint8_t update_best_path() {
+    uint8_t ret = 0;
+
+    int32_t saving_current = path_state.path_total_saving[PATH_CURRENT];
+    int32_t saving_best = path_state.path_total_saving[PATH_BEST];
+    int32_t size_current = path_state.path_size[PATH_CURRENT];
+    int32_t size_best = path_state.path_size[PATH_BEST];
+    uint32_t freq_current = path_state.path_total_freq[PATH_CURRENT];
+    uint32_t freq_best = path_state.path_total_freq[PATH_BEST];
+
+    if (saving_current > saving_best || (saving_current == saving_best && size_current < size_best) ||
+        (saving_current == saving_best && size_current == size_best && freq_current > freq_best)) {
+
+        int32_t size = size_current + 1;
+        CHECK_INDEX(size - 1, "update_best_path copy");
+
+        path_state.path_total_saving[PATH_BEST] = saving_current;
+        path_state.path_size[PATH_BEST] = size_current;
+        path_state.path_total_freq[PATH_BEST] = freq_current;
+
+        memcpy(path_state.path_stack[PATH_BEST], path_state.path_stack[PATH_CURRENT], size * sizeof(uint32_t));
+
+        ret = 1;
+    }
+
+    return ret;
 }
