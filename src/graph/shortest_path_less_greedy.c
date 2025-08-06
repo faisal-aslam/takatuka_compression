@@ -106,7 +106,7 @@ static uint32_t find_best_in_map(uint16_t level, const uint8_t* block) {
     uint32_t end_id_of_last_level = get_level_end_id(level);
     uint32_t freq=0, map_node_id;
     double best_savings = 0;
-    uint32_t best_saving_node_id = -1;
+    uint32_t best_saving_node_id = UINT32_MAX;
     for (uint32_t id = start_id_of_last_level; id < end_id_of_last_level; id++) {
         GraphNode* node = get_graph_node(id);
         if(seq_freq_get(&block[node->offset], node->sequence_length, &freq, &map_node_id) && freq > 0) {
@@ -143,26 +143,40 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     path_init();
     uint16_t level = starting_level;
     
-    uint32_t start_id_of_last_level = get_level_start_id(starting_level);
+    /*uint32_t start_id_of_last_level = get_level_start_id(starting_level);
     uint32_t end_id_of_last_level = get_level_end_id(starting_level);
-    for (uint32_t id = start_id_of_last_level; id < end_id_of_last_level; id++) {
+    for (uint32_t id = start_id_of_last_level; id < end_id_of_last_level; id++) {*/
+        uint32_t id = best_savings_node_ids[level];
         //map is cleared before finding a path.
         init_seq_freq_map(); 
         //fetch the node of the last level
         GraphNode* node = get_graph_node(id);
+#ifdef DEBUG
+        printf("At last level %u selected ", node->node_level);
+        print_graph_node(node);
+#endif
         update_current_path(node, block);
         //go to the parent level
         level = get_parent_level(node);
          while (level < MAX_LEVELS) {
             //first check if the map has a node with most savings.
             uint32_t most_saving_node_id = find_best_in_map(level, block);
-            if (most_saving_node_id < 0) {
+            if (most_saving_node_id == UINT32_MAX) {
                 most_saving_node_id = best_savings_node_ids[level];
             }
             node = get_graph_node(most_saving_node_id);
+#ifdef DEBUG
+        printf("At level %u selected ", node->node_level);
+        print_graph_node(node);
+#endif
+
             update_current_path(node, block);
+            if (node->node_id == 0) break;
             level = get_parent_level(node);
          }
          update_best_path();
-    }
+         print_path(0, 1, block);
+    //}
+    final_book_keeping(block);
+    print_path(0, 1, block);
 }
