@@ -9,37 +9,50 @@
 
 
 /**
- * @brief Calculates the storage saving
+ * @brief Calculates the storage saving (integer version).
  *
- * @param node Pointer to graph node being evaluated
- * @param frequency Frequency count of this sequence in the data
- * @return double Storage saving in bytes
+ * @param node      Pointer to graph node being evaluated.
+ * @param frequency Frequency count of this sequence in the data.
+ * @return uint32_t Storage saving in bytes (integer approximation).
  */
-static inline double calc_savings(GraphNode *node, uint32_t frequency) {
+static inline uint32_t calc_savings(GraphNode *node, uint32_t frequency) {
+    // No savings for root node
+    if (node->node_id == 0) return 0;
 
-    // Branchless design for common cases - reduces pipeline stalls
     const uint8_t len = node->sequence_length;
-    double base_saving;
-
-    if (node->node_id == 0) return 0; // no savings for the root node.
 
     // Handle RLE case first (uses different saving model)
     if (node->is_RLE) {
         // RLE saving: pattern length + 1 byte for repeat count
-        double ret = (node->length_of_RLE / node->repeat_seq_length);
-        return (ret * ret * ret);
+        // Original was: (len_ratio)^3 in floating point
+        // We'll approximate it here and clamp to avoid overflow.
+        uint32_t ratio = (node->length_of_RLE / node->repeat_seq_length);
+        uint64_t cubic = (uint64_t)ratio * ratio * ratio;
+        return (cubic > UINT32_MAX) ? UINT32_MAX : (uint32_t)cubic;
     }
 
-    // Main saving calculation branches
-    if (len <= 1) {
-        // Cases: 0 bytes = 0/1 saving, 0
-        base_saving = 0;
-    } else {
-        // Multi-byte case: savings is based on length and frequency.
-        base_saving = (frequency - 1) * node->sequence_length * sqrt((double)node->sequence_length);
+    // For sequences of length <= 1, no savings
+    if (len <= 1 || frequency <= 1) {
+        return 0;
     }
 
-    return base_saving;
+    // Approximate sqrt(len) in integer math
+    // Fast enough for small len values (1..255)
+    uint32_t sqrt_len;
+    switch (len) {
+        case 2:  sqrt_len = 1; break;
+        case 3:  sqrt_len = 1; break;
+        case 4:  sqrt_len = 2; break;
+        case 5:  sqrt_len = 2; break;
+        case 6:  sqrt_len = 2; break;
+        case 7:  sqrt_len = 2; break;
+        case 8:  sqrt_len = 2; break;
+        default: sqrt_len = (uint32_t)(sqrt((double)len)); break; // fallback for rare big lengths
+    }
+
+    // Savings = (frequency - 1) × length × sqrt(length)
+    uint64_t saving = (uint64_t)(frequency - 1) * len * sqrt_len;
+    return (saving > UINT32_MAX) ? UINT32_MAX : (uint32_t)saving;
 }
 
 #define CHECK_INDEX(idx, label)                                                                                        \
