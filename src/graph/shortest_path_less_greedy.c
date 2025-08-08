@@ -5,10 +5,10 @@
 // and moves upward through parent levels, preferring sequences already present in the frequency map.
 
 #include "shortest_path_common.h"
-#include <stdbool.h>
 #include <limits.h>
+#include <stdbool.h>
 
-Path path_state;  // Global path state tracker
+Path path_state;                          // Global path state tracker
 uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
 
 /**
@@ -19,13 +19,11 @@ uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per lev
  * @param max_saving_node_ids    Array mapping each level to the node with the maximum immediate savings.
  * @param best_savings_node_ids  Output array mapping each level to the node with the highest cumulative savings.
  */
-void compute_best_savings_all(const uint8_t *block,
-                              const uint32_t *max_saving_node_ids,
-                              uint32_t *best_savings_node_ids)
-{
+void compute_best_savings_all(const uint8_t *block, const uint32_t *max_saving_node_ids,
+                              uint32_t *best_savings_node_ids) {
     for (uint16_t level = 0; level < graph.total_levels; level++) {
         uint32_t start = get_level_start_id(level);
-        uint32_t end   = get_level_end_id(level);
+        uint32_t end = get_level_end_id(level);
 
         uint32_t max_saving = 0;
         best_savings_node_ids[level] = UINT32_MAX; // No valid node yet
@@ -59,8 +57,7 @@ void compute_best_savings_all(const uint8_t *block,
             // Add best savings from parent level if available
             if (level > 0) {
                 uint16_t parent_level = get_parent_level(node);
-                if (parent_level < graph.total_levels &&
-                    max_saving_node_ids[parent_level] != UINT32_MAX) {
+                if (parent_level < graph.total_levels && max_saving_node_ids[parent_level] != UINT32_MAX) {
                     GraphNode *parent = get_graph_node(max_saving_node_ids[parent_level]);
                     inherited_saving = parent->best_savings;
                 }
@@ -69,8 +66,8 @@ void compute_best_savings_all(const uint8_t *block,
             node->best_savings = own_saving + inherited_saving;
 
 #ifdef DEBUG
-            printf("  Node %u: freq=%u, own=%u, inherited=%u, total=%u\n",
-                   node->node_id, freq, own_saving, inherited_saving, node->best_savings);
+            printf("  Node %u: freq=%u, own=%u, inherited=%u, total=%u\n", node->node_id, freq, own_saving,
+                   inherited_saving, node->best_savings);
 #endif
 
             // Update best node for this level
@@ -78,16 +75,14 @@ void compute_best_savings_all(const uint8_t *block,
                 max_saving = node->best_savings;
                 best_savings_node_ids[level] = node->node_id;
 #ifdef DEBUG
-                printf("    --> Node %u becomes best so far with total saving %u\n",
-                       node->node_id, node->best_savings);
+                printf("    --> Node %u becomes best so far with total saving %u\n", node->node_id, node->best_savings);
 #endif
             }
         }
 
 #ifdef DEBUG
         if (best_savings_node_ids[level] != UINT32_MAX) {
-            printf("[Level %u] Best node: %u with saving %u\n",
-                   level, best_savings_node_ids[level], max_saving);
+            printf("[Level %u] Best node: %u with saving %u\n", level, best_savings_node_ids[level], max_saving);
         } else {
             printf("[Level %u] No valid best node found.\n", level);
         }
@@ -122,7 +117,7 @@ static inline void update_current_path(GraphNode *node, const uint8_t *block) {
  */
 static uint32_t find_best_in_map(uint16_t level, const uint8_t *block) {
     uint32_t start_id = get_level_start_id(level);
-    uint32_t end_id   = get_level_end_id(level);
+    uint32_t end_id = get_level_end_id(level);
     uint32_t freq = 0, map_node_id = 0;
     uint32_t best_savings = 0;
     uint32_t best_node_id = UINT32_MAX;
@@ -154,8 +149,7 @@ static uint32_t find_best_in_map(uint16_t level, const uint8_t *block) {
  * @param starting_level  The level to start path construction from.
  */
 void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
-    if (starting_level >= graph.total_levels)
-        return;
+    if (starting_level >= graph.total_levels) return;
 
     uint32_t best_savings_node_ids[MAX_LEVELS];
 
@@ -173,44 +167,50 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
 
     // Initialize path and sequence frequency map
     path_init();
-    init_seq_freq_map();
+    
 
-    // Step 3: Start from best node of the starting level
-    uint32_t id = best_savings_node_ids[starting_level];
-    if (id == UINT32_MAX) return; // No valid node
+    // Step 3: Start from each node of the starting level
+    uint32_t start_id_of_last_level = get_level_start_id(starting_level);
+    uint32_t end_id_of_last_level = get_level_end_id(starting_level);
+    for (uint32_t id = start_id_of_last_level; id < end_id_of_last_level; id++) {       
 
-    GraphNode *node = get_graph_node(id);
+        if (id == UINT32_MAX) return; // No valid node
+        path_init_current();
+        init_seq_freq_map();
+
+        GraphNode *node = get_graph_node(id);
 #ifdef DEBUG
-    printf("At starting level %u selected ", node->node_level);
-    print_graph_node(node);
-#endif
-    update_current_path(node, block);
-
-    // Step 4: Move upward through parents
-    uint16_t level = get_parent_level(node);
-    while (level < graph.total_levels) {
-        uint32_t chosen_node_id = find_best_in_map(level, block);
-        if (chosen_node_id == UINT32_MAX) {
-            chosen_node_id = best_savings_node_ids[level];
-            if (chosen_node_id == UINT32_MAX) break; // No valid node
-        }
-
-        node = get_graph_node(chosen_node_id);
-#ifdef DEBUG
-        printf("At level %u selected ", node->node_level);
+        printf("At starting level %u selected ", node->node_level);
         print_graph_node(node);
 #endif
         update_current_path(node, block);
 
-        // Stop if root node reached (assumes node 0 is root)
-        if (node->node_id == 0) break;
+        // Step 4: Move upward through parents
+        uint16_t level = get_parent_level(node);
+        while (level < graph.total_levels) {
+            uint32_t chosen_node_id = find_best_in_map(level, block);
+            if (chosen_node_id == UINT32_MAX) {
+                chosen_node_id = best_savings_node_ids[level];
+                if (chosen_node_id == UINT32_MAX) break; // No valid node
+            }
 
-        level = get_parent_level(node);
+            node = get_graph_node(chosen_node_id);
+#ifdef DEBUG
+            printf("At level %u selected ", node->node_level);
+            print_graph_node(node);
+#endif
+            update_current_path(node, block);
+
+            // Stop if root node reached (assumes node 0 is root)
+            if (node->node_id == 0) break;
+
+            level = get_parent_level(node);
+        }
+
+        // Step 5: Finalize and print path
+        update_best_path();
+        print_path(0, 1, block);
     }
-
-    // Step 5: Finalize and print path
-    update_best_path();
-    print_path(0, 1, block);
     final_book_keeping(block);
     print_path(0, 1, block);
 }

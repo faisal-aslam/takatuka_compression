@@ -75,6 +75,14 @@ static inline void path_init() {
 }
 
 /**
+ * Initializes the path state for a new search.
+ */
+static inline void path_init_current() {    
+    path_state.path_size[PATH_CURRENT] = -1;
+    path_state.path_total_saving[PATH_CURRENT] = 0;
+    path_state.path_total_freq[PATH_CURRENT] = 0;
+}
+/**
  * Prints either the current path or the best path.
  * @param isCurrent If true, prints current path; otherwise prints best path
  * @param shouldPrintData If true, prints sequence details as well
