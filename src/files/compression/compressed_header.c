@@ -215,11 +215,11 @@ void populate_header(BestPathView best_path, const uint8_t* block,
         assigned[code_class]++;
     }
 
-#ifdef DEBUG
+//#ifdef DEBUG
     printf("[DEBUG] Final code map state:\n");
     print_code_map(&code_map);
     printf("[DEBUG] Header writing complete, flushing...\n");
-#endif
+//#endif
 
     bitwriter_overwrite_at(writer, header_start_bit, candidate_count, 16);    
    

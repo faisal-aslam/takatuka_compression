@@ -92,7 +92,7 @@ void print_code_map(const CodeMap* map) {
         
         if (e->occupied) {
             for (uint8_t j = 0; j < e->length; ++j) {
-                printf("%02X ", e->seq[j]);
+                printf("%c", e->seq[j]);
             }
         } else {
             printf("(empty)");
