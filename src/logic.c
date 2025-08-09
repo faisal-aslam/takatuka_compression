@@ -138,8 +138,8 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     uint16_t level = get_last_level_index();
     find_best_saving_path(block, level);
     final_book_keeping(block);
-#ifdef DEBUG
+//#ifdef DEBUG
     print_path(0, 1, block);
-#endif
+//#endif
     write_compressed_output("out.bin", block);
 }

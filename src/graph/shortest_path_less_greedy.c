@@ -221,9 +221,6 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
         update_best_path();
         break;// remove me later.
         
-    }
-    //do not need that. 
-    //final_book_keeping(block);
-    print_path(0, 1, block);
+    }   
 
 }
