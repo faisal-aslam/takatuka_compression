@@ -8,13 +8,15 @@
 #define PATH_BEST 1
 
 extern uint32_t max_saving_node_ids[MAX_LEVELS];
+extern uint32_t best_savings_node_ids[MAX_LEVELS];
+
 typedef struct {
-    uint32_t path_stack[2][MAX_LEVELS];   // 0 = current, 1 = best
-    uint32_t path_freqs[2][MAX_LEVELS];   // frequencies per node
-    double path_per_node_savings[2][MAX_LEVELS];  // per-node cost
-    uint32_t path_size[2];                 // size of each path
-    double path_total_saving[2];                  // total cost
-    uint32_t path_total_freq[2];
+    uint32_t path_stack[2][MAX_LEVELS];          // node IDs
+    uint32_t path_freqs[2][MAX_LEVELS];          // frequencies per node
+    uint32_t path_per_node_savings[2][MAX_LEVELS]; // per-node savings
+    int32_t  path_size[2];                       // signed: -1 means empty
+    uint32_t path_total_saving[2];               // total savings
+    uint32_t path_total_freq[2];                 // total frequency
 } Path;
 
 extern Path path_state;

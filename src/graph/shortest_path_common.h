@@ -6,6 +6,12 @@
 #include <math.h>
 
 
+#define CHECK_INDEX(idx, label)                                                                                        \
+    if ((idx) < 0 || (idx) >= MAX_LEVELS) {                                                                            \
+        fprintf(stderr, "ERROR: Index %d out of bounds in %s (MAX_LEVELS = %d)\n", (idx), (label), MAX_LEVELS);        \
+        abort();                                                                                                       \
+    }
+
 
 
 /**
@@ -36,40 +42,20 @@ static inline uint32_t calc_savings(GraphNode *node, uint32_t frequency) {
         return 0;
     }
 
-    // Approximate sqrt(len) in integer math
-    // Fast enough for small len values (1..255)
-    uint32_t sqrt_len;
-    switch (len) {
-        case 2:  sqrt_len = 1; break;
-        case 3:  sqrt_len = 1; break;
-        case 4:  sqrt_len = 2; break;
-        case 5:  sqrt_len = 2; break;
-        case 6:  sqrt_len = 2; break;
-        case 7:  sqrt_len = 2; break;
-        case 8:  sqrt_len = 2; break;
-        default: sqrt_len = (uint32_t)(sqrt((double)len)); break; // fallback for rare big lengths
-    }
-
-    // Savings = (frequency - 1) × length × sqrt(length)
-    uint64_t saving = (uint64_t)(frequency - 1) * len * sqrt_len;
+    
+    uint64_t saving = (uint64_t)(frequency - 1) * len * len;
     return (saving > UINT32_MAX) ? UINT32_MAX : (uint32_t)saving;
 }
-
-#define CHECK_INDEX(idx, label)                                                                                        \
-    if ((idx) < 0 || (idx) >= MAX_LEVELS) {                                                                            \
-        fprintf(stderr, "ERROR: Index %d out of bounds in %s (MAX_LEVELS = %d)\n", (idx), (label), MAX_LEVELS);        \
-        abort();                                                                                                       \
-    }
 
 /**
  * Initializes the path state for a new search.
  */
 static inline void path_init() {
     memset(&path_state, 0, sizeof(Path));
-    path_state.path_size[PATH_CURRENT] = -1;
-    path_state.path_size[PATH_BEST] = -1;
+    path_state.path_size[PATH_CURRENT] = UINT32_MAX;
+    path_state.path_size[PATH_BEST] = UINT32_MAX;
     path_state.path_total_saving[PATH_CURRENT] = 0;
-    path_state.path_total_saving[PATH_BEST] = -1;
+    path_state.path_total_saving[PATH_BEST] = UINT32_MAX;
     path_state.path_total_freq[PATH_BEST] = 0;
     path_state.path_total_freq[PATH_CURRENT] = 0;
 }
@@ -90,21 +76,23 @@ static inline void path_init_current() {
  */
 void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block) {
     const int idx = isCurrent ? PATH_CURRENT : PATH_BEST;
-    const int32_t size = path_state.path_size[idx];
-    if (size < 0) return; // no path exist.
-    CHECK_INDEX(size - 1, "print_path");
+    const int size = path_state.path_size[idx];
 
-    const double total_saving = path_state.path_total_saving[idx];
+    if (size < 0) return; // No path
+
+    CHECK_INDEX(size, "print_path");
+
+    uint32_t total_saving = path_state.path_total_saving[idx];
     const uint32_t *stack = path_state.path_stack[idx];
     const uint32_t *freqs = path_state.path_freqs[idx];
-    const double *per_node_savings = path_state.path_per_node_savings[idx];
+    const uint32_t *per_node_savings = path_state.path_per_node_savings[idx];
 
     printf("\n=== %s PATH ===\n", isCurrent ? "CURRENT" : "BEST");
-    printf("Path size = %d, Total saving = %.2lf, Total freq=%u \n", size + 1, total_saving,
-           path_state.path_total_freq[idx]);
+    printf("Path size = %d, Total saving = %u, Total freq=%u\n",
+           size + 1, total_saving, path_state.path_total_freq[idx]);
     printf("Node chain (node_id, level):\n");
 
-    for (int32_t i = size; i >= 0; i--) {
+    for (int i = size; i >= 0; i--) {
         GraphNode *node = get_graph_node(stack[i]);
         if (!node) continue;
         printf("(%u,%u)", node->node_id, node->node_level);
@@ -115,20 +103,21 @@ void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block
     if (!shouldPrintData) return;
 
     printf("\nDetailed sequence info:\n");
-    for (int32_t i = size; i >= 0; i--) {
+    for (int i = size; i >= 0; i--) {
         GraphNode *node = get_graph_node(stack[i]);
         if (!node) continue;
 
-        const uint8_t len = node->sequence_length;
-        const uint32_t freq = freqs[i];
-        const double saving = per_node_savings[i];
+        uint8_t len = node->sequence_length;
+        uint32_t freq = freqs[i];
+        uint32_t saving = per_node_savings[i];
 
         printf("\n -> ");
         if (node->is_RLE) {
             printf("RLE=YES ");
         }
 
-        printf("| id=%u len=%u freq=%u saving=%.2f | ", node->node_id, len, freq, saving);
+        printf("| id=%u len=%u freq=%u saving=%.2f | ",
+               node->node_id, len, freq, (double)saving);
 
         print_node_sequence(node, block);
 
@@ -259,24 +248,23 @@ void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
     }
 }
 
-
 /**
  * Updates the best path if the current path is better.
  */
 static inline uint8_t update_best_path() {
     uint8_t ret = 0;
 
-    int32_t saving_current = path_state.path_total_saving[PATH_CURRENT];
-    int32_t saving_best = path_state.path_total_saving[PATH_BEST];
+    uint32_t saving_current = path_state.path_total_saving[PATH_CURRENT];
+    uint32_t saving_best = path_state.path_total_saving[PATH_BEST];
     int32_t size_current = path_state.path_size[PATH_CURRENT];
     int32_t size_best = path_state.path_size[PATH_BEST];
     uint32_t freq_current = path_state.path_total_freq[PATH_CURRENT];
     uint32_t freq_best = path_state.path_total_freq[PATH_BEST];
 
-    if (saving_current > saving_best || (saving_current == saving_best && size_current < size_best) ||
+    if (size_best == -1 || saving_current > saving_best || (saving_current == saving_best && size_current < size_best) ||
         (saving_current == saving_best && size_current == size_best && freq_current > freq_best)) {
 
-        int32_t size = size_current + 1;
+        uint32_t size = size_current + 1;
         CHECK_INDEX(size - 1, "update_best_path copy");
 
         path_state.path_total_saving[PATH_BEST] = saving_current;
@@ -284,6 +272,8 @@ static inline uint8_t update_best_path() {
         path_state.path_total_freq[PATH_BEST] = freq_current;
 
         memcpy(path_state.path_stack[PATH_BEST], path_state.path_stack[PATH_CURRENT], size * sizeof(uint32_t));
+        memcpy(path_state.path_per_node_savings[PATH_BEST], path_state.path_per_node_savings[PATH_CURRENT], size * sizeof(uint32_t));
+        memcpy(path_state.path_freqs[PATH_BEST], path_state.path_freqs[PATH_CURRENT], size * sizeof(uint32_t));
 
         ret = 1;
     }

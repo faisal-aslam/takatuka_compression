@@ -23,7 +23,7 @@ static void print_node_content(FILE* output, const GraphNode* node, const uint8_
 
     for (uint8_t i = 0; i < node->sequence_length; i++) {
        
-        if (i > 0) fprintf(output, ",");
+        //if (i > 0) fprintf(output, ",");
         fprintf(output, "%c", block[node->offset + i]);
     }
 }
@@ -43,9 +43,11 @@ static void print_node(FILE* output, const GraphNode* node, const uint8_t *block
     uint32_t freq, node_id;
     seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id); 
     if(!node->is_RLE) {
-        fprintf(output, "\n l=%u, f=%u, b=%u, m=%u", node->node_level, freq, node->best_savings, max_saving_node_ids[node->node_level]);
+        fprintf(output, "\n l=%u, f=%u, b=%u, b_n=%u, m_n=%u", node->node_level, freq, node->best_savings, 
+            best_savings_node_ids[node->node_level], max_saving_node_ids[node->node_level]);
     } else {
-        fprintf(output, "\n l=%u, f=%u, b=%u, m=%u \nRLE", node->node_level, freq, node->best_savings, max_saving_node_ids[node->node_level]);
+        fprintf(output, "\n l=%u, f=%u, b=%u, b_n=%u, m_n=%u \nRLE", node->node_level, freq, node->best_savings,
+             best_savings_node_ids[node->node_level], max_saving_node_ids[node->node_level]);
     }
     fprintf(output, "\", shape=box, style=filled, fillcolor=\"%s\", fontcolor=\"%s\"];\n", 
             fillcolor, fontcolor);

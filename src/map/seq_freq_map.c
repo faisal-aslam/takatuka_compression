@@ -252,7 +252,7 @@ void seq_freq_map_print(void) {
         if (entry->sequence != NULL) {
             uint8_t len = META_GET_LEN(entry->meta);
             uint32_t freq = META_GET_FREQ(entry->meta);
-            if (freq <= 1) continue;
+            //if (freq <= 1) continue;
 
             printf("[%04u] freq=%u, len=%u, node_id=%u, seq=", i, freq, len, entry->node_id);
             for (uint8_t j = 0; j < len; j++) {
