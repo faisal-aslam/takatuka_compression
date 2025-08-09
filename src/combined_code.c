@@ -15,12 +15,12 @@ extern uint32_t max_saving_node_ids[MAX_LEVELS];
 extern uint32_t best_savings_node_ids[MAX_LEVELS];
 
 typedef struct {
-    uint32_t path_stack[2][MAX_LEVELS];   // 0 = current, 1 = best
-    uint32_t path_freqs[2][MAX_LEVELS];   // frequencies per node
-    uint32_t path_per_node_savings[2][MAX_LEVELS];  // per-node cost
-    uint32_t path_size[2];                 // size of each path
-    uint32_t path_total_saving[2];                  // total cost
-    uint32_t path_total_freq[2];
+    uint32_t path_stack[2][MAX_LEVELS];          // node IDs
+    uint32_t path_freqs[2][MAX_LEVELS];          // frequencies per node
+    uint32_t path_per_node_savings[2][MAX_LEVELS]; // per-node savings
+    int32_t  path_size[2];                       // signed: -1 means empty
+    uint32_t path_total_saving[2];               // total savings
+    uint32_t path_total_freq[2];                 // total frequency
 } Path;
 
 extern Path path_state;
@@ -43,6 +43,12 @@ void final_book_keeping(const uint8_t* block);
 #include "timer.h"
 #include <math.h>
 
+
+#define CHECK_INDEX(idx, label)                                                                                        \
+    if ((idx) < 0 || (idx) >= MAX_LEVELS) {                                                                            \
+        fprintf(stderr, "ERROR: Index %d out of bounds in %s (MAX_LEVELS = %d)\n", (idx), (label), MAX_LEVELS);        \
+        abort();                                                                                                       \
+    }
 
 
 
@@ -79,12 +85,6 @@ static inline uint32_t calc_savings(GraphNode *node, uint32_t frequency) {
     return (saving > UINT32_MAX) ? UINT32_MAX : (uint32_t)saving;
 }
 
-#define CHECK_INDEX(idx, label)                                                                                        \
-    if ((idx) < 0 || (idx) >= MAX_LEVELS) {                                                                            \
-        fprintf(stderr, "ERROR: Index %d out of bounds in %s (MAX_LEVELS = %d)\n", (idx), (label), MAX_LEVELS);        \
-        abort();                                                                                                       \
-    }
-
 /**
  * Initializes the path state for a new search.
  */
@@ -114,21 +114,23 @@ static inline void path_init_current() {
  */
 void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block) {
     const int idx = isCurrent ? PATH_CURRENT : PATH_BEST;
-    const int32_t size = path_state.path_size[idx];
-    if (size < 0) return; // no path exist.
-    CHECK_INDEX(size - 1, "print_path");
+    const int size = path_state.path_size[idx];
 
-    const double total_saving = path_state.path_total_saving[idx];
+    if (size < 0) return; // No path
+
+    CHECK_INDEX(size, "print_path");
+
+    uint32_t total_saving = path_state.path_total_saving[idx];
     const uint32_t *stack = path_state.path_stack[idx];
     const uint32_t *freqs = path_state.path_freqs[idx];
-    const double *per_node_savings = path_state.path_per_node_savings[idx];
+    const uint32_t *per_node_savings = path_state.path_per_node_savings[idx];
 
     printf("\n=== %s PATH ===\n", isCurrent ? "CURRENT" : "BEST");
-    printf("Path size = %d, Total saving = %.2lf, Total freq=%u \n", size + 1, total_saving,
-           path_state.path_total_freq[idx]);
+    printf("Path size = %d, Total saving = %u, Total freq=%u\n",
+           size + 1, total_saving, path_state.path_total_freq[idx]);
     printf("Node chain (node_id, level):\n");
 
-    for (int32_t i = size; i >= 0; i--) {
+    for (int i = size; i >= 0; i--) {
         GraphNode *node = get_graph_node(stack[i]);
         if (!node) continue;
         printf("(%u,%u)", node->node_id, node->node_level);
@@ -139,20 +141,21 @@ void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block
     if (!shouldPrintData) return;
 
     printf("\nDetailed sequence info:\n");
-    for (int32_t i = size; i >= 0; i--) {
+    for (int i = size; i >= 0; i--) {
         GraphNode *node = get_graph_node(stack[i]);
         if (!node) continue;
 
-        const uint8_t len = node->sequence_length;
-        const uint32_t freq = freqs[i];
-        const double saving = per_node_savings[i];
+        uint8_t len = node->sequence_length;
+        uint32_t freq = freqs[i];
+        uint32_t saving = per_node_savings[i];
 
         printf("\n -> ");
         if (node->is_RLE) {
             printf("RLE=YES ");
         }
 
-        printf("| id=%u len=%u freq=%u saving=%.2f | ", node->node_id, len, freq, saving);
+        printf("| id=%u len=%u freq=%u saving=%.2f | ",
+               node->node_id, len, freq, (double)saving);
 
         print_node_sequence(node, block);
 
@@ -291,12 +294,12 @@ static inline uint8_t update_best_path() {
 
     uint32_t saving_current = path_state.path_total_saving[PATH_CURRENT];
     uint32_t saving_best = path_state.path_total_saving[PATH_BEST];
-    uint32_t size_current = path_state.path_size[PATH_CURRENT];
-    uint32_t size_best = path_state.path_size[PATH_BEST];
+    int32_t size_current = path_state.path_size[PATH_CURRENT];
+    int32_t size_best = path_state.path_size[PATH_BEST];
     uint32_t freq_current = path_state.path_total_freq[PATH_CURRENT];
     uint32_t freq_best = path_state.path_total_freq[PATH_BEST];
 
-    if (size_best == UINT32_MAX || saving_current > saving_best || (saving_current == saving_best && size_current < size_best) ||
+    if (size_best == -1 || saving_current > saving_best || (saving_current == saving_best && size_current < size_best) ||
         (saving_current == saving_best && size_current == size_best && freq_current > freq_best)) {
 
         uint32_t size = size_current + 1;
@@ -415,13 +418,17 @@ void compute_best_savings_all(const uint8_t *block, const uint32_t *max_saving_n
  * adjust cumulative path savings/frequencies.
  */
 static inline void update_current_path(GraphNode *node, const uint8_t *block) {
-    int idx = ++path_state.path_size[PATH_CURRENT];
+    int idx = ++path_state.path_size[PATH_CURRENT];  // First push: from -1 to 0
     path_state.path_stack[PATH_CURRENT][idx] = node->node_id;
+
     uint32_t freq = 1;
     if (!node->is_RLE && node->sequence_length > 1) {
         freq = seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
+#ifdef DEBUG
         seq_freq_map_print();
+#endif
     }
+
     uint32_t savings = calc_savings(node, freq);
 
     path_state.path_per_node_savings[PATH_CURRENT][idx] = savings;
@@ -495,7 +502,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     uint32_t start_id_of_last_level = get_level_start_id(level);
     uint32_t end_id_of_last_level = get_level_end_id(level);
     for (uint32_t id = start_id_of_last_level; id < end_id_of_last_level; id++) {
-        
+        id = best_savings_node_ids[level];
         GraphNode *node = get_graph_node(id);
         if (node->useless) continue;
 
@@ -530,11 +537,232 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
         }
 
         // Step 5: Finalize and print path
-        update_best_path();        
+#ifdef DEBUG
+        print_path(1, 1, block);
+#endif        
+        update_best_path();
+        break;// remove me later.
         
-    }
-    //do not need that. 
-    //final_book_keeping(block);
-    print_path(0, 1, block);
+    }   
 
 }
+
+// === FILE: /home/noman/takatuka/takatuka_compression/src/graph/graph.h ===
+
+#pragma once
+/*
+ * Graph structure with virtual parent links:
+ * - Nodes are organized in levels.
+ * - Each node’s parents are all nodes in the previous level whose sequences may match.
+ * - Parent links are inferred on-the-fly based on level and sequence_length.
+ * - This saves memory and allows fast traversal by computing parent ranges.
+ */
+
+#include <stdint.h>
+#include "../constants.h"
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include "graph_visualizer.h"
+#include <stdio.h>
+#include <stdbool.h>
+
+#define MAX_LEVELS (BLOCK_SIZE+1) //one extra for the root level.
+#define MAX_WEIGHTS SEQ_LENGTH_LIMIT
+
+typedef struct {
+    uint32_t node_id;
+    uint32_t offset;
+    uint32_t best_savings;
+    uint16_t node_level;
+    uint8_t useless;
+    uint8_t sequence_length;
+    uint8_t is_RLE;
+    uint8_t repeat_seq_length;
+    uint8_t length_of_RLE;
+} GraphNode;
+
+typedef struct {    
+    uint32_t size;
+    uint32_t first_node_of_level[MAX_LEVELS];
+    GraphNode nodes[MAX_GRAPH_NODES];
+    uint16_t total_levels;
+} Graph;
+
+extern Graph graph; //always use graph.c definiton.
+
+void init_graph(void);
+static inline uint8_t get_parent_nodes_count(GraphNode* node);
+static inline uint32_t total_nodes_at_level(uint16_t level);
+static inline uint32_t get_level_start_id(uint16_t level);
+static inline uint32_t get_level_end_id(uint16_t level);
+static inline uint16_t get_last_level_index(void); 
+static inline GraphNode* get_graph_node(uint32_t node_id);
+static inline GraphNode* get_next_node(void);
+static inline uint16_t create_graph_level(void);
+static inline uint32_t get_graph_size(void);
+static inline GraphNode* get_parent_nodes(GraphNode* node);
+static inline uint16_t get_parent_level(GraphNode* node);
+static inline void reset_graph(void);
+static inline uint8_t get_parent_nodes_count_by_level_and_length(uint16_t level, uint8_t seq_length);
+void print_graph_node(GraphNode *node);
+void print_node_sequence(GraphNode *node, const uint8_t* block);
+void print_all_nodes(const uint8_t* block);
+void mass_increment_levels(int add_levels);
+void compact_graph(const uint8_t* block);
+
+/**
+ * @brief Detects Run-Length Encodable (RLE) sequences within a data block
+ * 
+ * This function analyzes a block of data to identify the longest prefix suitable for RLE compression,
+ * either as a uniform byte sequence or a repeating pattern. The function is optimized for performance
+ * when processing entire blocks at once.
+ * 
+ * Key Features:
+ * - Detects both uniform sequences (e.g., "AAAAA") and patterned sequences (e.g., "ABABAB")
+ * - Returns the longest valid RLE prefix meeting minimum length requirements
+ * - Processes data in-place without memory allocation
+ * - Uses optimized checks for early rejection of non-RLE candidates
+ * 
+ * Output Parameters:
+ * - repeat_seq_length: For uniform sequences = 1, for patterns = pattern length
+ * - length_of_RLE: Number of bytes that can be RLE encoded (may be less than block_size)
+ * 
+ * @param[out] repeat_seq_length Length of repeating pattern (1 for uniform sequences)
+ * @param[out] length_of_RLE Length of encodable sequence (0 if no RLE found)
+ * @param[in] block_size Total size of the block to analyze
+ * @param[in] offset Byte offset within the block to start analysis
+ * @param[in] block Pointer to the data block
+ * 
+ * @return uint8_t Returns 1 if RLE sequence found, 0 otherwise
+ * 
+ * @note Performance Considerations:
+ *       - Processes data in a single pass when possible
+ *       - Uses memcmp for efficient pattern comparison
+ *       - Early termination on non-RLE sequences
+ * 
+ * @example "AAAAAAABCD" → returns 1, repeat_seq_length=1, length_of_RLE=7
+ * @example "ABABABXXXX" → returns 1, repeat_seq_length=2, length_of_RLE=6
+ * @example "ABCDEFGHIJ" → returns 0
+ * 
+ * @see MIN_RLE_SEQ_LENGTH Minimum sequence length to consider for RLE
+ * @see RLE_MAX_PATTERN_LENGTH Maximum pattern length to check
+ */
+uint8_t is_RLE_sequence(uint8_t* repeat_seq_length, uint8_t* length_of_RLE, uint8_t block_size, uint32_t offset, const uint8_t *block);
+
+static inline void reset_graph(void) {
+    graph.size = 0;
+    graph.total_levels = 0;
+}
+
+static inline GraphNode* get_next_node(void) {
+    GraphNode* g_node = &graph.nodes[graph.size++];
+    g_node->node_id = graph.size-1; //please never change node's id ever.
+    g_node->node_level = graph.total_levels-1; //please do not change this ever too.  
+    return g_node;
+}
+
+static inline uint32_t get_level_start_id(uint16_t level) {
+    if (level >= graph.total_levels) {
+        fprintf(stderr, "Illegal level: %u (total_levels=%u)\n", level, graph.total_levels);
+        exit(1);
+    }
+    return graph.first_node_of_level[level];
+}
+
+static inline uint32_t get_level_end_id(uint16_t level) {
+    if (level >= graph.total_levels) {
+        fprintf(stderr, "Illegal level: %u (total_levels=%u)\n", level, graph.total_levels);
+        exit(1);
+    }
+    if (level == graph.total_levels - 1) {
+        return graph.size;
+    }
+    return graph.first_node_of_level[level+1];
+}
+
+static inline uint16_t get_last_level_index(void)  {
+    return (graph.total_levels > 0) ? graph.total_levels - 1 : 0;
+}
+
+static inline uint16_t get_parent_level(GraphNode* node) {    
+    uint16_t parent_level =  node->node_level-node->sequence_length; 
+
+    if (!node || parent_level == UINT16_MAX ||  parent_level > MAX_LEVELS) {
+        fprintf(stderr, "illegal parent level");
+        abort();
+    }
+    return parent_level;
+}
+
+static inline uint32_t get_graph_size(void) {
+    return graph.size;
+}
+
+static inline GraphNode* get_graph_node(uint32_t node_id) {
+    assert(node_id < graph.size);
+    return &graph.nodes[node_id];
+}
+
+
+static inline uint16_t create_graph_level(void) {
+    if (graph.total_levels < MAX_LEVELS) {
+        graph.first_node_of_level[graph.total_levels] = graph.size;
+        graph.total_levels++;
+        return graph.total_levels-1;
+    }
+    fprintf(stderr, "Illegal level created \n");
+    abort();
+    return 0;
+}
+
+static inline uint8_t get_parent_nodes_count_by_level_and_length(uint16_t level, uint8_t seq_length) {
+    // Ensure the level is valid and large enough for a sequence of length `seq_length`
+    if (level == 0 || seq_length == 0 || seq_length > level) {
+        return 0;
+    }
+
+    uint16_t parent_level = level - seq_length;
+
+    if (parent_level >= graph.total_levels) {
+        return 0;
+    }
+
+    uint32_t count = total_nodes_at_level(parent_level);
+
+    if (count > SEQ_LENGTH_LIMIT + 1) {
+        fprintf(stderr, "Illegal number of parent nodes at hypothetical level=%u (seq_length=%u)\n",
+                level, seq_length);
+        abort();
+    }
+
+    return (uint8_t)count;
+}
+
+static inline uint32_t total_nodes_at_level(uint16_t level) {
+
+    return (get_level_end_id(level) - get_level_start_id(level));
+}
+
+uint8_t get_parent_nodes_count(GraphNode* node) {
+    if (!node || node->node_id == 0) {
+        return 0;
+    }
+    uint8_t parents_count = total_nodes_at_level(get_parent_level(node));
+    if (parents_count > SEQ_LENGTH_LIMIT+1) {
+        fprintf(stderr, "Illegal number of parent nodes, at node=%d, node_level=%d\n", node->node_id, node->node_level);        
+        abort();
+    }
+    return parents_count;
+}
+
+static inline GraphNode* get_parent_nodes(GraphNode* node) {
+    if (node->node_id == 0) return NULL;
+    //Step 1: Get parent level.
+    uint16_t parent_level = get_parent_level(node);
+    // Step 2: Get the index of the first node of the parent level
+    uint32_t start_index =get_level_start_id (parent_level);
+    return &graph.nodes[start_index];
+}
+
+

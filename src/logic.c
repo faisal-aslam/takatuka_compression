@@ -101,6 +101,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         }
         // Non-RLE nodes: Make sequences of specific sizes.
         for (uint8_t seq_len = 1; seq_len <= max_sequence; seq_len++) {
+            if (seq_len > 1 && seq_len < SEQ_LENGTH_START) continue;
             uint8_t parent_count = get_parent_nodes_count_by_level_and_length(current_level, seq_len);
             if (parent_count == 0) {
                 continue;
