@@ -113,6 +113,7 @@ static inline void update_current_path(GraphNode *node, const uint8_t *block) {
     path_state.path_freqs[PATH_CURRENT][idx] = freq;
     path_state.path_total_saving[PATH_CURRENT] += savings;
     path_state.path_total_freq[PATH_CURRENT] += freq;
+    path_state.path_total_cost[PATH_CURRENT] += calc_cost(node, freq);
 }
 
 /**
@@ -180,7 +181,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     uint32_t start_id_of_last_level = get_level_start_id(level);
     uint32_t end_id_of_last_level = get_level_end_id(level);
     for (uint32_t id = start_id_of_last_level; id < end_id_of_last_level; id++) {
-        id = best_savings_node_ids[level];
+
         GraphNode *node = get_graph_node(id);
         if (node->useless) continue;
 
@@ -219,7 +220,6 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
         print_path(1, 1, block);
 #endif        
         update_best_path();
-        break;// remove me later.
         
     }   
 

@@ -1,10 +1,9 @@
 #pragma once
 
-#include "shortest_path.h"
 #include "seq_freq_map.h"
+#include "shortest_path.h"
 #include "timer.h"
 #include <math.h>
-
 
 #define CHECK_INDEX(idx, label)                                                                                        \
     if ((idx) < 0 || (idx) >= MAX_LEVELS) {                                                                            \
@@ -12,7 +11,52 @@
         abort();                                                                                                       \
     }
 
+/**
+ * @brief Calculates the storage cost in bytes for adding a graph node to a path
+ *
+ * This is a hot path function - optimized for minimal branching and fast execution.
+ * All costs are calculated in bytes of storage required.
+ *
+ * Cost Rules:
+ * - Zero-length sequences: 0 bytes (invalid case, handled defensively)
+ * - Single-byte sequences: 1 byte (raw byte)
+ * - Multi-byte unique sequences (freq=1): n+1 bytes (n bytes + 1 byte length prefix)
+ * - Multi-byte repeated sequences (freq>1): 1 byte (reference to dictionary)
+ * - RLE sequences: pattern_length + 1 byte (pattern + repeat count)
+ *
+ * @param node Pointer to graph node being evaluated
+ * @param frequency Frequency count of this sequence in the data
+ * @return uint32_t Storage cost in bytes (always >= 0)
+ */
+static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
+    const uint8_t len = node->sequence_length;
+    uint32_t base_cost;
 
+    if (node->node_id == 0) return 0; // no cost for the root node.
+
+    // Handle RLE case first (different cost model)
+    if (node->is_RLE) {
+        // RLE cost: pattern length + 1 byte for repeat count
+        return (uint32_t)node->repeat_seq_length + 1;
+    }
+
+    // Main cost calculation
+    if (len <= 1) {
+        // Cases: 0 bytes = 0 cost, 1 byte = 1 cost
+        base_cost = len;
+    } else {
+        // Multi-byte case: 1 byte if repeated, n+1 bytes if unique
+        base_cost = (frequency > 1) ? 1u : ((uint32_t)len + 1u);
+    }
+
+#ifdef DEBUG
+    if (base_cost == 0 && len != 0) {
+        printf("WARNING: Zero cost for non-zero length node %u\n", node->node_id);
+    }
+#endif
+
+    return base_cost;
+}
 
 /**
  * @brief Calculates the storage saving (integer version).
@@ -42,7 +86,6 @@ static inline uint32_t calc_savings(GraphNode *node, uint32_t frequency) {
         return 0;
     }
 
-    
     uint64_t saving = (uint64_t)(frequency - 1) * len * len;
     return (saving > UINT32_MAX) ? UINT32_MAX : (uint32_t)saving;
 }
@@ -52,21 +95,24 @@ static inline uint32_t calc_savings(GraphNode *node, uint32_t frequency) {
  */
 static inline void path_init() {
     memset(&path_state, 0, sizeof(Path));
-    path_state.path_size[PATH_CURRENT] = UINT32_MAX;
-    path_state.path_size[PATH_BEST] = UINT32_MAX;
+    path_state.path_size[PATH_CURRENT] = -1;
+    path_state.path_size[PATH_BEST] = -1;
     path_state.path_total_saving[PATH_CURRENT] = 0;
     path_state.path_total_saving[PATH_BEST] = UINT32_MAX;
     path_state.path_total_freq[PATH_BEST] = 0;
     path_state.path_total_freq[PATH_CURRENT] = 0;
+    path_state.path_total_cost[PATH_CURRENT] = 0;
+    path_state.path_total_cost[PATH_BEST] = 0;
 }
 
 /**
  * Initializes the path state for a new search.
  */
-static inline void path_init_current() {    
+static inline void path_init_current() {
     path_state.path_size[PATH_CURRENT] = -1;
     path_state.path_total_saving[PATH_CURRENT] = 0;
     path_state.path_total_freq[PATH_CURRENT] = 0;
+    path_state.path_total_cost[PATH_CURRENT] = 0;
 }
 /**
  * Prints either the current path or the best path.
@@ -88,8 +134,8 @@ void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block
     const uint32_t *per_node_savings = path_state.path_per_node_savings[idx];
 
     printf("\n=== %s PATH ===\n", isCurrent ? "CURRENT" : "BEST");
-    printf("Path size = %d, Total saving = %u, Total freq=%u\n",
-           size + 1, total_saving, path_state.path_total_freq[idx]);
+    printf("Path size = %d, Total saving = %u, Total cost=%u\n", size + 1, total_saving,
+           path_state.path_total_cost[idx]);
     printf("Node chain (node_id, level):\n");
 
     for (int i = size; i >= 0; i--) {
@@ -116,8 +162,7 @@ void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block
             printf("RLE=YES ");
         }
 
-        printf("| id=%u len=%u freq=%u saving=%u | ",
-               node->node_id, len, freq, saving);
+        printf("| id=%u len=%u freq=%u saving=%u | ", node->node_id, len, freq, saving);
 
         print_node_sequence(node, block);
 
@@ -126,7 +171,6 @@ void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block
 
     printf("\n\n");
 }
-
 
 void free_path_state() {
     // Only if path_state has dynamic allocations
@@ -137,7 +181,8 @@ void final_book_keeping(const uint8_t *block) {
     init_seq_freq_map();
     GraphNode *node;
     const uint32_t *path = path_state.path_stack[PATH_BEST];
-    uint32_t path_len = path_state.path_size[PATH_BEST];
+    int32_t path_len = path_state.path_size[PATH_BEST];
+    if (path_len <=0) return; 
 
     // Pass 1: Count sequence frequencies
     for (uint32_t i = 0; i <= path_len; i++) {
@@ -205,8 +250,8 @@ void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
             uint32_t saving = calc_savings(node, freq);
 
 #ifdef DEBUG
-            printf("  Node %u: seq_len = %u, is_RLE = %u, freq = %u, saving = %u\n",
-                   node->node_id, node->sequence_length, node->is_RLE, freq, saving);
+            printf("  Node %u: seq_len = %u, is_RLE = %u, freq = %u, saving = %u\n", node->node_id,
+                   node->sequence_length, node->is_RLE, freq, saving);
 #endif
 
             if (saving > max_saving || best_node_id == UINT32_MAX) {
@@ -260,9 +305,11 @@ static inline uint8_t update_best_path() {
     int32_t size_best = path_state.path_size[PATH_BEST];
     uint32_t freq_current = path_state.path_total_freq[PATH_CURRENT];
     uint32_t freq_best = path_state.path_total_freq[PATH_BEST];
+    uint32_t cost_current = path_state.path_total_cost[PATH_CURRENT];
+    uint32_t cost_best = path_state.path_total_cost[PATH_BEST];
 
-    if (size_best == -1 || saving_current > saving_best || (saving_current == saving_best && size_current < size_best) ||
-        (saving_current == saving_best && size_current == size_best && freq_current > freq_best)) {
+    if (size_best == -1 || cost_current < cost_best ||
+        (cost_current == cost_best && size_current < size_best)) {
 
         uint32_t size = size_current + 1;
         CHECK_INDEX(size - 1, "update_best_path copy");
@@ -270,9 +317,11 @@ static inline uint8_t update_best_path() {
         path_state.path_total_saving[PATH_BEST] = saving_current;
         path_state.path_size[PATH_BEST] = size_current;
         path_state.path_total_freq[PATH_BEST] = freq_current;
+        path_state.path_total_cost[PATH_BEST] = cost_current;
 
         memcpy(path_state.path_stack[PATH_BEST], path_state.path_stack[PATH_CURRENT], size * sizeof(uint32_t));
-        memcpy(path_state.path_per_node_savings[PATH_BEST], path_state.path_per_node_savings[PATH_CURRENT], size * sizeof(uint32_t));
+        memcpy(path_state.path_per_node_savings[PATH_BEST], path_state.path_per_node_savings[PATH_CURRENT],
+               size * sizeof(uint32_t));
         memcpy(path_state.path_freqs[PATH_BEST], path_state.path_freqs[PATH_CURRENT], size * sizeof(uint32_t));
 
         ret = 1;

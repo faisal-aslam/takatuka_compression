@@ -17,7 +17,7 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
-#define SEQ_LENGTH_START 3
+#define SEQ_LENGTH_START 2
 #define SEQ_LENGTH_LIMIT 128 //a.k.a k
 #define BLOCK_SIZE 64000
 #define MAX_BRUTE_FORCE_PATH 4
