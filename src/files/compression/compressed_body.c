@@ -1,16 +1,21 @@
 // compressed_body.c
 
+// compressed_body.c
+//
+// Writes the compressed body using the code_map filled by populate_header().
+// Uses global_class2_bits (written in header) to determine class-2 code widths.
+
 #include "compressed_body.h"
 #include "bit_writer.h"
 #include "code_classes.h"
 #include "code_map.h"
-#include "compressed_header.h"
+#include "compressed_header.h" // for global_class2_bits
 #include "graph.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-extern CodeMap code_map;
+extern CodeMap code_map; // filled by populate_header()
 
 void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_write, BitWriter *writer) {
 #ifdef DEBUG
@@ -38,7 +43,7 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
         uint16_t code;
         uint8_t code_class;
         if (node->is_RLE) {
-            // RLE case
+            // RLE case: encoded using code_class = 3 (bits '11') and RLE format
             if (node->repeat_seq_length > 8) {
                 fprintf(stderr, "RLE repeat_seq_length too large: %u\n", node->repeat_seq_length);
                 exit(EXIT_FAILURE);
@@ -49,18 +54,19 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
                    node->length_of_RLE);
 #endif
 
+            // Write compressed flag (1) then class (3 == 11b)
             SAFE_BITWRITE(writer, 1, 1, file_to_write, "c_flag");
 #ifdef DEBUG
             printf("[DEBUG] ➤ Written 1 bit: 1 (compressed flag)\n");
             bitwriter_print_state(writer);
 #endif
-            SAFE_BITWRITE(writer, 3, 2, file_to_write, "code_class"); //In case of RLE code_class is (11)_2=3
+            SAFE_BITWRITE(writer, 3, 2, file_to_write, "code_class"); // RLE uses class code 11b
 #ifdef DEBUG
             printf("[DEBUG] ➤ Written 2 bits: code class = %u\n", 3);
             bitwriter_print_state(writer);
 #endif
 
-
+            // RLE metadata
             SAFE_BITWRITE(writer, node->repeat_seq_length, 3, file_to_write, "seq_len");
 #ifdef DEBUG
             printf("[DEBUG] ➤ Written 3 bits: RLE repeat length = %u\n", node->repeat_seq_length);
@@ -80,7 +86,7 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
 #endif
             }
         } else if (len > 1 && code_map_get(&code_map, seq, len, &code, &code_class)) {
-            // Code of that sequence exists so it is compressed regular (Regular case).
+            // Compressed regular sequence - write compressed flag, class, and code index.
 #ifdef DEBUG
             printf("[DEBUG] Writing compressed sequence (code=%u, class=%u)\n", code, code_class);
 #endif
@@ -90,18 +96,22 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
             printf("[DEBUG] ➤ Written 1 bit: 1 (compressed flag)\n");
             bitwriter_print_state(writer);
 #endif
+
             SAFE_BITWRITE(writer, code_class, 2, file_to_write, "code_class");
 #ifdef DEBUG
             printf("[DEBUG] ➤ Written 2 bits: code class = %u\n", code_class);
             bitwriter_print_state(writer);
 #endif
-            SAFE_BITWRITE(writer, code, get_code_class_size(code_class), file_to_write, "code");
+
+            // Use class2 bit-width if code_class == 2, else fixed sizes from code_classes
+            uint8_t bits_for_code = get_code_class_size(code_class, global_class2_bits);
+            SAFE_BITWRITE(writer, code, bits_for_code, file_to_write, "code");
 #ifdef DEBUG
-            printf("[DEBUG] ➤ Written %u bits: code = %u\n", get_code_class_size(code_class), code);
+            printf("[DEBUG] ➤ Written %u bits: code = %u\n", bits_for_code, code);
             bitwriter_print_state(writer);
 #endif
         } else {
-            // Uncompressed case
+            // Uncompressed bytes: each raw byte prefixed with a '0' flag bit.
 #ifdef DEBUG
             printf("[DEBUG] Writing uncompressed bytes (len=%u)\n", len);
 #endif
@@ -123,7 +133,6 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
 #ifdef DEBUG
     printf("[DEBUG] Body writing complete, flushing...\n");
 #endif
-
 
     if (!bitwriter_write_to_file(writer, file_to_write)) {
         fprintf(stderr, "Failed to write final body data to file\n");

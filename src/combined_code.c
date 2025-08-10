@@ -1,768 +1,753 @@
 // Combined C and H Files
 
-// === FILE: /home/noman/takatuka/takatuka_compression/src/graph/shortest_path.h ===
+// === FILE: /home/noman/takatuka/takatuka_compression/src/files/code_classes.h ===
+
+//code_class.h
 
 #pragma once
+
 #include <stdint.h>
-#include "graph.h"
+#include <string.h>
 #include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 
-#define PATH_CURRENT 0
-#define PATH_BEST 1
+#define TOTAL_NUMBER_OF_CODE_CLASSES 4
 
-extern uint32_t max_saving_node_ids[MAX_LEVELS];
-extern uint32_t best_savings_node_ids[MAX_LEVELS];
+uint8_t get_code_class_overhead(uint8_t code_class);
 
-typedef struct {
-    uint32_t path_stack[2][MAX_LEVELS];          // node IDs
-    uint32_t path_freqs[2][MAX_LEVELS];          // frequencies per node
-    uint32_t path_per_node_savings[2][MAX_LEVELS]; // per-node savings
-    int32_t  path_size[2];                       // signed: -1 means empty
-    uint32_t path_total_saving[2];               // total savings
-    uint32_t path_total_freq[2];                 // total frequency
-} Path;
+/* NOTE: add class2_bits - used when code_class == 2 to compute correct size */
+uint8_t get_header_overhead(uint8_t code_class, uint16_t seq_length, uint8_t class2_bits);
 
-extern Path path_state;
-extern long total_input_size;
+uint16_t get_code_class_threshold(uint8_t code_class, uint8_t class2_bits);
+uint8_t get_code_class_size(uint8_t code_class, uint8_t class2_bits);
 
-// to find the path with maximum total savings from any leaf to the root node
-void find_best_saving_path(const uint8_t* block, uint16_t starting_level);
+uint8_t calculate_class2_bits(uint16_t class2_codes);
 
-void free_path_state();
+// === FILE: /home/noman/takatuka/takatuka_compression/src/files/code_classes.c ===
 
-void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block);
+//code_class.c
 
-void final_book_keeping(const uint8_t* block);
-// === FILE: /home/noman/takatuka/takatuka_compression/src/graph/shortest_path_common.h ===
+// src/files/code_classes.c
 
-#pragma once
+#include "code_classes.h"
 
-#include "shortest_path.h"
-#include "seq_freq_map.h"
-#include "timer.h"
-#include <math.h>
-
-
-#define CHECK_INDEX(idx, label)                                                                                        \
-    if ((idx) < 0 || (idx) >= MAX_LEVELS) {                                                                            \
-        fprintf(stderr, "ERROR: Index %d out of bounds in %s (MAX_LEVELS = %d)\n", (idx), (label), MAX_LEVELS);        \
-        abort();                                                                                                       \
-    }
-
-
-
-/**
- * @brief Calculates the storage saving (integer version).
+/*
+ * Header overhead layout per sequence entry (in bits):
+ *  - 3 bits : (reserved for something in your original format — keep it)
+ *  - N bytes * 8 : sequence bytes
+ *  - 2 bits : code_class prefix
+ *  - M bits : code index (depends on class: class0/class1 fixed, class2 dynamic)
  *
- * @param node      Pointer to graph node being evaluated.
- * @param frequency Frequency count of this sequence in the data.
- * @return uint32_t Storage saving in bytes (integer approximation).
+ * get_header_overhead returns this total in BITS or BYTES? Your old code
+ * returned an integer that was used only for relative calculations; keep the same
+ * semantics (here returning number of bits).
  */
-static inline uint32_t calc_savings(GraphNode *node, uint32_t frequency) {
-    // No savings for root node
-    if (node->node_id == 0) return 0;
-
-    const uint8_t len = node->sequence_length;
-
-    // Handle RLE case first (uses different saving model)
-    if (node->is_RLE) {
-        // RLE saving: pattern length + 1 byte for repeat count
-        // Original was: (len_ratio)^3 in floating point
-        // We'll approximate it here and clamp to avoid overflow.
-        uint32_t ratio = (node->length_of_RLE / node->repeat_seq_length);
-        uint64_t cubic = (uint64_t)ratio * ratio * ratio;
-        return (cubic > UINT32_MAX) ? UINT32_MAX : (uint32_t)cubic;
-    }
-
-    // For sequences of length <= 1, no savings
-    if (len <= 1 || frequency <= 1) {
+uint8_t get_header_overhead(uint8_t code_class, uint16_t seq_length, uint8_t class2_bits) {
+    if (code_class == 0 || code_class == 1 || code_class == 2) {
+        /* 3 bits + seq_length*8 + 2 bits class + code bits for that class */
+        uint8_t code_bits = get_code_class_size(code_class, class2_bits);
+        return (uint8_t)(3 + (seq_length * 8) + 2 + code_bits);
+    } else {
+        fprintf(stderr, "Invalid code_class %d Exiting (get_header_overhead)!\n", code_class);
+        exit(EXIT_FAILURE);
         return 0;
     }
-
-    
-    uint64_t saving = (uint64_t)(frequency - 1) * len * len;
-    return (saving > UINT32_MAX) ? UINT32_MAX : (uint32_t)saving;
 }
 
-/**
- * Initializes the path state for a new search.
+/*
+ * calculate_class2_bits:
+ *  - returns smallest n such that (1u << n) >= class2_codes
+ *  - returns 0 for class2_codes == 0
+ *  - returns 0 for class2_codes == 1 (i.e. 1 entry requires 0 index bits)
+ *    If you prefer a minimum of 1 bit for any non-zero count, change the return
+ *    to `return (n == 0) ? 1 : n;`.
  */
-static inline void path_init() {
-    memset(&path_state, 0, sizeof(Path));
-    path_state.path_size[PATH_CURRENT] = UINT32_MAX;
-    path_state.path_size[PATH_BEST] = UINT32_MAX;
-    path_state.path_total_saving[PATH_CURRENT] = 0;
-    path_state.path_total_saving[PATH_BEST] = UINT32_MAX;
-    path_state.path_total_freq[PATH_BEST] = 0;
-    path_state.path_total_freq[PATH_CURRENT] = 0;
-}
+uint8_t calculate_class2_bits(uint16_t class2_codes) {
+    if (class2_codes == 0) return 0;
 
-/**
- * Initializes the path state for a new search.
- */
-static inline void path_init_current() {    
-    path_state.path_size[PATH_CURRENT] = -1;
-    path_state.path_total_saving[PATH_CURRENT] = 0;
-    path_state.path_total_freq[PATH_CURRENT] = 0;
-}
-/**
- * Prints either the current path or the best path.
- * @param isCurrent If true, prints current path; otherwise prints best path
- * @param shouldPrintData If true, prints sequence details as well
- * @param block Pointer to input block (for sequence data)
- */
-void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block) {
-    const int idx = isCurrent ? PATH_CURRENT : PATH_BEST;
-    const int size = path_state.path_size[idx];
-
-    if (size < 0) return; // No path
-
-    CHECK_INDEX(size, "print_path");
-
-    uint32_t total_saving = path_state.path_total_saving[idx];
-    const uint32_t *stack = path_state.path_stack[idx];
-    const uint32_t *freqs = path_state.path_freqs[idx];
-    const uint32_t *per_node_savings = path_state.path_per_node_savings[idx];
-
-    printf("\n=== %s PATH ===\n", isCurrent ? "CURRENT" : "BEST");
-    printf("Path size = %d, Total saving = %u, Total freq=%u\n",
-           size + 1, total_saving, path_state.path_total_freq[idx]);
-    printf("Node chain (node_id, level):\n");
-
-    for (int i = size; i >= 0; i--) {
-        GraphNode *node = get_graph_node(stack[i]);
-        if (!node) continue;
-        printf("(%u,%u)", node->node_id, node->node_level);
-        if (i > 0) printf(" -> ");
+    uint8_t n = 0;
+    while ((n < 31) && ((1u << n) < (uint32_t)class2_codes)) {
+        n++;
     }
-    printf("\n");
-
-    if (!shouldPrintData) return;
-
-    printf("\nDetailed sequence info:\n");
-    for (int i = size; i >= 0; i--) {
-        GraphNode *node = get_graph_node(stack[i]);
-        if (!node) continue;
-
-        uint8_t len = node->sequence_length;
-        uint32_t freq = freqs[i];
-        uint32_t saving = per_node_savings[i];
-
-        printf("\n -> ");
-        if (node->is_RLE) {
-            printf("RLE=YES ");
-        }
-
-        printf("| id=%u len=%u freq=%u saving=%.2f | ",
-               node->node_id, len, freq, (double)saving);
-
-        print_node_sequence(node, block);
-
-        if (i % 20 == 0) fflush(stdout);
-    }
-
-    printf("\n\n");
+    return n;
 }
 
-
-void free_path_state() {
-    // Only if path_state has dynamic allocations
-    memset(&path_state, 0, sizeof(Path));
-}
-
-void final_book_keeping(const uint8_t *block) {
-    init_seq_freq_map();
-    GraphNode *node;
-    const uint32_t *path = path_state.path_stack[PATH_BEST];
-    uint32_t path_len = path_state.path_size[PATH_BEST];
-
-    // Pass 1: Count sequence frequencies
-    for (uint32_t i = 0; i <= path_len; i++) {
-        node = get_graph_node(path[i]);
-        if (node->sequence_length > 1 && !node->is_RLE) {
-            seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
-        }
-    }
-
-    // Pass 2: Store frequencies per node
-    for (uint32_t i = 0; i <= path_len; i++) {
-        node = get_graph_node(path[i]);
-        if (node->sequence_length > 1 && !node->is_RLE) {
-            uint32_t freq, node_id_unused;
-            seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id_unused);
-            path_state.path_freqs[PATH_BEST][i] = freq;
-        } else {
-            path_state.path_freqs[PATH_BEST][i] = 1; // or other sentinel if needed
-        }
+/* Return the number of bits used for the index portion (excluding the 2-bit class prefix) */
+uint8_t get_code_class_size(uint8_t code_class, uint8_t class2_bits) {
+    switch (code_class) {
+        case 0: return 4;              /* fixed */
+        case 1: return 5;              /* fixed — note you had 5 in your last edit */
+        case 2: return class2_bits;    /* dynamic */
+        default:
+            fprintf(stderr, "Invalid code_class %d Exiting (get_code_class_size)!\n", code_class);
+            exit(EXIT_FAILURE);
+            return 0;
     }
 }
 
-void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
-    if (graph.total_levels < 2) return;
+/* Return threshold (capacity) for given class as uint16_t. For class2 uses class2_bits. */
+uint16_t get_code_class_threshold(uint8_t code_class, uint8_t class2_bits) {
+    uint8_t bits;
+    if (code_class == 2) {
+        bits = class2_bits;
+    } else {
+        bits = get_code_class_size(code_class, 0); /* class2_bits unused for non-class2 */
+    }
 
-    for (uint16_t level = graph.total_levels - 1; level != 0; level--) {
-        uint32_t start = graph.first_node_of_level[level];
-        uint32_t end = (level + 1 < graph.total_levels) ? graph.first_node_of_level[level + 1] : graph.size;
+    if (bits >= 16) {
+        /* uint16_t return can't represent >2^15 safely here. If you expect >65535
+           entries for a class2, change return type to uint32_t. */
+        fprintf(stderr, "Requested threshold bits too large: %u\n", bits);
+        exit(EXIT_FAILURE);
+    }
+    return (uint16_t)(1u << bits);
+}
 
-        if (start == UINT32_MAX || start >= end) {
-            max_ids[level] = UINT32_MAX; // No nodes in this level
-#ifdef DEBUG
-            printf("[Level %u] Empty or invalid range (start=%u, end=%u), skipping.\n", level, start, end);
-#endif
-            continue;
+/* Returns overhead of a code_class (kept same as before) */
+uint8_t get_code_class_overhead(uint8_t code_class) {
+    (void)code_class; // unused for now
+    return 3;
+}
+
+// === FILE: /home/noman/takatuka/takatuka_compression/src/files/decompression//bit_reader.c ===
+
+// bit_reader.c
+#include "bit_reader.h"
+#include <stdlib.h>
+
+void bitreader_init(BitReader *br, const uint8_t *buffer, size_t size) {
+    br->buffer = buffer;
+    br->buffer_size = size;
+    br->byte_pos = 0;
+    br->bit_pos = 0;
+    br->overflow = false;
+}
+
+bool bitreader_read(BitReader *br, uint32_t *value, uint8_t num_bits) {
+    if (num_bits > 32 || br->overflow) return false;
+    *value = 0;
+
+    for (int i = num_bits - 1; i >= 0; --i) {
+        if (br->byte_pos >= br->buffer_size) {
+            br->overflow = true;
+            return false;
         }
 
-        double max_saving = -1.0;
-        uint32_t best_node_id = UINT32_MAX;
+        uint8_t current_byte = br->buffer[br->byte_pos];
+        uint8_t bit = (current_byte >> (7 - br->bit_pos)) & 1;
+        *value |= (bit << i);
 
-#ifdef DEBUG
-        printf("\n[Level %u] start=%u, end=%u\n", level, start, end);
-#endif
-
-        for (uint32_t i = start; i < end; i++) {
-            GraphNode *node = &graph.nodes[i];
-            if (node->useless) {
-#ifdef DEBUG
-                printf("  Node %u: useless, skipping\n", node->node_id);
-#endif
-                continue;
-            }
-
-            uint32_t freq = 1;
-            if (node->sequence_length > 1 && !node->is_RLE) {
-                uint32_t dummy_id;
-                if (!seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_id)) {
-                    freq = 1;
-#ifdef DEBUG
-                    printf("  Node %u: seq_freq not found, fallback freq = 1\n", node->node_id);
-#endif
-                }
-            }
-
-            double saving = calc_savings(node, freq);
-
-#ifdef DEBUG
-            printf("  Node %u: seq_len = %u, is_RLE = %u, freq = %u, saving = %0.2f\n",
-                   node->node_id, node->sequence_length, node->is_RLE, freq, saving);
-#endif
-
-            if (saving > max_saving) {
-                max_saving = saving;
-                best_node_id = node->node_id;
-#ifdef DEBUG
-                printf("    --> New best node: %u with saving %0.2f\n", best_node_id, saving);
-#endif
-            }
+        br->bit_pos++;
+        if (br->bit_pos == 8) {
+            br->bit_pos = 0;
+            br->byte_pos++;
         }
+    }
+    return true;
+}
 
-        max_ids[level] = best_node_id;
-
-        if (best_node_id != UINT32_MAX) {
-            GraphNode *node = get_graph_node(best_node_id);
-#ifdef DEBUG
-            printf("[Level %u] Best node selected: %u (saving %0.2f)\n", level, best_node_id, max_saving);
-#endif
-            if (0 && node->sequence_length > 1 && !node->is_RLE) {
-                uint32_t freq, node_id;
-                uint32_t index = seq_freq_get_with_index(&block[node->offset], node->sequence_length, &freq, &node_id);
-                if (index != UINT32_MAX) {
-                    seq_freq_set_existing(index, freq + 3, node_id);
-#ifdef DEBUG
-                    printf("  Boosted frequency of node %u to %u at index %u\n", node_id, freq + 3, index);
-#endif
-                }
-#ifdef DEBUG
-                else {
-                    printf("  Could not boost frequency: node %u sequence not found in map.\n", node->node_id);
-                }
-#endif
-            }
-        } else {
-#ifdef DEBUG
-            printf("[Level %u] No valid best node found.\n", level);
-#endif
-        }
+void bitreader_move_byte_boundary(BitReader *br) {
+    if (br->bit_pos != 0) {
+        br->byte_pos++;
+        br->bit_pos = 0;
     }
 }
 
-/**
- * Updates the best path if the current path is better.
- */
-static inline uint8_t update_best_path() {
-    uint8_t ret = 0;
+uint8_t *bitreader_load_from_file(FILE *fp, size_t *out_size) {
+    fseek(fp, 0, SEEK_END);
+    size_t size = ftell(fp);
+    rewind(fp);
 
-    uint32_t saving_current = path_state.path_total_saving[PATH_CURRENT];
-    uint32_t saving_best = path_state.path_total_saving[PATH_BEST];
-    int32_t size_current = path_state.path_size[PATH_CURRENT];
-    int32_t size_best = path_state.path_size[PATH_BEST];
-    uint32_t freq_current = path_state.path_total_freq[PATH_CURRENT];
-    uint32_t freq_best = path_state.path_total_freq[PATH_BEST];
+    uint8_t *buffer = malloc(size);
+    if (!buffer) return NULL;
 
-    if (size_best == -1 || saving_current > saving_best || (saving_current == saving_best && size_current < size_best) ||
-        (saving_current == saving_best && size_current == size_best && freq_current > freq_best)) {
-
-        uint32_t size = size_current + 1;
-        CHECK_INDEX(size - 1, "update_best_path copy");
-
-        path_state.path_total_saving[PATH_BEST] = saving_current;
-        path_state.path_size[PATH_BEST] = size_current;
-        path_state.path_total_freq[PATH_BEST] = freq_current;
-
-        memcpy(path_state.path_stack[PATH_BEST], path_state.path_stack[PATH_CURRENT], size * sizeof(uint32_t));
-        memcpy(path_state.path_per_node_savings[PATH_BEST], path_state.path_per_node_savings[PATH_CURRENT], size * sizeof(uint32_t));
-        memcpy(path_state.path_freqs[PATH_BEST], path_state.path_freqs[PATH_CURRENT], size * sizeof(uint32_t));
-
-        ret = 1;
+    if (fread(buffer, 1, size, fp) != size) {
+        free(buffer);
+        return NULL;
     }
 
-    return ret;
-}
-// === FILE: /home/noman/takatuka/takatuka_compression/src/graph/shortest_path_less_greedy.c ===
-
-// shortest_path_less_greedy.c
-//
-// This file implements a "less greedy" shortest path finder in a graph-based compression system.
-// The algorithm starts from a given level, picks the node with the highest cumulative savings,
-// and moves upward through parent levels, preferring sequences already present in the frequency map.
-
-#include "shortest_path_common.h"
-#include <limits.h>
-#include <stdbool.h>
-
-Path path_state;                          // Global path state tracker
-uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
-uint32_t best_savings_node_ids[MAX_LEVELS];
-/**
- * Compute the best cumulative savings node for every level in the graph.
- * Cumulative savings = own savings + inherited savings from the best node in the parent level.
- *
- * @param block                  Pointer to the data block being analyzed.
- * @param max_saving_node_ids    Array mapping each level to the node with the maximum immediate savings.
- * @param best_savings_node_ids  Output array mapping each level to the node with the highest cumulative savings.
- */
-void compute_best_savings_all(const uint8_t *block, const uint32_t *max_saving_node_ids,
-                              uint32_t *best_savings_node_ids) {
-    for (uint16_t level = 0; level < graph.total_levels; level++) {
-        uint32_t start = get_level_start_id(level);
-        uint32_t end = get_level_end_id(level);
-
-        uint32_t max_saving = 0;
-        best_savings_node_ids[level] = UINT32_MAX; // No valid node yet
-
-#ifdef DEBUG
-        printf("\n[Level %u] start=%u, end=%u\n", level, start, end);
-#endif
-
-        for (uint32_t i = start; i < end; i++) {
-            GraphNode *node = &graph.nodes[i];
-
-            if (node->useless) {
-                node->best_savings = 0;
-                continue;
-            }
-
-            // Get frequency (fallback to 1 if missing)
-            uint32_t freq = 1, dummy_id = 0;
-            if (!node->is_RLE && node->sequence_length > 1) {
-                if (!seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_id)) {
-                    freq = 1; // Fallback if sequence not found
-#ifdef DEBUG
-                    printf("  Node %u: seq_freq not found, fallback freq = 1\n", node->node_id);
-#endif
-                }
-            }
-
-            uint32_t own_saving = calc_savings(node, freq);
-            uint32_t inherited_saving = 0;
-
-            // Add best savings from parent level if available
-            if (level > 0) {
-                uint16_t parent_level = get_parent_level(node);
-                if (parent_level < graph.total_levels && max_saving_node_ids[parent_level] != UINT32_MAX) {
-                    GraphNode *parent = get_graph_node(max_saving_node_ids[parent_level]);                    
-                    inherited_saving = parent->best_savings;
-                    
-                }
-            }
-
-            node->best_savings = own_saving + inherited_saving;
-
-#ifdef DEBUG
-            printf("  Node %u: freq=%u, own=%u, inherited=%u, total=%u\n", node->node_id, freq, own_saving,
-                   inherited_saving, node->best_savings);
-#endif
-
-            // Update best node for this level
-            if (node->best_savings > max_saving || best_savings_node_ids[level] == UINT32_MAX) {
-                max_saving = node->best_savings;
-                best_savings_node_ids[level] = node->node_id;
-#ifdef DEBUG
-                printf("    --> Node %u becomes best so far with total saving %u\n", node->node_id, node->best_savings);
-#endif
-            }
-        }
-
-#ifdef DEBUG
-        if (best_savings_node_ids[level] != UINT32_MAX) {
-            printf("[Level %u] Best node: %u with saving %u\n", level, best_savings_node_ids[level], max_saving);
-        } else {
-            printf("[Level %u] No valid best node found.\n", level);
-        }
-#endif
-    }
+    if (out_size) *out_size = size;
+    return buffer;
 }
 
-/**
- * Append a node to the current path, update sequence frequency map, and
- * adjust cumulative path savings/frequencies.
- */
-static inline void update_current_path(GraphNode *node, const uint8_t *block) {
-    int idx = ++path_state.path_size[PATH_CURRENT];  // First push: from -1 to 0
-    path_state.path_stack[PATH_CURRENT][idx] = node->node_id;
+void bitreader_print_state(const BitReader *br) {
+    printf("[BitReader] byte_pos = %zu, bit_pos = %u, total_bits = %zu, overflow = %s\n", br->byte_pos, br->bit_pos,
+           br->byte_pos * 8 + br->bit_pos, br->overflow ? "true" : "false");
+}
 
-    uint32_t freq = 1;
-    if (!node->is_RLE && node->sequence_length > 1) {
-        freq = seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
-#ifdef DEBUG
-        seq_freq_map_print();
-#endif
+void bitreader_reset(BitReader *br, const uint8_t *new_buffer, size_t new_size) {
+    br->buffer = new_buffer;
+    br->buffer_size = new_size;
+    br->byte_pos = 0;
+    br->bit_pos = 0;
+    br->overflow = false;
+}
+
+void bitreader_attach_file(BitReader *br, FILE *file, size_t buffer_cap) {
+    br->owned_buf = malloc(buffer_cap);
+    if (!br->owned_buf) {
+        fprintf(stderr, "Failed to allocate internal bitreader buffer\n");
+        exit(EXIT_FAILURE);
     }
 
-    uint32_t savings = calc_savings(node, freq);
+    br->file = file;
+    br->buffer_cap = buffer_cap;
 
-    path_state.path_per_node_savings[PATH_CURRENT][idx] = savings;
-    path_state.path_freqs[PATH_CURRENT][idx] = freq;
-    path_state.path_total_saving[PATH_CURRENT] += savings;
-    path_state.path_total_freq[PATH_CURRENT] += freq;
+    size_t bytes_read = fread(br->owned_buf, 1, buffer_cap, br->file);
+    br->buffer = br->owned_buf;
+    br->buffer_size = bytes_read;
+    br->byte_pos = 0;
+    br->bit_pos = 0;
+    br->overflow = false;
 }
 
-/**
- * Search the given level for the node whose sequence exists in the frequency map
- * and yields the highest savings.
- *
- * @param level  The graph level to scan.
- * @param block  Pointer to the data block being analyzed.
- * @return Node ID of the best saving node found in the map, or UINT32_MAX if none found.
- */
-static uint32_t find_best_in_map(uint16_t level, const uint8_t *block) {
-    uint32_t start_id = get_level_start_id(level);
-    uint32_t end_id = get_level_end_id(level);
-    uint32_t freq = 0, map_node_id = 0;
-    uint32_t best_savings = 0;
-    uint32_t best_node_id = UINT32_MAX;
+bool bitreader_fill_next_chunk(BitReader *br) {
+    if (!br->file || !br->owned_buf) return false;
 
-    for (uint32_t id = start_id; id < end_id; id++) {
-        GraphNode *node = get_graph_node(id);
-        if (node->useless || node->is_RLE || node->sequence_length <= 1) continue;
-        if (seq_freq_get(&block[node->offset], node->sequence_length, &freq, &map_node_id) && freq > 0) {
-            uint32_t savings = calc_savings(node, freq);
-            if (savings >= best_savings) {
-                best_node_id = node->node_id;
-                best_savings = savings;
-            }
-        }
+    size_t bytes_read = fread(br->owned_buf, 1, br->buffer_cap, br->file);
+    if (bytes_read == 0) {
+        br->overflow = true;
+        return false;
     }
-    return best_node_id;
+
+    br->buffer = br->owned_buf;
+    br->buffer_size = bytes_read;
+    br->byte_pos = 0;
+    br->bit_pos = 0;
+    br->overflow = false;
+
+    return true;
 }
 
-/**
- * Build the best savings path starting from a given level and moving upward.
- *
- * Steps:
- *  1. Compute per-level max savings nodes.
- *  2. Compute cumulative best savings for all nodes.
- *  3. Start at starting_level's best node and add it to the path.
- *  4. Move to parent level; if a node in the sequence map has higher savings, choose it.
- *  5. Continue until the root is reached (or no parent).
- *
- * @param block           Pointer to the data block being analyzed.
- * @param starting_level  The level to start path construction from.
- */
-void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
-    if (starting_level >= graph.total_levels) return;
+bool bitreader_peek(BitReader *br, uint32_t *value, uint8_t num_bits) {
+    size_t saved_byte_pos = br->byte_pos;
+    uint8_t saved_bit_pos = br->bit_pos;
+    bool saved_overflow = br->overflow;
 
-    uint16_t level = starting_level;
-    // Step 1: Find immediate best nodes
-    compute_max_saving_node_ids(block, max_saving_node_ids);
+    bool success = bitreader_read(br, value, num_bits);
 
-    // Step 2: Compute cumulative best savings nodes
-    compute_best_savings_all(block, max_saving_node_ids, best_savings_node_ids);
+    // Restore state
+    br->byte_pos = saved_byte_pos;
+    br->bit_pos = saved_bit_pos;
+    br->overflow = saved_overflow;
 
-#ifdef DEBUG
-    fflush(stdout);
-    visualize_graph(block);
-    fflush(stdout);
-#endif
-
-    // Initialize path and sequence frequency map
-    path_init();
-
-    // Step 3: Start from each node of the starting level
-    uint32_t start_id_of_last_level = get_level_start_id(level);
-    uint32_t end_id_of_last_level = get_level_end_id(level);
-    for (uint32_t id = start_id_of_last_level; id < end_id_of_last_level; id++) {
-        id = best_savings_node_ids[level];
-        GraphNode *node = get_graph_node(id);
-        if (node->useless) continue;
-
-        path_init_current();
-        init_seq_freq_map();
-        
-#ifdef DEBUG
-        printf("At starting level %u selected ", node->node_level);
-        print_graph_node(node);
-#endif
-        update_current_path(node, block);
-
-        // Step 4: Move upward through parents
-        level = get_parent_level(node);
-        while (level < graph.total_levels) {
-            uint32_t chosen_node_id = find_best_in_map(level, block);
-            if (chosen_node_id == UINT32_MAX) { // if unable to find best in map then use the best_saving_node.
-                chosen_node_id = best_savings_node_ids[level];
-            }
-
-            node = get_graph_node(chosen_node_id);
-#ifdef DEBUG
-            printf("At level %u selected ", node->node_level);
-            print_graph_node(node);
-#endif
-            update_current_path(node, block);
-
-            // Stop if root node reached (assumes node 0 is root)
-            if (node->node_id == 0) break;
-
-            level = get_parent_level(node);
-        }
-
-        // Step 5: Finalize and print path
-#ifdef DEBUG
-        print_path(1, 1, block);
-#endif        
-        update_best_path();
-        break;// remove me later.
-        
-    }   
-
+    return success;
 }
 
-// === FILE: /home/noman/takatuka/takatuka_compression/src/graph/graph.h ===
+void bitreader_close(BitReader *br) {
+    if (br->owned_buf) {
+        free(br->owned_buf);
+        br->owned_buf = NULL;
+    }
+
+    br->buffer = NULL;
+    br->buffer_size = 0;
+    br->byte_pos = 0;
+    br->bit_pos = 0;
+    br->overflow = false;
+    br->file = NULL;
+    br->buffer_cap = 0;
+}
+
+// === FILE: /home/noman/takatuka/takatuka_compression/src/files/decompression//bit_reader.h ===
+
+//bit_reader.h
 
 #pragma once
-/*
- * Graph structure with virtual parent links:
- * - Nodes are organized in levels.
- * - Each node’s parents are all nodes in the previous level whose sequences may match.
- * - Parent links are inferred on-the-fly based on level and sequence_length.
- * - This saves memory and allows fast traversal by computing parent ranges.
- */
 
 #include <stdint.h>
-#include "../constants.h"
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include "graph_visualizer.h"
-#include <stdio.h>
+#include <stddef.h>
 #include <stdbool.h>
-
-#define MAX_LEVELS (BLOCK_SIZE+1) //one extra for the root level.
-#define MAX_WEIGHTS SEQ_LENGTH_LIMIT
+#include <stdio.h>
 
 typedef struct {
-    uint32_t node_id;
-    uint32_t offset;
-    uint32_t best_savings;
-    uint16_t node_level;
-    uint8_t useless;
-    uint8_t sequence_length;
-    uint8_t is_RLE;
-    uint8_t repeat_seq_length;
-    uint8_t length_of_RLE;
-} GraphNode;
+    const uint8_t* buffer;
+    size_t buffer_size;
+    size_t byte_pos;
+    uint8_t bit_pos;  // 0 (MSB) to 7 (LSB)
+    bool overflow;
 
-typedef struct {    
-    uint32_t size;
-    uint32_t first_node_of_level[MAX_LEVELS];
-    GraphNode nodes[MAX_GRAPH_NODES];
-    uint16_t total_levels;
-} Graph;
+    FILE* file;           // Optional: file to refill from
+    uint8_t* owned_buf;   // Internal buffer owned by reader
+    size_t   buffer_cap;  // Capacity of owned_buf
+} BitReader;
 
-extern Graph graph; //always use graph.c definiton.
+void bitreader_attach_file(BitReader* br, FILE* file, size_t buffer_cap);
+bool bitreader_fill_next_chunk(BitReader* br);
 
-void init_graph(void);
-static inline uint8_t get_parent_nodes_count(GraphNode* node);
-static inline uint32_t total_nodes_at_level(uint16_t level);
-static inline uint32_t get_level_start_id(uint16_t level);
-static inline uint32_t get_level_end_id(uint16_t level);
-static inline uint16_t get_last_level_index(void); 
-static inline GraphNode* get_graph_node(uint32_t node_id);
-static inline GraphNode* get_next_node(void);
-static inline uint16_t create_graph_level(void);
-static inline uint32_t get_graph_size(void);
-static inline GraphNode* get_parent_nodes(GraphNode* node);
-static inline uint16_t get_parent_level(GraphNode* node);
-static inline void reset_graph(void);
-static inline uint8_t get_parent_nodes_count_by_level_and_length(uint16_t level, uint8_t seq_length);
-void print_graph_node(GraphNode *node);
-void print_node_sequence(GraphNode *node, const uint8_t* block);
-void print_all_nodes(const uint8_t* block);
-void mass_increment_levels(int add_levels);
-void compact_graph(const uint8_t* block);
+void bitreader_init(BitReader* br, const uint8_t* buffer, size_t size);
+bool bitreader_read(BitReader* br, uint32_t* value, uint8_t num_bits);
+uint8_t* bitreader_load_from_file(FILE* fp, size_t* out_size);
 
-/**
- * @brief Detects Run-Length Encodable (RLE) sequences within a data block
- * 
- * This function analyzes a block of data to identify the longest prefix suitable for RLE compression,
- * either as a uniform byte sequence or a repeating pattern. The function is optimized for performance
- * when processing entire blocks at once.
- * 
- * Key Features:
- * - Detects both uniform sequences (e.g., "AAAAA") and patterned sequences (e.g., "ABABAB")
- * - Returns the longest valid RLE prefix meeting minimum length requirements
- * - Processes data in-place without memory allocation
- * - Uses optimized checks for early rejection of non-RLE candidates
- * 
- * Output Parameters:
- * - repeat_seq_length: For uniform sequences = 1, for patterns = pattern length
- * - length_of_RLE: Number of bytes that can be RLE encoded (may be less than block_size)
- * 
- * @param[out] repeat_seq_length Length of repeating pattern (1 for uniform sequences)
- * @param[out] length_of_RLE Length of encodable sequence (0 if no RLE found)
- * @param[in] block_size Total size of the block to analyze
- * @param[in] offset Byte offset within the block to start analysis
- * @param[in] block Pointer to the data block
- * 
- * @return uint8_t Returns 1 if RLE sequence found, 0 otherwise
- * 
- * @note Performance Considerations:
- *       - Processes data in a single pass when possible
- *       - Uses memcmp for efficient pattern comparison
- *       - Early termination on non-RLE sequences
- * 
- * @example "AAAAAAABCD" → returns 1, repeat_seq_length=1, length_of_RLE=7
- * @example "ABABABXXXX" → returns 1, repeat_seq_length=2, length_of_RLE=6
- * @example "ABCDEFGHIJ" → returns 0
- * 
- * @see MIN_RLE_SEQ_LENGTH Minimum sequence length to consider for RLE
- * @see RLE_MAX_PATTERN_LENGTH Maximum pattern length to check
- */
-uint8_t is_RLE_sequence(uint8_t* repeat_seq_length, uint8_t* length_of_RLE, uint8_t block_size, uint32_t offset, const uint8_t *block);
+void bitreader_print_state(const BitReader* br); 
+void bitreader_reset(BitReader* br, const uint8_t* new_buffer, size_t new_size);
 
-static inline void reset_graph(void) {
-    graph.size = 0;
-    graph.total_levels = 0;
+bool bitreader_peek(BitReader* br, uint32_t* value, uint8_t num_bits);
+
+void bitreader_close(BitReader* br);
+
+void bitreader_move_byte_boundary(BitReader *br);
+
+// === FILE: /home/noman/takatuka/takatuka_compression/src/files/decompression//decoder_map.c ===
+
+#include "decoder_map.h"
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
+void init_decoder_map(DecoderMap* map, size_t capacity) {
+    map->capacity = capacity * 2; // Maintain load factor ≤ 0.5
+    map->size = 0;
+    map->entries = calloc(map->capacity, sizeof(DecoderMapEntry));
 }
 
-static inline GraphNode* get_next_node(void) {
-    GraphNode* g_node = &graph.nodes[graph.size++];
-    g_node->node_id = graph.size-1; //please never change node's id ever.
-    g_node->node_level = graph.total_levels-1; //please do not change this ever too.  
-    return g_node;
+void free_decoder_map(DecoderMap* map) {
+    free(map->entries);
+    map->entries = NULL;
+    map->capacity = 0;
+    map->size = 0;
 }
 
-static inline uint32_t get_level_start_id(uint16_t level) {
-    if (level >= graph.total_levels) {
-        fprintf(stderr, "Illegal level: %u (total_levels=%u)\n", level, graph.total_levels);
-        exit(1);
+static inline size_t decoder_hash(uint16_t code, uint8_t code_class) {
+    return ((uint32_t)code << 3) | (code_class & 0x07); // simple mix
+}
+
+static inline size_t decoder_probe(size_t hash, size_t i, size_t cap) {
+    return (hash + i) % cap;
+}
+
+bool decoder_map_set(DecoderMap* map, uint16_t code, uint8_t code_class, const uint8_t* seq, uint8_t length) {
+    if (map->size >= map->capacity / 2) {
+        return false; // load factor too high
     }
-    return graph.first_node_of_level[level];
-}
 
-static inline uint32_t get_level_end_id(uint16_t level) {
-    if (level >= graph.total_levels) {
-        fprintf(stderr, "Illegal level: %u (total_levels=%u)\n", level, graph.total_levels);
-        exit(1);
+    size_t h = decoder_hash(code, code_class);
+    for (size_t i = 0; i < map->capacity; ++i) {
+        size_t idx = decoder_probe(h, i, map->capacity);
+        DecoderMapEntry* e = &map->entries[idx];
+
+        if (!e->occupied) {
+            e->code = code;
+            e->code_class = code_class;
+            e->seq = seq;
+            e->length = length;
+            e->occupied = true;
+            map->size++;
+            return true;
+        }
+
+        if (e->code == code && e->code_class == code_class) {
+            e->seq = seq;
+            e->length = length;
+            return true; // update existing
+        }
     }
-    if (level == graph.total_levels - 1) {
-        return graph.size;
+    return false;
+}
+
+bool decoder_map_get(const DecoderMap* map, uint16_t code, uint8_t code_class, const uint8_t** out_seq, uint8_t* out_len) {
+    size_t h = decoder_hash(code, code_class);
+    for (size_t i = 0; i < map->capacity; ++i) {
+        size_t idx = decoder_probe(h, i, map->capacity);
+        const DecoderMapEntry* e = &map->entries[idx];
+
+        if (!e->occupied) return false;
+        if (e->code == code && e->code_class == code_class) {
+            *out_seq = e->seq;
+            *out_len = e->length;
+            return true;
+        }
     }
-    return graph.first_node_of_level[level+1];
+    return false;
 }
 
-static inline uint16_t get_last_level_index(void)  {
-    return (graph.total_levels > 0) ? graph.total_levels - 1 : 0;
-}
+void print_decoder_map(const DecoderMap* map) {
+    printf("DecoderMap (size: %zu, capacity: %zu):\n", map->size, map->capacity);
+    printf("---------------------------------------------------\n");
+    printf("| Index | Code | Class | Length | Sequence\n");
+    printf("---------------------------------------------------\n");
 
-static inline uint16_t get_parent_level(GraphNode* node) {    
-    uint16_t parent_level =  node->node_level-node->sequence_length; 
+    for (size_t i = 0; i < map->capacity; ++i) {
+        const DecoderMapEntry* e = &map->entries[i];
+        if (!e->occupied) continue;
 
-    if (!node || parent_level == UINT16_MAX ||  parent_level > MAX_LEVELS) {
-        fprintf(stderr, "illegal parent level");
-        abort();
+        printf("| %5zu | %4u | %5u | %6u | ", i, e->code, e->code_class, e->length);
+        for (uint8_t j = 0; j < e->length; ++j) {
+            printf("%02X ", e->seq[j]);
+        }
+        printf("\n");
     }
-    return parent_level;
+    printf("---------------------------------------------------\n");
 }
 
-static inline uint32_t get_graph_size(void) {
-    return graph.size;
-}
+// === FILE: /home/noman/takatuka/takatuka_compression/src/files/decompression//decoder_map.h ===
 
-static inline GraphNode* get_graph_node(uint32_t node_id) {
-    assert(node_id < graph.size);
-    return &graph.nodes[node_id];
-}
+#pragma once
 
+#include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
 
-static inline uint16_t create_graph_level(void) {
-    if (graph.total_levels < MAX_LEVELS) {
-        graph.first_node_of_level[graph.total_levels] = graph.size;
-        graph.total_levels++;
-        return graph.total_levels-1;
+typedef struct {
+    const uint8_t* seq;
+    uint8_t length;
+    uint16_t code;
+    uint8_t code_class;
+    bool occupied;
+} DecoderMapEntry;
+
+typedef struct {
+    DecoderMapEntry* entries;
+    size_t capacity;
+    size_t size;
+} DecoderMap;
+
+void init_decoder_map(DecoderMap* map, size_t capacity);
+void free_decoder_map(DecoderMap* map);
+
+bool decoder_map_set(DecoderMap* map, uint16_t code, uint8_t code_class, const uint8_t* seq, uint8_t length);
+bool decoder_map_get(const DecoderMap* map, uint16_t code, uint8_t code_class, const uint8_t** out_seq, uint8_t* out_len);
+
+void print_decoder_map(const DecoderMap* map);
+
+// === FILE: /home/noman/takatuka/takatuka_compression/src/files/decompression//decompress_body.c ===
+
+#include "decompress_body.h"
+#include "bit_reader.h"
+#include "code_classes.h"
+#include "decoder_map.h"
+#include "decompress_header.h"
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define BODY_BUFFER_SIZE 4096
+
+void read_body_using_decoder_map(BitReader *reader, const char *decompress_file_name) {
+    FILE *output_file = fopen(decompress_file_name, "wb");
+    if (!output_file) {
+        fprintf(stderr, "Failed to open output file: %s\n", decompress_file_name);
+        exit(EXIT_FAILURE);
     }
-    fprintf(stderr, "Illegal level created \n");
-    abort();
+
+    uint8_t output[256]; // Max sequence size
+    uint32_t bit;
+    size_t total_bytes_written = 0;
+
+#ifdef DEBUG
+    printf("\n=== STARTING BODY DECOMPRESSION ===\n");
+    printf("Output file: %s\n", decompress_file_name);
+    bitreader_print_state(reader);
+#endif
+
+    while (bitreader_read(reader, &bit, 1)) {
+#ifdef DEBUG
+        printf("\n[READ] Prefix bit: %u\n", bit);
+        bitreader_print_state(reader);
+#endif
+
+        if (bit == 0) {
+            // Uncompressed single byte
+            uint32_t byte;
+            if (!bitreader_read(reader, &byte, 8)) {
+                if (reader->bit_pos == 0 && reader->byte_pos >= reader->buffer_size) {
+                    // Graceful EOF: don't throw error
+                    break;
+                }
+                fprintf(stderr, "Unexpected EOF while reading uncompressed byte\n");
+                exit(EXIT_FAILURE);
+            }
+
+#ifdef DEBUG
+            printf("[UNCOMPRESSED] Byte: 0x%02X (%c)\n", byte, (byte >= 32 && byte <= 126) ? byte : '.');
+            printf("  Writing 1 raw byte to output\n");
+#endif
+
+            fputc((uint8_t)byte, output_file);
+            total_bytes_written++;
+        } else {
+            // Compressed data - read code class to determine type
+            uint32_t code_class;
+            if (!bitreader_read(reader, &code_class, 2)) {
+                fprintf(stderr, "Failed to read code_class\n");
+                exit(EXIT_FAILURE);
+            }
+
+#ifdef DEBUG
+            printf("[COMPRESSED] Read code class: %u\n", code_class);
+            bitreader_print_state(reader);
+#endif
+
+            if (code_class == 3) { // 0b11 indicates RLE
+                // RLE case
+                uint32_t rle_len;
+                if (!bitreader_read(reader, &rle_len, 3)) {
+                    fprintf(stderr, "Failed to read RLE length\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                uint32_t rle_count;
+                if (!bitreader_read(reader, &rle_count, 8)) {
+                    fprintf(stderr, "Failed to read RLE count\n");
+                    exit(EXIT_FAILURE);
+                }
+
+#ifdef DEBUG
+                printf("[RLE] Pattern length: %u, Repeat count: %u\n", rle_len, rle_count);
+                printf("  Reading pattern bytes:\n");
+#endif
+
+                // Read the RLE pattern bytes
+                for (uint32_t i = 0; i < rle_len; ++i) {
+                    uint32_t temp;
+                    if (!bitreader_read(reader, &temp, 8)) {
+                        fprintf(stderr, "Failed to read RLE sequence byte\n");
+                        exit(EXIT_FAILURE);
+                    }
+                    output[i] = (uint8_t)temp;
+#ifdef DEBUG
+                    printf("    [RLE BYTE %u] 0x%02X (%c)\n", i, output[i],
+                           (output[i] >= 32 && output[i] <= 126) ? output[i] : '.');
+#endif
+                }
+
+                // Write the repeated sequence
+#ifdef DEBUG
+                printf("  Writing %u repetitions of %u-byte pattern:\n", rle_count, rle_len);
+                for (uint32_t i = 0; i < rle_len; i++) {
+                    printf("    0x%02X ", output[i]);
+                }
+                printf("\n");
+#endif
+
+                for (uint32_t rep = 0; rep < rle_count; ++rep) {
+                    fwrite(output, 1, rle_len, output_file);
+#ifdef DEBUG
+                    printf("    [REP %u/%u] Written\n", rep + 1, rle_count);
+#endif
+                }
+                total_bytes_written += rle_len * rle_count;
+            } else {
+                // Regular compressed case (code_class 0, 1, or 2)
+                uint8_t bits = get_code_class_size(code_class);
+                uint32_t code;
+                if (!bitreader_read(reader, &code, bits)) {
+                    fprintf(stderr, "Failed to read code (%u bits)\n", bits);
+                    exit(EXIT_FAILURE);
+                }
+
+#ifdef DEBUG
+                printf("[COMPRESSED] Code bits: %u, Code value: %u\n", bits, code);
+                bitreader_print_state(reader);
+                printf("  Looking up in decoder map...\n");
+#endif
+
+                const uint8_t *seq = NULL;
+                uint8_t length = 0;
+                if (!decoder_map_get(&decoder_map, code, code_class, &seq, &length)) {
+                    fprintf(stderr, "Failed to decode sequence for code=0x%X class=%u\n", code, code_class);
+                    exit(EXIT_FAILURE);
+                }
+
+#ifdef DEBUG
+                printf("  DECODED SEQUENCE: Length=%u, Bytes: ", length);
+                for (uint8_t i = 0; i < length; i++) {
+                    printf("0x%02X ", seq[i]);
+                }
+                printf("\n  Writing to output\n");
+#endif
+
+                fwrite(seq, 1, length, output_file);
+                total_bytes_written += length;
+            }
+        }
+
+#ifdef DEBUG
+        printf("[PROGRESS] Total bytes written so far: %zu\n", total_bytes_written);
+        bitreader_print_state(reader);
+#endif
+    }
+
+#ifdef DEBUG
+    printf("\n=== DECOMPRESSION COMPLETE ===\n");
+    printf("Total bytes written: %zu\n", total_bytes_written);
+    printf("Final reader state:\n");
+    bitreader_print_state(reader);
+#endif
+
+    fclose(output_file);
+}
+// === FILE: /home/noman/takatuka/takatuka_compression/src/files/decompression//decompress_body.h ===
+
+// decompress_header.h
+
+#pragma once
+
+#include "bit_reader.h"
+
+// Read the body using the decoder map.
+void read_body_using_decoder_map(BitReader* reader, const char* decompress_file_name);
+
+// === FILE: /home/noman/takatuka/takatuka_compression/src/files/decompression//decompress.c ===
+
+//decompress.c
+
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h> 
+#include "decompress.h"
+#include "code_classes.h"
+#include "code_map.h"
+#include "decompress_body.h"
+#include "decompress_header.h"
+
+#define HEADER_BUFFER_SIZE 4096
+
+int main(int argc, char** argv) {
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <input> <output>\n", argv[0]);
+        return 1;
+    }
+
+    printf("Decompressing %s to %s...\n", argv[1], argv[2]);
+    read_compressed_file(argv[1], argv[2]);
+    printf("Done Decompression.\n");
+
     return 0;
 }
 
-static inline uint8_t get_parent_nodes_count_by_level_and_length(uint16_t level, uint8_t seq_length) {
-    // Ensure the level is valid and large enough for a sequence of length `seq_length`
-    if (level == 0 || seq_length == 0 || seq_length > level) {
-        return 0;
+void read_compressed_file(const char* input_file_name, const char* output_file_name) {
+    if (!input_file_name) {
+        fprintf(stderr, "Error: Invalid inputs in writeCompressedOutput\n");
+        return;
     }
 
-    uint16_t parent_level = level - seq_length;
-
-    if (parent_level >= graph.total_levels) {
-        return 0;
+    FILE *file = fopen(input_file_name, "rb");
+    if (!file) {
+        perror("Failed to open binary reading file");
+        return;
     }
-
-    uint32_t count = total_nodes_at_level(parent_level);
-
-    if (count > SEQ_LENGTH_LIMIT + 1) {
-        fprintf(stderr, "Illegal number of parent nodes at hypothetical level=%u (seq_length=%u)\n",
-                level, seq_length);
-        abort();
-    }
-
-    return (uint8_t)count;
+    BitReader reader;
+    bitreader_attach_file(&reader, file, HEADER_BUFFER_SIZE);
+    
+    read_header_and_create_decoder_map(&reader);   // shared reader + buffer
+    printf("Read header \n");
+    read_body_using_decoder_map(&reader, output_file_name);          // reuses buffer + position
+    printf("Read body \n");
+    bitreader_close(&reader);    
+    fclose(file);
 }
 
-static inline uint32_t total_nodes_at_level(uint16_t level) {
+// === FILE: /home/noman/takatuka/takatuka_compression/src/files/decompression//decompress.h ===
 
-    return (get_level_end_id(level) - get_level_start_id(level));
-}
+//decompress.h
 
-uint8_t get_parent_nodes_count(GraphNode* node) {
-    if (!node || node->node_id == 0) {
-        return 0;
+#pragma once
+// Rest of header content
+
+void read_compressed_file(const char* input_file_name, const char* output_file_name);
+
+// === FILE: /home/noman/takatuka/takatuka_compression/src/files/decompression//decompress_header.c ===
+
+// decompress_header.c
+
+#include "decompress_header.h"
+#include "bit_reader.h"
+#include "decoder_map.h"
+#include "code_classes.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <assert.h>
+
+DecoderMap decoder_map;
+
+// Macro to safely read bits, refilling buffer from file if needed
+#define SAFE_BITREAD(reader_ptr, out, bits)                              \
+    do {                                                                 \
+        if (!bitreader_read(reader_ptr, out, bits)) {                    \
+            if (!bitreader_fill_next_chunk(reader_ptr)) {                \
+                fprintf(stderr, "Failed to read %u bits (EOF/overflow)\n", bits); \
+                exit(EXIT_FAILURE);                                      \
+            }                                                            \
+            if (!bitreader_read(reader_ptr, out, bits)) {                \
+                fprintf(stderr, "bitreader_read failed again\n");        \
+                exit(EXIT_FAILURE);                                      \
+            }                                                            \
+        }                                                                \
+    } while (0)
+
+void read_header_and_create_decoder_map(BitReader* reader) {
+    uint32_t num_codes;
+    SAFE_BITREAD(reader, &num_codes, 16);
+
+#ifdef DEBUG
+    printf("[DEBUG] ⏎ Read 16 bits: num_codes = %u\n", num_codes);
+    bitreader_print_state(reader);
+#endif
+
+    init_decoder_map(&decoder_map, num_codes);
+
+    for (uint32_t i = 0; i < num_codes; ++i) {
+        uint32_t code_class, length, code_index;
+
+        SAFE_BITREAD(reader, &code_class, 2);
+#ifdef DEBUG
+        printf("[DEBUG] ⏎ Read 2 bits: code_class = %u\n", code_class);
+        bitreader_print_state(reader);
+#endif
+
+        SAFE_BITREAD(reader, &length, 8);
+#ifdef DEBUG
+        printf("[DEBUG] ⏎ Read 8 bits: sequence_length = %u\n", length);
+        bitreader_print_state(reader);
+#endif
+
+        uint8_t class_bits = get_code_class_size((uint8_t)code_class);
+        SAFE_BITREAD(reader, &code_index, class_bits);
+#ifdef DEBUG
+        printf("[DEBUG] ⏎ Read %u bits: code_index = %u (class %u)\n", class_bits, code_index, code_class);
+        bitreader_print_state(reader);
+#endif
+
+        uint8_t* sequence = malloc(length);
+        if (!sequence) {
+            fprintf(stderr, "Memory allocation failure for sequence\n");
+            exit(EXIT_FAILURE);
+        }
+
+        for (uint8_t j = 0; j < length; ++j) {
+            uint32_t byte_val;
+            SAFE_BITREAD(reader, &byte_val, 8);
+            sequence[j] = (uint8_t)byte_val;
+#ifdef DEBUG
+            printf("[DEBUG] ⏎ Read byte #%u: %02X\n", j, sequence[j]);
+            bitreader_print_state(reader);
+#endif
+        }
+
+        decoder_map_set(&decoder_map, code_index, (uint8_t)code_class, sequence, (uint8_t)length);
+        // Do not free sequence — it's owned by DecoderMap
     }
-    uint8_t parents_count = total_nodes_at_level(get_parent_level(node));
-    if (parents_count > SEQ_LENGTH_LIMIT+1) {
-        fprintf(stderr, "Illegal number of parent nodes, at node=%d, node_level=%d\n", node->node_id, node->node_level);        
-        abort();
-    }
-    return parents_count;
+
+#ifdef DEBUG
+    printf("[DEBUG] Completed DecoderMap reconstruction.\n");
+    print_decoder_map(&decoder_map);
+#endif
+    bitreader_move_byte_boundary(reader);
 }
+// === FILE: /home/noman/takatuka/takatuka_compression/src/files/decompression//decompress_header.h ===
 
-static inline GraphNode* get_parent_nodes(GraphNode* node) {
-    if (node->node_id == 0) return NULL;
-    //Step 1: Get parent level.
-    uint16_t parent_level = get_parent_level(node);
-    // Step 2: Get the index of the first node of the parent level
-    uint32_t start_index =get_level_start_id (parent_level);
-    return &graph.nodes[start_index];
-}
+// decompress_header.h
 
+#pragma once
 
+#include "bit_reader.h"
+#include "decoder_map.h"
+
+extern DecoderMap decoder_map;
+
+// Reconstructs DecoderMap by reading the header of the compressed file
+void read_header_and_create_decoder_map(BitReader* reader);
