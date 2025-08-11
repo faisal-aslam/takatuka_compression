@@ -142,5 +142,5 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 //#ifdef DEBUG
     print_path(0, 1, block);
 //#endif
-    write_compressed_output("out.bin", block);
+    write_compressed_output(output_file, block);
 }

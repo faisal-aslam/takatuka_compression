@@ -10,10 +10,11 @@
 
 
 long total_input_size;
+char output_file[500];
 
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        printf("Usage: %s <input_file>\n", argv[0]);
+    if (argc != 3) {
+        printf("Usage: %s <input_file> <output_file>\n", argv[0]);
         return 1;
     }
     init_timer();
@@ -23,6 +24,7 @@ int main(int argc, char *argv[]) {
         perror("Failed to open file");
         return 1;
     }
+    memcpy(output_file, argv[2], sizeof(char)*500);
 
     // Get file size
     fseek(file, 0L, SEEK_END);
