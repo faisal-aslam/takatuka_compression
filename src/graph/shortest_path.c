@@ -14,7 +14,8 @@ typedef struct {
 
 Path path_state;
 static StackItem main_stack[MAX_GRAPH_NODES*2+1];
-
+uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
+uint32_t best_savings_node_ids[MAX_LEVELS];
 
 
 /**
@@ -55,12 +56,13 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
         seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
     }
 
-    double added_saving = calc_savings(node, freq);
+    uint32_t added_saving = calc_savings(node, freq);
     if (node->node_id == 0) added_saving = 0;
     path_state.path_total_saving[PATH_CURRENT] += added_saving;
     path_state.path_freqs[PATH_CURRENT][index] = freq;
     path_state.path_per_node_savings[PATH_CURRENT][index] = added_saving;
     path_state.path_total_freq[PATH_CURRENT] += freq;
+    path_state.path_total_cost[PATH_CURRENT] += calc_cost(node, freq);
 }
 
 static void bookkeeping_best_path(uint16_t last_level, const uint8_t *block) {
@@ -225,7 +227,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
             if (update_best_path()) {
                 best_count++;
 #ifdef DEBUG
-                printf("Saved the path %d with saving: %lf\n", best_count, path_state.path_total_saving[PATH_CURRENT]);
+                printf("Saved the path %d with saving: %u\n", best_count, path_state.path_total_saving[PATH_CURRENT]);
                 printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count,
                        back_track_count, push_count);
                 print_path(0, 1, block);

@@ -309,7 +309,7 @@ static inline uint8_t update_best_path() {
     uint32_t cost_best = path_state.path_total_cost[PATH_BEST];
 
     if (size_best == -1 || cost_current < cost_best ||
-        (cost_current == cost_best && size_current < size_best)) {
+        (cost_current == cost_best && saving_current > saving_best)) {
 
         uint32_t size = size_current + 1;
         CHECK_INDEX(size - 1, "update_best_path copy");
