@@ -107,7 +107,7 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
         }
 
         const uint8_t *sequence = &block[offset];
-        candidates[candidate_count++] = (CodeCandidate){.savings = (uint64_t)len * freq,
+        candidates[candidate_count++] = (CodeCandidate){.savings = (uint64_t)freq,
                                                         .sequence = sequence,
                                                         .length = len};
 

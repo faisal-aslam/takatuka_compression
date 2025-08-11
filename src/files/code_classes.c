@@ -49,7 +49,7 @@ uint8_t calculate_class2_bits(uint16_t class2_codes) {
 uint8_t get_code_class_size(uint8_t code_class, uint8_t class2_bits) {
     switch (code_class) {
         case 0: return 4;              /* fixed */
-        case 1: return 5;              /* fixed — note you had 5 in your last edit */
+        case 1: return 5;              /* fixed */
         case 2: return class2_bits;    /* dynamic */
         default:
             fprintf(stderr, "Invalid code_class %d Exiting (get_code_class_size)!\n", code_class);
