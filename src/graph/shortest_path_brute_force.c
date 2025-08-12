@@ -22,11 +22,16 @@ uint32_t best_savings_node_ids[MAX_LEVELS];
  * Handles backtracking by removing the node from current path,
  * decreasing its frequency if needed, and updating savings.
  */
-static inline void backtrack_node() {
+static inline void backtrack_node(const uint8_t* block) {
 
     int32_t index = path_state.path_size[PATH_CURRENT];
     CHECK_INDEX(index, "backtrack_node");
 
+    uint32_t node_id = path_state.path_stack[PATH_CURRENT][index];
+    GraphNode *node = get_graph_node(node_id);
+    if (!node->is_RLE && node->sequence_length > 1) {
+        seq_freq_decrement(&block[node->offset], node->sequence_length);
+    }
     path_state.path_total_freq[PATH_CURRENT] -= path_state.path_freqs[PATH_CURRENT][index];
     path_state.path_total_saving[PATH_CURRENT] -= path_state.path_per_node_savings[PATH_CURRENT][index];
     path_state.path_total_cost[PATH_CURRENT] -= path_state.path_per_node_cost[PATH_CURRENT][index];
@@ -53,8 +58,9 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
     path_state.path_stack[PATH_CURRENT][index] = node->node_id;
 
     uint32_t freq = 0, node_id;
+    
     if (node->sequence_length > 1 && !node->is_RLE) {
-        seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
+        freq = seq_freq_increment(&block[node->offset], node->sequence_length, &node_id);        
     }
 #ifdef DEBUG
     seq_freq_map_print();
@@ -106,6 +112,7 @@ static void bookkeeping_best_path(uint16_t last_level, const uint8_t *block) {
         }
     }
 }
+
 /**
  * Initializes the DFS stack with all valid leaf nodes.
  */
@@ -183,6 +190,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     uint32_t push_count = 0;
 
     path_init(); // Reset path state
+    init_seq_freq_map();// initalize the seqeunce map.
 
     initialize_leaf_nodes(main_stack, &top, starting_level);
     if(top < 0) {
@@ -198,7 +206,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
 
         if (current.node_id == UINT32_MAX) {
             // Backtrack marker encountered
-            backtrack_node();
+            backtrack_node(block);
             back_track_count++;
             continue;
         }
