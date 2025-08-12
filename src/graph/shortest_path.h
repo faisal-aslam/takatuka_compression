@@ -17,6 +17,7 @@ typedef struct {
     int32_t  path_size[2];                       // signed: -1 means empty
     uint32_t path_total_saving[2];               // total savings
     uint32_t path_total_cost[2];                 // total cost of the path
+    uint32_t path_per_node_cost[2][MAX_LEVELS]; // per-node cost
     uint32_t path_total_freq[2];                 // total frequency
 } Path;
 
