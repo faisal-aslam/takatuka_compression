@@ -191,6 +191,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     uint32_t back_track_count = 0;
     uint32_t best_count = 0;
     uint32_t push_count = 0;
+    long max_push = get_graph_size()*get_graph_size();
 
     path_init();         // Reset path state
     init_seq_freq_map(); // initalize the seqeunce map.
@@ -201,6 +202,9 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
         return; // no path exist.
     }
     while (top >= 0) {
+        if (push_count > max_push && best_count >= 1) {
+            break;            
+        }
         StackItem current = main_stack[top--];
 #ifdef DEBUG
         printf("pop stack node_id=%u, from top=%d, node_id_popped=%u\n", current.node_id, top + 1,
