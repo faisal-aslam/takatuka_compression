@@ -6,7 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/compress-debug",
-            "args": ["tests/test.bin"], 
+            "args": ["tests/test.bin", "out.bin"], 
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

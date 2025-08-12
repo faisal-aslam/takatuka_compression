@@ -98,11 +98,11 @@ static inline void path_init() {
     path_state.path_size[PATH_CURRENT] = -1;
     path_state.path_size[PATH_BEST] = -1;
     path_state.path_total_saving[PATH_CURRENT] = 0;
-    path_state.path_total_saving[PATH_BEST] = UINT32_MAX;
+    path_state.path_total_saving[PATH_BEST] = 0;
     path_state.path_total_freq[PATH_BEST] = 0;
     path_state.path_total_freq[PATH_CURRENT] = 0;
     path_state.path_total_cost[PATH_CURRENT] = 0;
-    path_state.path_total_cost[PATH_BEST] = 0;
+    path_state.path_total_cost[PATH_BEST] = UINT32_MAX;
 }
 
 /**
@@ -304,12 +304,12 @@ static inline uint8_t update_best_path() {
     int32_t size_current = path_state.path_size[PATH_CURRENT];
     int32_t size_best = path_state.path_size[PATH_BEST];
     uint32_t freq_current = path_state.path_total_freq[PATH_CURRENT];
-    uint32_t freq_best = path_state.path_total_freq[PATH_BEST];
     uint32_t cost_current = path_state.path_total_cost[PATH_CURRENT];
     uint32_t cost_best = path_state.path_total_cost[PATH_BEST];
 
     if (size_best == -1 || cost_current < cost_best ||
-        (cost_current == cost_best && saving_current > saving_best)) {
+        (cost_current == cost_best && saving_current > saving_best)||
+        (cost_current == cost_best && saving_current == saving_best && size_current < size_best)) {
 
         uint32_t size = size_current + 1;
         CHECK_INDEX(size - 1, "update_best_path copy");

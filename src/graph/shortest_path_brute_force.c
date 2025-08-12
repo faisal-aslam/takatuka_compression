@@ -1,8 +1,8 @@
 // shortest_path.c
 
 #include "shortest_path_common.h"
-#include <stdbool.h>
 #include <math.h>
+#include <stdbool.h>
 
 int prune_count = 0;
 
@@ -13,16 +13,15 @@ typedef struct {
 } StackItem;
 
 Path path_state;
-static StackItem main_stack[MAX_GRAPH_NODES*2+1];
+static StackItem main_stack[MAX_GRAPH_NODES * 2 + 1];
 uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
 uint32_t best_savings_node_ids[MAX_LEVELS];
-
 
 /**
  * Handles backtracking by removing the node from current path,
  * decreasing its frequency if needed, and updating savings.
  */
-static inline void backtrack_node(const uint8_t* block) {
+static inline void backtrack_node(const uint8_t *block) {
 
     int32_t index = path_state.path_size[PATH_CURRENT];
     CHECK_INDEX(index, "backtrack_node");
@@ -37,9 +36,14 @@ static inline void backtrack_node(const uint8_t* block) {
     path_state.path_total_cost[PATH_CURRENT] -= path_state.path_per_node_cost[PATH_CURRENT][index];
     path_state.path_stack[PATH_CURRENT][index] = 0;
     path_state.path_per_node_savings[PATH_CURRENT][index] = 0;
-    path_state.path_per_node_cost[PATH_CURRENT][index] = 0; //backtrack cost.
+    path_state.path_per_node_cost[PATH_CURRENT][index] = 0; // backtrack cost.
     path_state.path_freqs[PATH_CURRENT][index] = 0;
     path_state.path_size[PATH_CURRENT]--;
+#ifdef DEBUG
+    printf("After backtrack node=%u, Cost=%u, savings=%u, size=%u\n", node_id, path_state.path_total_cost[PATH_CURRENT],
+           path_state.path_total_saving[PATH_CURRENT], path_state.path_size[PATH_CURRENT]);
+    seq_freq_map_print();
+#endif
 }
 
 /**
@@ -58,9 +62,9 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
     path_state.path_stack[PATH_CURRENT][index] = node->node_id;
 
     uint32_t freq = 0, node_id;
-    
+
     if (node->sequence_length > 1 && !node->is_RLE) {
-        freq = seq_freq_increment(&block[node->offset], node->sequence_length, &node_id);        
+        freq = seq_freq_increment(&block[node->offset], node->sequence_length, &node_id);
     }
 #ifdef DEBUG
     seq_freq_map_print();
@@ -75,9 +79,9 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
     path_state.path_total_cost[PATH_CURRENT] += added_cost;
     path_state.path_per_node_cost[PATH_CURRENT][index] = added_cost;
 #ifdef DEBUG
-    printf("So far, Cost=%u, savings=%u, size=%u\n", path_state.path_total_cost[PATH_CURRENT], 
-        path_state.path_total_saving[PATH_CURRENT], path_state.path_size[PATH_CURRENT]);
-#endif    
+    printf("So far, Cost=%u, savings=%u, size=%u\n", path_state.path_total_cost[PATH_CURRENT],
+           path_state.path_total_saving[PATH_CURRENT], path_state.path_size[PATH_CURRENT]);
+#endif
 }
 
 static void bookkeeping_best_path(uint16_t last_level, const uint8_t *block) {
@@ -137,12 +141,11 @@ static inline void initialize_leaf_nodes(StackItem *stack, int *top, uint16_t la
 
 static inline uint8_t should_prune(GraphNode *node) {
     if (node->useless) return 1;
-    /*if (path_state.path_total_saving[PATH_CURRENT] + node->min_depth > path_state.path_total_saving[PATH_BEST] ||
-        (path_state.path_total_saving[PATH_CURRENT] + node->min_depth == path_state.path_total_saving[PATH_BEST] &&
-         path_state.path_size[PATH_CURRENT] + node->min_depth > path_state.path_size[PATH_BEST])) {
-            prune_count++;
-            return 1;
-    }*/
+    if (path_state.path_total_cost[PATH_CURRENT] > path_state.path_total_cost[PATH_BEST] ||
+        (path_state.path_total_cost[PATH_CURRENT] == path_state.path_total_cost[PATH_BEST] &&
+         path_state.path_total_saving[PATH_CURRENT] < path_state.path_total_saving[PATH_BEST])) {
+        return 1;
+    }
     return 0;
 }
 
@@ -182,20 +185,20 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNo
  * each node using calc_saving function.
  */
 void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
-  
+
     int top = -1;
 
     uint32_t back_track_count = 0;
     uint32_t best_count = 0;
     uint32_t push_count = 0;
 
-    path_init(); // Reset path state
-    init_seq_freq_map();// initalize the seqeunce map.
+    path_init();         // Reset path state
+    init_seq_freq_map(); // initalize the seqeunce map.
 
     initialize_leaf_nodes(main_stack, &top, starting_level);
-    if(top < 0) {
+    if (top < 0) {
         printf("empty level\n");
-        return; //no path exist.
+        return; // no path exist.
     }
     while (top >= 0) {
         StackItem current = main_stack[top--];
@@ -211,7 +214,6 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
             continue;
         }
         GraphNode *node = get_graph_node(current.node_id);
-
 
         // The following pruning is very useful for speed up.
         // In it, we do not explore paths which are worse.
@@ -263,4 +265,3 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
 
     // free_path_state();
 }
-
