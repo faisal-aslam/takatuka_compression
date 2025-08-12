@@ -2,7 +2,7 @@
     // Font settings
     "editor.fontFamily": "'Victor Mono', monospace",
     "editor.fontLigatures": true,
-    "editor.fontSize": 14,
+    "editor.fontSize": 15,
     "editor.fontWeight": "300",
 
     // Syntax style overrides
