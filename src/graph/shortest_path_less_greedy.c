@@ -122,15 +122,16 @@ static inline void update_current_path(GraphNode *node, const uint8_t *block) {
  *
  * @param level  The graph level to scan.
  * @param block  Pointer to the data block being analyzed.
- * @return Node ID of the best saving node found in the map, or UINT32_MAX if none found.
+ * @param out_best_node_id is return as the best saving node found in the map, or UINT32_MAX if none found.
+ * @param out_level the leven of the node id found. Either it will be same as level_in or a parent of level_in.
  */
-static uint32_t find_best_in_map(uint16_t level, const uint8_t *block) {
-    uint32_t start_id = get_level_start_id(level);
-    uint32_t end_id = get_level_end_id(level);
+static void find_best_in_map(uint16_t level_in, const uint8_t *block, uint32_t* out_best_node_id, uint16_t *out_level) {
+    uint32_t start_id = get_level_start_id(level_in);
+    uint32_t end_id = get_level_end_id(level_in);
     uint32_t freq = 0, map_node_id = 0;
     uint32_t best_cost = 0;
     uint32_t best_savings = 0;
-    uint32_t best_node_id = UINT32_MAX;
+    *out_best_node_id = UINT32_MAX;
 
     for (uint32_t id = start_id; id < end_id; id++) {
         GraphNode *node = get_graph_node(id);
@@ -138,14 +139,13 @@ static uint32_t find_best_in_map(uint16_t level, const uint8_t *block) {
         if (seq_freq_get(&block[node->offset], node->sequence_length, &freq, &map_node_id) && freq > 0) {
             uint32_t cost = calc_cost(node, freq);
             uint32_t savings = calc_savings(node, freq);
-            if (best_node_id == UINT32_MAX || cost < best_cost || (cost == best_cost && savings > best_savings)) {
-                best_node_id = node->node_id;
+            if (*out_best_node_id == UINT32_MAX || cost < best_cost || (cost == best_cost && savings > best_savings)) {
+                *out_best_node_id = node->node_id;
                 best_cost = cost;
                 best_savings = savings;
             }
         }
     }
-    return best_node_id;
 }
 
 /**
@@ -200,7 +200,9 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
         // Step 4: Move upward through parents
         level = get_parent_level(node);
         while (level < graph.total_levels) {
-            uint32_t chosen_node_id = find_best_in_map(level, block);
+            uint32_t chosen_node_id;
+            uint16_t out_level;
+            find_best_in_map(level, block, &chosen_node_id, &out_level);
             if (chosen_node_id == UINT32_MAX) { // if unable to find best in map then use the best_saving_node.
                 chosen_node_id = best_savings_node_ids[level];
             }

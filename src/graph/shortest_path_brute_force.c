@@ -203,7 +203,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     }
     while (top >= 0) {
         if (push_count > max_push && best_count >= 1) {
-            break;            
+            //break;            
         }
         StackItem current = main_stack[top--];
 #ifdef DEBUG
