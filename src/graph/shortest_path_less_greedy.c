@@ -58,9 +58,8 @@ void compute_best_savings_all(const uint8_t *block, const uint32_t *max_saving_n
             if (level > 0) {
                 uint16_t parent_level = get_parent_level(node);
                 if (parent_level < graph.total_levels && max_saving_node_ids[parent_level] != UINT32_MAX) {
-                    GraphNode *parent = get_graph_node(max_saving_node_ids[parent_level]);                    
+                    GraphNode *parent = get_graph_node(max_saving_node_ids[parent_level]);
                     inherited_saving = parent->best_savings;
-                    
                 }
             }
 
@@ -96,7 +95,7 @@ void compute_best_savings_all(const uint8_t *block, const uint32_t *max_saving_n
  * adjust cumulative path savings/frequencies.
  */
 static inline void update_current_path(GraphNode *node, const uint8_t *block) {
-    int idx = ++path_state.path_size[PATH_CURRENT];  // First push: from -1 to 0
+    int idx = ++path_state.path_size[PATH_CURRENT]; // First push: from -1 to 0
     path_state.path_stack[PATH_CURRENT][idx] = node->node_id;
 
     uint32_t freq = 1;
@@ -125,24 +124,30 @@ static inline void update_current_path(GraphNode *node, const uint8_t *block) {
  * @param out_best_node_id is return as the best saving node found in the map, or UINT32_MAX if none found.
  * @param out_level the leven of the node id found. Either it will be same as level_in or a parent of level_in.
  */
-static void find_best_in_map(uint16_t level_in, const uint8_t *block, uint32_t* out_best_node_id, uint16_t *out_level) {
-    uint32_t start_id = get_level_start_id(level_in);
-    uint32_t end_id = get_level_end_id(level_in);
+static void find_best_in_map(uint16_t level_in, const uint8_t *block, uint32_t *out_best_node_id, uint16_t *out_level) {
     uint32_t freq = 0, map_node_id = 0;
     uint32_t best_cost = 0;
     uint32_t best_savings = 0;
+    uint8_t best_length = 0;
     *out_best_node_id = UINT32_MAX;
-
-    for (uint32_t id = start_id; id < end_id; id++) {
-        GraphNode *node = get_graph_node(id);
-        if (node->useless || node->is_RLE || node->sequence_length <= 1) continue;
-        if (seq_freq_get(&block[node->offset], node->sequence_length, &freq, &map_node_id) && freq > 0) {
-            uint32_t cost = calc_cost(node, freq);
-            uint32_t savings = calc_savings(node, freq);
-            if (*out_best_node_id == UINT32_MAX || cost < best_cost || (cost == best_cost && savings > best_savings)) {
-                *out_best_node_id = node->node_id;
-                best_cost = cost;
-                best_savings = savings;
+    for (uint16_t cur_level = level_in; cur_level <= level_in + 0; cur_level++) {
+        uint32_t start_id = get_level_start_id(cur_level);
+        uint32_t end_id = get_level_end_id(cur_level);
+        for (uint32_t id = start_id; id < end_id; id++) {
+            GraphNode *node = get_graph_node(id);
+            if (node->useless || node->is_RLE || node->sequence_length <= 1) continue;
+            if (seq_freq_get(&block[node->offset], node->sequence_length, &freq, &map_node_id) && freq > 0) {
+                uint32_t cost = calc_cost(node, freq);
+                uint32_t savings = calc_savings(node, freq);
+                if (*out_best_node_id == UINT32_MAX || cost < best_cost ||
+                    (cost == best_cost && savings > best_savings) ||
+                    (cost == best_cost && savings == best_savings && node->sequence_length > best_length)) {
+                    *out_best_node_id = node->node_id;
+                    best_cost = cost;
+                    best_savings = savings;
+                    best_length = node->sequence_length;
+                    *out_level = cur_level;
+                }
             }
         }
     }
@@ -190,7 +195,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
 
         path_init_current();
         init_seq_freq_map();
-        
+
 #ifdef DEBUG
         printf("At starting level %u selected ", node->node_level);
         print_graph_node(node);
@@ -223,9 +228,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
         // Step 5: Finalize and print path
 #ifdef DEBUG
         print_path(1, 1, block);
-#endif        
+#endif
         update_best_path();
-        
-    }   
-
+    }
 }
