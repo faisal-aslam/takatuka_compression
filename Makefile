@@ -9,6 +9,7 @@ INC_DIRS := \
     $(SRC_DIR) \
     $(SRC_DIR)/map \
     $(SRC_DIR)/graph \
+	$(SRC_DIR)/graph/shortest_path \
     $(SRC_DIR)/files \
 	$(SRC_DIR)/files/compression/ \
 	$(SRC_DIR)/files/decompression/ \
