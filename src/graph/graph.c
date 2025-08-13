@@ -19,8 +19,6 @@ void compact_graph(const uint8_t *block) {
 
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
-    uint32_t level_start = 0;
-    uint16_t min_depth = 0;
 
     // Pre-process: mark all levels as invalid initially
     for (uint32_t l = 0; l < graph.total_levels; l++) {
@@ -52,8 +50,6 @@ void compact_graph(const uint8_t *block) {
         GraphNode *new_node = &graph.nodes[write_idx];
         new_node->node_id = write_idx;
 
-        // Calculate min depth (optimized parent access)
-        uint16_t parent_level = new_node->node_level - new_node->sequence_length;
 
         write_idx++;
     }

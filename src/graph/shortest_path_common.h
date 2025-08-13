@@ -185,7 +185,7 @@ void final_book_keeping(const uint8_t *block) {
     if (path_len <=0) return; 
 
     // Pass 1: Count sequence frequencies
-    for (uint32_t i = 0; i <= path_len; i++) {
+    for (int32_t i = 0; i <= path_len; i++) {
         node = get_graph_node(path[i]);
         if (node->sequence_length > 1 && !node->is_RLE) {
             seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
@@ -193,7 +193,7 @@ void final_book_keeping(const uint8_t *block) {
     }
 
     // Pass 2: Store frequencies per node
-    for (uint32_t i = 0; i <= path_len; i++) {
+    for (int32_t i = 0; i <= path_len; i++) {
         node = get_graph_node(path[i]);
         if (node->sequence_length > 1 && !node->is_RLE) {
             uint32_t freq, node_id_unused;
