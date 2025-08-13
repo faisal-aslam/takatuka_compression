@@ -137,8 +137,8 @@ static inline void initialize_leaf_nodes(StackItem *stack, int *top, uint16_t la
     }
 }
 
-static inline uint8_t should_prune(GraphNode *node) {
-    if (node->useless) return 1;
+static inline uint8_t should_prune(GraphNode *node, GraphNode *dest_node) {
+    if (node->useless || node->node_level < dest_node->node_level) return 1;
     if (path_state.path_total_cost[PATH_CURRENT] > path_state.path_total_cost[PATH_BEST] ||
         (path_state.path_total_cost[PATH_CURRENT] == path_state.path_total_cost[PATH_BEST] &&
          path_state.path_total_saving[PATH_CURRENT] < path_state.path_total_saving[PATH_BEST])) {
@@ -150,14 +150,13 @@ static inline uint8_t should_prune(GraphNode *node) {
 /**
  * Adds all valid parent nodes to the DFS stack for exploration.
  */
-static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNode *node, const uint8_t *block) {
+static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNode *node, const uint8_t *block,
+                                             GraphNode *dest_node) {
     uint8_t parent_count = get_parent_nodes_count(node);
     GraphNode *parents = get_parent_nodes(node);
-
     for (uint8_t i = 0; i < parent_count; i++) {
         GraphNode *parent = &parents[i];
-        if (should_prune(
-                parent) /*&& (node->node_level < get_last_level_index()-1 && parent->min_depth == node->min_depth)*/) {
+        if (should_prune(parent, dest_node)) {
             continue;
         }
         // Passed all pruning checks, push to stack
@@ -179,11 +178,11 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
     uint32_t back_track_count = 0;
     uint32_t best_count = 0;
     uint32_t push_count = 0;
-    long max_push = get_graph_size()*get_graph_size();
+    long max_push = get_graph_size() * get_graph_size();
 
     path_init();         // Reset path state
     init_seq_freq_map(); // initalize the seqeunce map.
-
+    GraphNode *dest_node = get_graph_node(destination_id);
     initialize_leaf_nodes(main_stack, &top, starting_level);
     if (top < 0) {
         printf("empty level\n");
@@ -191,7 +190,7 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
     }
     while (top >= 0) {
         if (push_count > max_push && best_count >= 1) {
-            //break;            
+            // break;
         }
         StackItem current = main_stack[top--];
 #ifdef DEBUG
@@ -210,7 +209,7 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
         // The following pruning is very useful for speed up.
         // In it, we do not explore paths which are worse.
         // Early pruning before frequency saving and stack updates
-        if (should_prune(node)) {
+        if (should_prune(node, dest_node)) {
             continue;
         }
 
@@ -244,8 +243,10 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
             continue; // Root has no parents
         }
 
-        // Explore parents
-        add_parent_nodes_to_stack(main_stack, &top, node, block);
+        // explore parents.
+        if (node->node_level >= dest_node->node_level) {
+            add_parent_nodes_to_stack(main_stack, &top, node, block, dest_node);
+        }
     }
     // Final output
 #ifdef DEBUG
