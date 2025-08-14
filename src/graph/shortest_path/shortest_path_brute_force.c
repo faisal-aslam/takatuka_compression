@@ -7,7 +7,6 @@
 int prune_count = 0;
 
 Path path_state;
-StackItem main_stack[MAX_GRAPH_NODES * 2 + 1];
 uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
 uint32_t best_savings_node_ids[MAX_LEVELS];
 

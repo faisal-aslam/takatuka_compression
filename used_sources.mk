@@ -6,6 +6,7 @@ SRCS = \
     src/files/compression/compress.c \
     src/time.c \
     src/graph/shortest_path/shortest_path_brute_force.c \
+    src/graph/shortest_path/sp_seq_freq_map.c \
     src/graph/graph.c \
     src/graph/graph_visualizer.c \
     src/files/best_path_view.c \

@@ -3,6 +3,7 @@
 #include "shortest_path_common.h"
 #include <math.h>
 #include <stdbool.h>
+#include "sp_seq_freq_map.h"
 
 extern int prune_count;
 
@@ -13,7 +14,7 @@ typedef struct {
 } StackItem;
 
 extern Path path_state;
-extern StackItem main_stack[MAX_GRAPH_NODES * 2 + 1];
+
 
 /**
  * Handles backtracking by removing the node from current path,
@@ -27,7 +28,8 @@ static inline void backtrack_node(const uint8_t *block) {
     uint32_t node_id = path_state.path_stack[PATH_CURRENT][index];
     GraphNode *node = get_graph_node(node_id);
     if (!node->is_RLE && node->sequence_length > 1) {
-        seq_freq_decrement(&block[node->offset], node->sequence_length);
+        
+        sf_decrement(&block[node->offset], node->sequence_length);
     }
     path_state.path_total_freq[PATH_CURRENT] -= path_state.path_freqs[PATH_CURRENT][index];
     path_state.path_total_saving[PATH_CURRENT] -= path_state.path_per_node_savings[PATH_CURRENT][index];
@@ -40,7 +42,7 @@ static inline void backtrack_node(const uint8_t *block) {
 #ifdef DEBUG
     printf("After backtrack node=%u, Cost=%u, savings=%u, size=%u\n", node_id, path_state.path_total_cost[PATH_CURRENT],
            path_state.path_total_saving[PATH_CURRENT], path_state.path_size[PATH_CURRENT]);
-    seq_freq_map_print();
+    sf_map_print();
 #endif
 }
 
@@ -59,13 +61,13 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
     CHECK_INDEX(index, "process_node");
     path_state.path_stack[PATH_CURRENT][index] = node->node_id;
 
-    uint32_t freq = 0, node_id;
+    uint32_t freq = 0;
 
     if (node->sequence_length > 1 && !node->is_RLE) {
-        freq = seq_freq_increment(&block[node->offset], node->sequence_length, node_id);
+        freq = sf_increment(&block[node->offset], node->sequence_length);
     }
 #ifdef DEBUG
-    seq_freq_map_print();
+    sf_map_print();
 #endif
     uint32_t added_saving = calc_savings(node, freq);
     uint32_t added_cost = calc_cost(node, freq);
@@ -91,13 +93,6 @@ static void bookkeeping_best_path(uint16_t last_level, const uint8_t *block) {
         node = get_graph_node(id);
         if (!node->useless) {
             node->useless = 1; // mark it useless.
-            if (node->sequence_length > 1 && !node->is_RLE) {
-                uint32_t freq, node_id;
-                uint32_t index = seq_freq_get_with_index(&block[node->offset], node->sequence_length, &freq, &node_id);
-                if (freq > 1) {
-                    seq_freq_set_existing(index, freq - 1, node_id);
-                }
-            }
         }
     }
     // only nodes in the best path are marked useful
@@ -110,7 +105,7 @@ static void bookkeeping_best_path(uint16_t last_level, const uint8_t *block) {
 #endif
         node->useless = 0;
         if (node->sequence_length > 1 && !node->is_RLE) {
-            seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
+            sf_increment(&block[node->offset], node->sequence_length);
         }
     }
 }
@@ -172,6 +167,21 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNo
         }
     }
 }
+
+
+// Rounds up to the next power of two for 32-bit numbers.
+// Returns 1 if x is 0 (edge case).
+static inline uint32_t next_power_of_two(uint32_t x) {
+    if (x == 0) return 1;
+    x--; // handle exact power of two case
+    x |= x >> 1;
+    x |= x >> 2;
+    x |= x >> 4;
+    x |= x >> 8;
+    x |= x >> 16;
+    return x + 1;
+}
+
 void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_level, uint32_t destination_id) {
     int top = -1;
 
@@ -181,8 +191,13 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
     long max_push = get_graph_size() * get_graph_size();
 
     path_init();         // Reset path state
-    init_seq_freq_map(); // initalize the seqeunce map.
     GraphNode *dest_node = get_graph_node(destination_id);
+    if (dest_node->node_level > starting_level) return;
+    uint32_t max_nodes = (starting_level-dest_node->node_level)*SEQ_LENGTH_LIMIT*2+1;
+    max_nodes = next_power_of_two(max_nodes);
+    init_sf_map(max_nodes); // initalize the seqeunce map.
+    StackItem main_stack[max_nodes];
+    
     initialize_leaf_nodes(main_stack, &top, starting_level);
     if (top < 0) {
         printf("empty level\n");
