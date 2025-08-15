@@ -227,6 +227,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
             printf("At level %u selected ", node->node_level);
             print_graph_node(node);
 #endif
+            //todo have to append best_path in the current path efficiently.
             update_current_path(node, block);
 
             // Stop if root node reached (assumes node 0 is root)

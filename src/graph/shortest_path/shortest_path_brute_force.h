@@ -84,11 +84,12 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
 #endif
 }
 
-static void bookkeeping_best_path(uint16_t last_level, const uint8_t *block) {
+static void bookkeeping_best_path(const uint8_t *block, uint16_t starting_level, uint32_t destination_id) {
     // Step 1. Mark all nodes useless.
     GraphNode *node;
-    uint32_t start_id = get_level_start_id(last_level - MAX_BRUTE_FORCE_PATH);
-    uint32_t end_id = get_level_end_id(last_level);
+    GraphNode *dest_node = get_graph_node(destination_id);
+    uint32_t start_id = get_level_start_id(starting_level);
+    uint32_t end_id = get_level_end_id(dest_node->node_level);
     for (uint32_t id = start_id; id < end_id; id++) {
         node = get_graph_node(id);
         if (!node->useless) {
@@ -260,7 +261,7 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
     printf("\nbest_count=%u, \n", best_count);
     print_path(0, 1, block);
 #endif
-    bookkeeping_best_path(starting_level, block);
+    //bookkeeping_best_path(block, starting_level, destination_id);
 
     // free_path_state();
 }

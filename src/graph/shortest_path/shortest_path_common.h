@@ -13,7 +13,7 @@
 
 
 #ifdef DEBUG
-static uint64_t best_count = 0;
+static uint32_t best_count = 0;
 #endif
 
 /**
@@ -46,12 +46,12 @@ static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
     }
 
     // Main cost calculation
-    if (len <= 1) {
+    if (len <= 1 || frequency == 1) {
         // Cases: 0 bytes = 0 cost, 1 byte = 1 cost
         base_cost = len;
     } else {
-        // Multi-byte case: 1 byte if repeated, n+1 bytes if unique
-        base_cost = (frequency > 1) ? 1u : ((uint32_t)len + 1u);
+        // Multi-byte case: 1 byte if repeated
+        base_cost = 1u;
     }
 
 #ifdef DEBUG
@@ -330,6 +330,7 @@ static inline void rollback_path_freqs(int path_index, const uint8_t *block) {
  * Updates the best path if the current path is better.
  */
 static inline uint8_t update_best_path(const uint8_t *block) {
+    (void)block; //not used at the moment.
     uint8_t ret = 0;
 
     uint32_t saving_current = path_state.path_total_saving[PATH_CURRENT];
@@ -344,7 +345,7 @@ static inline uint8_t update_best_path(const uint8_t *block) {
         (cost_current == cost_best && saving_current == saving_best && size_current < size_best)) {
 
         // Undo increments from the current path so they don't bias future runs
-        rollback_path_freqs(PATH_CURRENT, block);
+        //rollback_path_freqs(PATH_CURRENT, block);
 
         int32_t size = size_current + 1;
         CHECK_INDEX(size - 1, "update_best_path copy");
