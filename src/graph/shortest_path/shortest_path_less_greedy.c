@@ -239,7 +239,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
 #ifdef DEBUG
         print_path(1, 1, block);
 #endif
-        update_best_path();
+        update_best_path(block);
         break; //remove it later.
     }
 }

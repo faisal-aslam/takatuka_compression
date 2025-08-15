@@ -3,7 +3,7 @@
 #include "shortest_path_common.h"
 #include <math.h>
 #include <stdbool.h>
-#include "sp_seq_freq_map.h"
+
 
 
 typedef struct {
@@ -14,7 +14,7 @@ typedef struct {
 
 extern Path path_state;
 
-static uint32_t best_count = 0;
+
 
 /**
  * Handles backtracking by removing the node from current path,
@@ -29,7 +29,7 @@ static inline void backtrack_node(const uint8_t *block) {
     GraphNode *node = get_graph_node(node_id);
     if (!node->is_RLE && node->sequence_length > 1) {
         
-        sf_decrement(&block[node->offset], node->sequence_length);
+        seq_freq_decrement(&block[node->offset], node->sequence_length);
     }
     path_state.path_total_freq[PATH_CURRENT] -= path_state.path_freqs[PATH_CURRENT][index];
     path_state.path_total_saving[PATH_CURRENT] -= path_state.path_per_node_savings[PATH_CURRENT][index];
@@ -42,7 +42,7 @@ static inline void backtrack_node(const uint8_t *block) {
 #ifdef DEBUG
     printf("After backtrack node=%u, Cost=%u, savings=%u, size=%u\n", node_id, path_state.path_total_cost[PATH_CURRENT],
            path_state.path_total_saving[PATH_CURRENT], path_state.path_size[PATH_CURRENT]);
-    sf_map_print();
+    seq_freq_map_print();
 #endif
 }
 
@@ -64,10 +64,10 @@ static inline void process_node(const uint8_t *block, GraphNode *node) {
     uint32_t freq = 0;
 
     if (node->sequence_length > 1 && !node->is_RLE) {
-        freq = sf_increment(&block[node->offset], node->sequence_length);
+        freq = seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
     }
 #ifdef DEBUG
-    sf_map_print();
+    seq_freq_map_print();
 #endif
     uint32_t added_saving = calc_savings(node, freq);
     uint32_t added_cost = calc_cost(node, freq);
@@ -105,7 +105,7 @@ static void bookkeeping_best_path(uint16_t last_level, const uint8_t *block) {
 #endif
         node->useless = 0;
         if (node->sequence_length > 1 && !node->is_RLE) {
-            sf_increment(&block[node->offset], node->sequence_length);
+            seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
         }
     }
 }
@@ -195,7 +195,7 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
     if (dest_node->node_level > starting_level) return;
     uint32_t max_nodes = (starting_level-dest_node->node_level)*SEQ_LENGTH_LIMIT*2+1;
     max_nodes = next_power_of_two(max_nodes);
-    init_sf_map(max_nodes); // initalize the seqeunce map.
+
     StackItem main_stack[max_nodes];
     
     initialize_leaf_nodes(main_stack, &top, starting_level);
@@ -239,7 +239,7 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
 #ifdef DEBUG
             print_path(1, 1, block);
 #endif
-            if (update_best_path()) {
+            if (update_best_path(block)) {
         
 #ifdef DEBUG
                 printf("Saved the path %d with saving: %u\n", best_count, path_state.path_total_saving[PATH_CURRENT]);

@@ -11,6 +11,11 @@
         abort();                                                                                                       \
     }
 
+
+#ifdef DEBUG
+static uint64_t best_count = 0;
+#endif
+
 /**
  * @brief Calculates the storage cost in bytes for adding a graph node to a path
  *
@@ -182,7 +187,7 @@ void final_book_keeping(const uint8_t *block) {
     GraphNode *node;
     const uint32_t *path = path_state.path_stack[PATH_BEST];
     int32_t path_len = path_state.path_size[PATH_BEST];
-    if (path_len <=0) return; 
+    if (path_len <= 0) return;
 
     // Pass 1: Count sequence frequencies
     for (int32_t i = 0; i <= path_len; i++) {
@@ -294,9 +299,37 @@ void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
 }
 
 /**
+ * @brief Roll back all sequence frequency increments for the given path.
+ *
+ * This is used when we don't want past increments to bias future best-path
+ * calculations. It will decrement each sequence's frequency exactly once.
+ *
+ * @param path_index  PATH_CURRENT or PATH_BEST (depending on which you undo)
+ * @param block       Pointer to the original data block
+ */
+static inline void rollback_path_freqs(int path_index, const uint8_t *block) {
+    int32_t size = path_state.path_size[path_index];
+    if (size < 0) return; // No nodes in path
+
+    const uint32_t *stack = path_state.path_stack[path_index];
+
+    for (int32_t i = 0; i <= size; i++) {
+        GraphNode *node = get_graph_node(stack[i]);
+        if (!node) continue;
+
+        // Only decrement for multi-byte non-RLE sequences
+        if (node->sequence_length > 1 && !node->is_RLE) {
+            // NOTE: seq_freq_decrement should safely handle cases where
+            //       the sequence isn't found or freq is already 0.
+            seq_freq_decrement(&block[node->offset], node->sequence_length);
+        }
+    }
+}
+
+/**
  * Updates the best path if the current path is better.
  */
-static inline uint8_t update_best_path() {
+static inline uint8_t update_best_path(const uint8_t *block) {
     uint8_t ret = 0;
 
     uint32_t saving_current = path_state.path_total_saving[PATH_CURRENT];
@@ -307,9 +340,11 @@ static inline uint8_t update_best_path() {
     uint32_t cost_current = path_state.path_total_cost[PATH_CURRENT];
     uint32_t cost_best = path_state.path_total_cost[PATH_BEST];
 
-    if (size_best == -1 || cost_current < cost_best ||
-        (cost_current == cost_best && saving_current > saving_best)||
+    if (size_best == -1 || cost_current < cost_best || (cost_current == cost_best && saving_current > saving_best) ||
         (cost_current == cost_best && saving_current == saving_best && size_current < size_best)) {
+
+        // Undo increments from the current path so they don't bias future runs
+        rollback_path_freqs(PATH_CURRENT, block);
 
         int32_t size = size_current + 1;
         CHECK_INDEX(size - 1, "update_best_path copy");
@@ -325,6 +360,10 @@ static inline uint8_t update_best_path() {
         memcpy(path_state.path_freqs[PATH_BEST], path_state.path_freqs[PATH_CURRENT], size * sizeof(uint32_t));
 
         ret = 1;
+#ifdef DEBUG
+        best_count++;
+        printf("[update_best_path] Best path updated %llu times\n", (unsigned long long)best_count);
+#endif
     }
 
     return ret;

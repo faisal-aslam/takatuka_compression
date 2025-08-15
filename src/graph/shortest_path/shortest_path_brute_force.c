@@ -19,5 +19,6 @@ uint32_t best_savings_node_ids[MAX_LEVELS];
  * each node using calc_saving function.
  */
 void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
+    init_seq_freq_map();// initialize the sequence map.
     find_best_saving_path_to_a_node(block, starting_level, 0);    
 }
