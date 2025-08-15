@@ -5,7 +5,7 @@ SRCS = \
     src/map/seq_freq_map.c \
     src/files/compression/compress.c \
     src/time.c \
-    src/graph/shortest_path/shortest_path_brute_force.c \
+    src/graph/shortest_path/shortest_path_less_greedy.c \
     src/graph/shortest_path/sp_seq_freq_map.c \
     src/graph/graph.c \
     src/graph/graph_visualizer.c \

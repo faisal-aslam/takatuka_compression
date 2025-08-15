@@ -147,7 +147,11 @@ static inline uint8_t should_prune(GraphNode *node, GraphNode *dest_node) {
  */
 static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNode *node, const uint8_t *block,
                                              GraphNode *dest_node) {
-    (void)block; // Mark as intentionally unused                                            
+    (void)block; // Mark as intentionally unused
+    if (get_parent_level(node) == dest_node->node_level) {
+        stack[++(*top)] = (StackItem){.node_id = dest_node->node_id, .node_id_popped = 0};
+        return;
+    }                                
     uint8_t parent_count = get_parent_nodes_count(node);
     GraphNode *parents = get_parent_nodes(node);
     for (uint8_t i = 0; i < parent_count; i++) {
@@ -247,7 +251,7 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
         }
 
         // explore parents.
-        if (node->node_level >= dest_node->node_level) {
+        if (get_parent_level(node) >= dest_node->node_level) {
             add_parent_nodes_to_stack(main_stack, &top, node, block, dest_node);
         }
     }

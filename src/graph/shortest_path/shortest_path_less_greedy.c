@@ -217,7 +217,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
             uint16_t out_level;
             find_best_in_map(level, block, &chosen_node_id, &out_level);
             if (chosen_node_id == UINT32_MAX) { // if unable to find best in map then use the best_saving_node.
-                chosen_node_id = best_savings_node_ids[level];
+                chosen_node_id = best_savings_node_ids[level]; //this needs to be changed too to work with multiple levels.
             } else if (level > out_level) {
                 find_best_saving_path_to_a_node(block, level, chosen_node_id);
             }
