@@ -15,6 +15,7 @@
 Graph graph; // Actual single definition
 
 void compact_graph(const uint8_t *block) {
+    (void)block; // Mark as intentionally unused
     if (graph.size == 0) return;
 
     uint32_t write_idx = 0;

@@ -5,7 +5,6 @@
 #include <stdbool.h>
 #include "sp_seq_freq_map.h"
 
-extern int prune_count;
 
 typedef struct {
     uint32_t node_id;
@@ -15,6 +14,7 @@ typedef struct {
 
 extern Path path_state;
 
+static uint32_t best_count = 0;
 
 /**
  * Handles backtracking by removing the node from current path,
@@ -147,6 +147,7 @@ static inline uint8_t should_prune(GraphNode *node, GraphNode *dest_node) {
  */
 static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNode *node, const uint8_t *block,
                                              GraphNode *dest_node) {
+    (void)block; // Mark as intentionally unused                                            
     uint8_t parent_count = get_parent_nodes_count(node);
     GraphNode *parents = get_parent_nodes(node);
     for (uint8_t i = 0; i < parent_count; i++) {
@@ -238,11 +239,9 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
         
 #ifdef DEBUG
                 printf("Saved the path %d with saving: %u\n", best_count, path_state.path_total_saving[PATH_CURRENT]);
-                printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count,
-                       back_track_count, push_count);
                 print_path(0, 1, block);
 #endif
-                prune_count = 0;
+               
             }
             continue; // Root has no parents
         }
@@ -254,8 +253,7 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
     }
     // Final output
 #ifdef DEBUG
-    printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count,
-           back_track_count, push_count);
+    printf("\nbest_count=%u, \n", best_count);
     print_path(0, 1, block);
 #endif
     bookkeeping_best_path(starting_level, block);

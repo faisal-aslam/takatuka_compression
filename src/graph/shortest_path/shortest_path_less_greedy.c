@@ -5,8 +5,11 @@
 // and moves upward through parent levels, preferring sequences already present in the frequency map.
 
 #include "shortest_path_common.h"
+#include "shortest_path_brute_force.h"
 #include <limits.h>
 #include <stdbool.h>
+
+#define MAX_BRUTE_FORCE 3
 
 Path path_state;                          // Global path state tracker
 uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
@@ -130,7 +133,7 @@ static void find_best_in_map(uint16_t level_in, const uint8_t *block, uint32_t *
     uint32_t best_savings = 0;
     uint8_t best_length = 0;
     *out_best_node_id = UINT32_MAX;
-    for (uint16_t cur_level = level_in; cur_level <= level_in + 0; cur_level++) {
+    for (uint16_t cur_level = level_in; cur_level <= level_in + MAX_BRUTE_FORCE; cur_level++) {
         uint32_t start_id = get_level_start_id(cur_level);
         uint32_t end_id = get_level_end_id(cur_level);
         for (uint32_t id = start_id; id < end_id; id++) {
@@ -215,6 +218,8 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
             find_best_in_map(level, block, &chosen_node_id, &out_level);
             if (chosen_node_id == UINT32_MAX) { // if unable to find best in map then use the best_saving_node.
                 chosen_node_id = best_savings_node_ids[level];
+            } else if (level > out_level) {
+                find_best_saving_path_to_a_node(block, level, chosen_node_id);
             }
 
             node = get_graph_node(chosen_node_id);
