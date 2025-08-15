@@ -133,12 +133,12 @@ static void find_best_in_map(uint16_t level_in, const uint8_t *block, uint32_t *
     uint32_t best_savings = 0;
     uint8_t best_length = 0;
     *out_best_node_id = UINT32_MAX;
-    for (uint16_t cur_level = level_in; cur_level <= level_in + MAX_BRUTE_FORCE; cur_level++) {
+    for (uint16_t cur_level = level_in; cur_level >= level_in - MAX_BRUTE_FORCE; cur_level--) {
         uint32_t start_id = get_level_start_id(cur_level);
         uint32_t end_id = get_level_end_id(cur_level);
         for (uint32_t id = start_id; id < end_id; id++) {
             GraphNode *node = get_graph_node(id);
-            if (node->useless || node->is_RLE || node->sequence_length <= 1) continue;
+            if (node->useless || node->sequence_length <= 1) continue;
             if (node->is_RLE) {
                 freq = 1;
             } else {
@@ -197,7 +197,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
     uint32_t start_id_of_last_level = get_level_start_id(level);
     uint32_t end_id_of_last_level = get_level_end_id(level);
     for (uint32_t id = start_id_of_last_level; id < end_id_of_last_level; id++) {
-
+        id = best_savings_node_ids[level]; //remove it later.
         GraphNode *node = get_graph_node(id);
         if (node->useless) continue;
 
@@ -240,5 +240,6 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
         print_path(1, 1, block);
 #endif
         update_best_path();
+        break; //remove it later.
     }
 }
