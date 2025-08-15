@@ -136,7 +136,12 @@ static void find_best_in_map(uint16_t level_in, const uint8_t *block, uint32_t *
         for (uint32_t id = start_id; id < end_id; id++) {
             GraphNode *node = get_graph_node(id);
             if (node->useless || node->is_RLE || node->sequence_length <= 1) continue;
-            if (seq_freq_get(&block[node->offset], node->sequence_length, &freq, &map_node_id) && freq > 0) {
+            if (node->is_RLE) {
+                freq = 1;
+            } else {
+                seq_freq_get(&block[node->offset], node->sequence_length, &freq, &map_node_id);
+            }
+            if (freq > 0){
                 uint32_t cost = calc_cost(node, freq);
                 uint32_t savings = calc_savings(node, freq);
                 if (*out_best_node_id == UINT32_MAX || cost < best_cost ||

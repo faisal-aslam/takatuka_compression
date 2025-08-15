@@ -53,6 +53,9 @@
         "decompress_header.h": "c",
         "stdint.h": "c",
         "stddef.h": "c",
-        "random": "c"
+        "random": "c",
+        "seq_freq_map.h": "c",
+        "common_types.h": "c",
+        "general_map.h": "c"
     }
 }

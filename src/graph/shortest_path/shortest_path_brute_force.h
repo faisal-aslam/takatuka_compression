@@ -185,11 +185,6 @@ static inline uint32_t next_power_of_two(uint32_t x) {
 void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_level, uint32_t destination_id) {
     int top = -1;
 
-    uint32_t back_track_count = 0;
-    uint32_t best_count = 0;
-    uint32_t push_count = 0;
-    long max_push = get_graph_size() * get_graph_size();
-
     path_init();         // Reset path state
     GraphNode *dest_node = get_graph_node(destination_id);
     if (dest_node->node_level > starting_level) return;
@@ -204,9 +199,6 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
         return; // no path exist.
     }
     while (top >= 0) {
-        if (push_count > max_push && best_count >= 1) {
-            // break;
-        }
         StackItem current = main_stack[top--];
 #ifdef DEBUG
         printf("pop stack node_id=%u, from top=%d, node_id_popped=%u\n", current.node_id, top + 1,
@@ -216,7 +208,6 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
         if (current.node_id == UINT32_MAX) {
             // Backtrack marker encountered
             backtrack_node(block);
-            back_track_count++;
             continue;
         }
         GraphNode *node = get_graph_node(current.node_id);
@@ -229,7 +220,7 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
         }
 
         process_node(block, node);
-        push_count++;
+        
 
         // Push backtrack marker
         main_stack[++top] = (StackItem){.node_id = UINT32_MAX, .node_id_popped = current.node_id};
@@ -244,15 +235,13 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
             print_path(1, 1, block);
 #endif
             if (update_best_path()) {
-                best_count++;
+        
 #ifdef DEBUG
                 printf("Saved the path %d with saving: %u\n", best_count, path_state.path_total_saving[PATH_CURRENT]);
                 printf("\nbest_count=%u, prune_count=%u, back_track_count=%u, push_count=%u\n", best_count, prune_count,
                        back_track_count, push_count);
                 print_path(0, 1, block);
 #endif
-                push_count = 0;
-                back_track_count = 0;
                 prune_count = 0;
             }
             continue; // Root has no parents
