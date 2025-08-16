@@ -35,7 +35,6 @@ static uint32_t best_count = 0;
 static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
     const uint8_t len = node->sequence_length;
 
-
     if (node->node_id == 0) return 0; // no cost for the root node.
 
     // Handle RLE case first (different cost model)
@@ -43,7 +42,7 @@ static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
         // RLE cost: pattern length + 1 byte for repeat count
         return (uint32_t)node->repeat_seq_length + 1;
     }
-
+    
     // Main cost calculation
     if (len <= 1 || frequency == 1) {
         // Cases: 0 bytes = 0 cost, 1 byte = 1 cost
@@ -85,7 +84,7 @@ static inline uint32_t calc_savings(GraphNode *node, uint32_t frequency) {
         return 0;
     }
 
-    uint64_t saving = (uint64_t)(frequency - 1) * len * len * len * len;
+    uint64_t saving = (uint64_t)(frequency - 1) * (len-1) * (len-1) * (len-1) * (len-1);
     return (saving > UINT32_MAX) ? UINT32_MAX : (uint32_t)saving;
 }
 
