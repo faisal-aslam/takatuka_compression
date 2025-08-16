@@ -219,7 +219,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
         if (node->useless) continue;
 
         path_init_current(path_main);
-        init_seq_freq_map();
+        //init_seq_freq_map();
 
 #ifdef DEBUG
         printf("At starting level %u selected ", node->node_level);

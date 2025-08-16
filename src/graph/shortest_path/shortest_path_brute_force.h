@@ -4,20 +4,17 @@
 #include <math.h>
 #include <stdbool.h>
 
-
-
 typedef struct {
     uint32_t node_id;
     uint32_t node_id_popped;
     uint32_t hash_index_cache;
 } StackItem;
 
-
 /**
  * Handles backtracking by removing the node from current path,
  * decreasing its frequency if needed, and updating savings.
  */
-static inline void backtrack_node(const uint8_t *block, Path* path_state) {
+static inline void backtrack_node(const uint8_t *block, Path *path_state) {
 
     int32_t index = path_state->path_size[PATH_CURRENT];
     CHECK_INDEX(index, "backtrack_node");
@@ -25,7 +22,7 @@ static inline void backtrack_node(const uint8_t *block, Path* path_state) {
     uint32_t node_id = path_state->path_stack[PATH_CURRENT][index];
     GraphNode *node = get_graph_node(node_id);
     if (!node->is_RLE && node->sequence_length > 1) {
-        
+
         seq_freq_decrement(&block[node->offset], node->sequence_length);
     }
     path_state->path_total_freq[PATH_CURRENT] -= path_state->path_freqs[PATH_CURRENT][index];
@@ -37,8 +34,9 @@ static inline void backtrack_node(const uint8_t *block, Path* path_state) {
     path_state->path_freqs[PATH_CURRENT][index] = 0;
     path_state->path_size[PATH_CURRENT]--;
 #ifdef DEBUG
-    printf("After backtrack node=%u, Cost=%u, savings=%u, size=%u\n", node_id, path_state->path_total_cost[PATH_CURRENT],
-           path_state->path_total_saving[PATH_CURRENT], path_state->path_size[PATH_CURRENT]);
+    printf("After backtrack node=%u, Cost=%u, savings=%u, size=%u\n", node_id,
+           path_state->path_total_cost[PATH_CURRENT], path_state->path_total_saving[PATH_CURRENT],
+           path_state->path_size[PATH_CURRENT]);
     seq_freq_map_print();
 #endif
 }
@@ -81,13 +79,14 @@ static inline void process_node(const uint8_t *block, GraphNode *node, Path *pat
 #endif
 }
 
-static void bookkeeping_best_path(const uint8_t *block, uint16_t starting_level, uint32_t destination_id, Path* path_state) {
-    
+static void bookkeeping_best_path(const uint8_t *block, uint16_t starting_level, uint32_t destination_id,
+                                  Path *path_state) {
+
     GraphNode *node;
-    GraphNode *dest_node = get_graph_node(destination_id);    
-    
+    GraphNode *dest_node = get_graph_node(destination_id);
+
     for (int32_t i = 0; i <= path_state->path_size[PATH_BEST]; i++) {
-        uint32_t node_id = path_state->path_stack[PATH_BEST][i];        
+        uint32_t node_id = path_state->path_stack[PATH_BEST][i];
         node = get_graph_node(node_id);
         if (node->sequence_length > 1 && !node->is_RLE) {
             seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
@@ -103,7 +102,7 @@ static inline void initialize_leaf_nodes(StackItem *stack, int *top, uint16_t la
     uint32_t end = get_level_end_id(last_level);
     for (uint32_t i = start; i < end; i++) {
         GraphNode *node = get_graph_node(i);
-        if (node->useless) continue;        
+        if (node->useless) continue;
         if (node) {
             stack[++(*top)] = (StackItem){.node_id = i, .node_id_popped = 0};
 #ifdef DEBUG
@@ -114,7 +113,7 @@ static inline void initialize_leaf_nodes(StackItem *stack, int *top, uint16_t la
     }
 }
 
-static inline uint8_t should_prune(GraphNode *node, GraphNode *dest_node, Path* path_state) {
+static inline uint8_t should_prune(GraphNode *node, GraphNode *dest_node, Path *path_state) {
     if (node->useless || node->node_level < dest_node->node_level) return 1;
     if (path_state->path_total_cost[PATH_CURRENT] > path_state->path_total_cost[PATH_BEST] ||
         (path_state->path_total_cost[PATH_CURRENT] == path_state->path_total_cost[PATH_BEST] &&
@@ -128,17 +127,23 @@ static inline uint8_t should_prune(GraphNode *node, GraphNode *dest_node, Path* 
  * Adds all valid parent nodes to the DFS stack for exploration.
  */
 static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNode *node, const uint8_t *block,
-                                             GraphNode *dest_node, Path* path_state) {
+                                             GraphNode *dest_node, Path *path_state) {
     (void)block; // Mark as intentionally unused
     if (get_parent_level(node) == dest_node->node_level) {
         stack[++(*top)] = (StackItem){.node_id = dest_node->node_id, .node_id_popped = 0};
         return;
-    }                                
+    }
     uint8_t parent_count = get_parent_nodes_count(node);
     GraphNode *parents = get_parent_nodes(node);
     for (uint8_t i = 0; i < parent_count; i++) {
         GraphNode *parent = &parents[i];
         if (should_prune(parent, dest_node, path_state)) {
+            continue;
+        }
+        uint32_t best_savings_id = best_savings_node_ids[parent->node_level];
+        uint32_t out_freq, out_node_id;
+        if (parent->node_id != best_savings_id && !parent->is_RLE && parent->sequence_length > 1 &&
+            !seq_freq_get(&block[parent->offset], parent->sequence_length, &out_freq, &out_node_id)) {
             continue;
         }
         // Passed all pruning checks, push to stack
@@ -155,7 +160,6 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNo
     }
 }
 
-
 // Rounds up to the next power of two for 32-bit numbers.
 // Returns 1 if x is 0 (edge case).
 static inline uint32_t next_power_of_two(uint32_t x) {
@@ -169,17 +173,18 @@ static inline uint32_t next_power_of_two(uint32_t x) {
     return x + 1;
 }
 
-void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_level, uint32_t destination_id, Path* path_state) {
+void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_level, uint32_t destination_id,
+                                     Path *path_state) {
     int top = -1;
 
-    path_init(path_state);         // Reset path state
+    path_init(path_state); // Reset path state
     GraphNode *dest_node = get_graph_node(destination_id);
     if (dest_node->node_level > starting_level) return;
-    uint32_t max_nodes = (starting_level-dest_node->node_level)*SEQ_LENGTH_LIMIT*2+1;
+    uint32_t max_nodes = (starting_level - dest_node->node_level) * SEQ_LENGTH_LIMIT * 2 + 1;
     max_nodes = next_power_of_two(max_nodes);
 
     StackItem main_stack[max_nodes];
-    
+
     initialize_leaf_nodes(main_stack, &top, starting_level);
     if (top < 0) {
         printf("empty level\n");
@@ -207,7 +212,6 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
         }
 
         process_node(block, node, path_state);
-        
 
         // Push backtrack marker
         main_stack[++top] = (StackItem){.node_id = UINT32_MAX, .node_id_popped = current.node_id};
@@ -222,12 +226,11 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
             print_path(1, 1, block, path_state);
 #endif
             if (update_best_path(block, path_state)) {
-        
+
 #ifdef DEBUG
                 printf("Saved the path %d with saving: %u\n", best_count, path_state->path_total_saving[PATH_CURRENT]);
                 print_path(0, 1, block, path_state);
 #endif
-               
             }
             continue; // Root has no parents
         }
