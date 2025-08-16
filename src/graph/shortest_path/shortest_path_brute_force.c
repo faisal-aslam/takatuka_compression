@@ -18,7 +18,7 @@ uint32_t best_savings_node_ids[MAX_LEVELS];
  * The path saving is computed based on the frequency and length of sequences at
  * each node using calc_saving function.
  */
-void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
+void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path* path_state) {
     init_seq_freq_map();// initialize the sequence map.
-    find_best_saving_path_to_a_node(block, starting_level, 0);    
+    find_best_saving_path_to_a_node(block, starting_level, 0, path_state);    
 }

@@ -15,6 +15,7 @@
 
 #define BUFFER_SIZE 4096
 
+
 /**
   * @brief Main function to write complete compressed output file
   * 
@@ -36,10 +37,9 @@ void write_compressed_output(const char* filename, const uint8_t* block) {
         return;
     }
 
-    BestPathView best_view = get_best_path_view();
-#ifdef DEBUG
+ #ifdef DEBUG
     printf("[DEBUG] Initial best path view:\n");
-    print_best_view(&best_view, 1, block);
+    print_best_view(&view, 1, block);
 #endif
 
     printf("\n ==== Starting compressed output writing === \n");
@@ -61,17 +61,17 @@ void write_compressed_output(const char* filename, const uint8_t* block) {
 #endif
 
     // Write header
-    populate_header(best_view, block, file, &writer);
+    populate_header(view, block, file, &writer);
 
 #ifdef DEBUG
     printf("[DEBUG] After header writing:\n");
-    print_best_view(&best_view, 1, block);
+    print_best_view(&view, 1, block);
     printf("[DEBUG] BitWriter state after header:\n");
     bitwriter_print_state(&writer);
 #endif
 
     // Write body
-    populate_body(best_view, block, file, &writer);
+    populate_body(view, block, file, &writer);
 
 #ifdef DEBUG
     printf("[DEBUG] BitWriter state after body:\n");

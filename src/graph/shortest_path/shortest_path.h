@@ -21,14 +21,13 @@ typedef struct {
     uint32_t path_total_freq[2];                 // total frequency
 } Path;
 
-extern Path path_state;
 extern long total_input_size;
 
 // to find the path with maximum total savings from any leaf to the root node
-void find_best_saving_path(const uint8_t* block, uint16_t starting_level);
+void find_best_saving_path(const uint8_t* block, uint16_t starting_level, Path *path_state);
 
-void free_path_state();
+void free_path_state(Path *path_state);
 
-void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block);
+void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block, Path *path_state);
 
-void final_book_keeping(const uint8_t* block);
+void final_book_keeping(const uint8_t *block, Path *path_state);

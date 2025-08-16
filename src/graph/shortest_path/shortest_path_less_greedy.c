@@ -11,7 +11,6 @@
 
 #define MAX_BRUTE_FORCE 3
 
-Path path_state;                          // Global path state tracker
 uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
 uint32_t best_savings_node_ids[MAX_LEVELS];
 /**
@@ -97,9 +96,9 @@ void compute_best_savings_all(const uint8_t *block, const uint32_t *max_saving_n
  * Append a node to the current path, update sequence frequency map, and
  * adjust cumulative path savings/frequencies.
  */
-static inline void update_current_path(GraphNode *node, const uint8_t *block) {
-    int idx = ++path_state.path_size[PATH_CURRENT]; // First push: from -1 to 0
-    path_state.path_stack[PATH_CURRENT][idx] = node->node_id;
+static inline void update_current_path(GraphNode *node, const uint8_t *block, Path* path_state) {
+    int idx = ++path_state->path_size[PATH_CURRENT]; // First push: from -1 to 0
+    path_state->path_stack[PATH_CURRENT][idx] = node->node_id;
 
     uint32_t freq = 1;
     if (!node->is_RLE && node->sequence_length > 1) {
@@ -111,11 +110,11 @@ static inline void update_current_path(GraphNode *node, const uint8_t *block) {
 
     uint32_t savings = calc_savings(node, freq);
 
-    path_state.path_per_node_savings[PATH_CURRENT][idx] = savings;
-    path_state.path_freqs[PATH_CURRENT][idx] = freq;
-    path_state.path_total_saving[PATH_CURRENT] += savings;
-    path_state.path_total_freq[PATH_CURRENT] += freq;
-    path_state.path_total_cost[PATH_CURRENT] += calc_cost(node, freq);
+    path_state->path_per_node_savings[PATH_CURRENT][idx] = savings;
+    path_state->path_freqs[PATH_CURRENT][idx] = freq;
+    path_state->path_total_saving[PATH_CURRENT] += savings;
+    path_state->path_total_freq[PATH_CURRENT] += freq;
+    path_state->path_total_cost[PATH_CURRENT] += calc_cost(node, freq);
 }
 
 /**
@@ -174,7 +173,7 @@ static void find_best_in_map(uint16_t level_in, const uint8_t *block, uint32_t *
  * @param block           Pointer to the data block being analyzed.
  * @param starting_level  The level to start path construction from.
  */
-void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
+void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path* path_state) {
     if (starting_level >= graph.total_levels) return;
 
     uint16_t level = starting_level;
@@ -191,7 +190,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
 #endif
 
     // Initialize path and sequence frequency map
-    path_init();
+    path_init(path_state);
 
     // Step 3: Start from each node of the starting level
     uint32_t start_id_of_last_level = get_level_start_id(level);
@@ -201,14 +200,14 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
         GraphNode *node = get_graph_node(id);
         if (node->useless) continue;
 
-        path_init_current();
+        path_init_current(path_state);
         init_seq_freq_map();
 
 #ifdef DEBUG
         printf("At starting level %u selected ", node->node_level);
         print_graph_node(node);
 #endif
-        update_current_path(node, block);
+        update_current_path(node, block, path_state);
 
         // Step 4: Move upward through parents
         level = get_parent_level(node);
@@ -219,7 +218,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
             if (chosen_node_id == UINT32_MAX) { // if unable to find best in map then use the best_saving_node.
                 chosen_node_id = best_savings_node_ids[level]; //this needs to be changed too to work with multiple levels.
             } else if (level > out_level) {
-                find_best_saving_path_to_a_node(block, level, chosen_node_id);
+                find_best_saving_path_to_a_node(block, level, chosen_node_id, path_state);
             }
 
             node = get_graph_node(chosen_node_id);
@@ -228,7 +227,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
             print_graph_node(node);
 #endif
             //todo have to append best_path in the current path efficiently.
-            update_current_path(node, block);
+            update_current_path(node, block, path_state);
 
             // Stop if root node reached (assumes node 0 is root)
             if (node->node_id == 0) break;
@@ -238,9 +237,9 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level) {
 
         // Step 5: Finalize and print path
 #ifdef DEBUG
-        print_path(1, 1, block);
+        print_path(1, 1, block, path_state);
 #endif
-        update_best_path(block);
+        update_best_path(block, path_state);
         break; //remove it later.
     }
 }
