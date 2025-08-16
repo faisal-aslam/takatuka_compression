@@ -140,12 +140,6 @@ static inline void add_parent_nodes_to_stack(StackItem *stack, int *top, GraphNo
         if (should_prune(parent, dest_node, path_state)) {
             continue;
         }
-        uint32_t best_savings_id = best_savings_node_ids[parent->node_level];
-        uint32_t out_freq, out_node_id;
-        if (parent->node_id != best_savings_id && !parent->is_RLE && parent->sequence_length > 1 &&
-            !seq_freq_get(&block[parent->offset], parent->sequence_length, &out_freq, &out_node_id)) {
-            continue;
-        }
         // Passed all pruning checks, push to stack
         stack[++(*top)] = (StackItem){.node_id = parent->node_id, .node_id_popped = 0};
 #ifdef DEBUG

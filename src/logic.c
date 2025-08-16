@@ -43,7 +43,7 @@ static inline GraphNode *create_node(uint32_t start, uint8_t length) {
 
 static inline uint8_t RLE_level(const uint8_t *block, uint32_t block_index, uint32_t block_size) {
     uint16_t current_level = get_last_level_index();
-    if (rle_info.next_RLE_level < current_level && is_RLE_sequence(&rle_info.repeat_seq_length, &rle_info.length_of_RLE,
+    if (is_RLE_sequence(&rle_info.repeat_seq_length, &rle_info.length_of_RLE,
                                                                    MIN(block_size, 255), block_index, block)) {
         // wait for the right level to create node.
         // do not create any RLE nodes before reaching that level.
