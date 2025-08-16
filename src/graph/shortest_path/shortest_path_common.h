@@ -11,7 +11,6 @@
         abort();                                                                                                       \
     }
 
-
 #ifdef DEBUG
 static uint32_t best_count = 0;
 #endif
@@ -35,7 +34,7 @@ static uint32_t best_count = 0;
  */
 static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
     const uint8_t len = node->sequence_length;
-    uint32_t base_cost;
+
 
     if (node->node_id == 0) return 0; // no cost for the root node.
 
@@ -48,19 +47,14 @@ static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
     // Main cost calculation
     if (len <= 1 || frequency == 1) {
         // Cases: 0 bytes = 0 cost, 1 byte = 1 cost
-        base_cost = len;
-    } else {
+        return len;
+    } else if (frequency > 1) {
         // Multi-byte case: 1 byte if repeated
-        base_cost = 1u;
+        return 1u;
     }
-
-#ifdef DEBUG
-    if (base_cost == 0 && len != 0) {
-        printf("WARNING: Zero cost for non-zero length node %u\n", node->node_id);
-    }
-#endif
-
-    return base_cost;
+    perror("illegal cost function use\n");
+    abort();
+    return 0;
 }
 
 /**
@@ -91,7 +85,7 @@ static inline uint32_t calc_savings(GraphNode *node, uint32_t frequency) {
         return 0;
     }
 
-    uint64_t saving = (uint64_t)(frequency - 1) * len * len;
+    uint64_t saving = (uint64_t)(frequency - 1) * len * len * len * len;
     return (saving > UINT32_MAX) ? UINT32_MAX : (uint32_t)saving;
 }
 
@@ -177,7 +171,7 @@ void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block
     printf("\n\n");
 }
 
-void free_path_state(Path* path_state) {
+void free_path_state(Path *path_state) {
     // Only if path_state has dynamic allocations
     memset(path_state, 0, sizeof(Path));
 }
@@ -307,7 +301,7 @@ void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
  * @param path_index  PATH_CURRENT or PATH_BEST (depending on which you undo)
  * @param block       Pointer to the original data block
  */
-static inline void rollback_path_freqs(int path_index, const uint8_t *block, Path* path_state) {
+static inline void rollback_path_freqs(int path_index, const uint8_t *block, Path *path_state) {
     int32_t size = path_state->path_size[path_index];
     if (size < 0) return; // No nodes in path
 
@@ -329,8 +323,8 @@ static inline void rollback_path_freqs(int path_index, const uint8_t *block, Pat
 /**
  * Updates the best path if the current path is better.
  */
-static inline uint8_t update_best_path(const uint8_t *block, Path* path_state) {
-    (void)block; //not used at the moment.
+static inline uint8_t update_best_path(const uint8_t *block, Path *path_state) {
+    (void)block; // not used at the moment.
     uint8_t ret = 0;
 
     uint32_t saving_current = path_state->path_total_saving[PATH_CURRENT];
@@ -345,7 +339,7 @@ static inline uint8_t update_best_path(const uint8_t *block, Path* path_state) {
         (cost_current == cost_best && saving_current == saving_best && size_current < size_best)) {
 
         // Undo increments from the current path so they don't bias future runs
-        //rollback_path_freqs(PATH_CURRENT, block);
+        // rollback_path_freqs(PATH_CURRENT, block);
 
         int32_t size = size_current + 1;
         CHECK_INDEX(size - 1, "update_best_path copy");

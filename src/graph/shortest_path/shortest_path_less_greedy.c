@@ -9,7 +9,7 @@
 #include <limits.h>
 #include <stdbool.h>
 
-#define MAX_BRUTE_FORCE 7
+#define MAX_BRUTE_FORCE 17
 
 uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
 uint32_t best_savings_node_ids[MAX_LEVELS];
@@ -213,7 +213,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
     uint32_t start_id_of_last_level = get_level_start_id(level);
     uint32_t end_id_of_last_level = get_level_end_id(level);
     for (uint32_t id = start_id_of_last_level; id < end_id_of_last_level; id++) {
-        //id = best_savings_node_ids[level]; // remove it later.
+        id = max_saving_node_ids[level];// best_savings_node_ids[level]; // remove it later.
         GraphNode *node = get_graph_node(id);
         if (node->useless) continue;
 
@@ -264,6 +264,6 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
         print_path(1, 1, block, path_main);
 #endif
         update_best_path(block, path_main);
-        //break; // remove it later.
+        break; // remove it later.
     }
 }
