@@ -84,7 +84,7 @@ static inline uint32_t calc_savings(GraphNode *node, uint32_t frequency) {
         return 0;
     }
 
-    uint64_t saving = (uint64_t)(frequency - 1) * (len-1) * (len-1) * (len-1) * (len-1);
+    uint64_t saving = (uint64_t)(frequency - 1) * (len-1) * (len-1) * (len-1);
     return (saving > UINT32_MAX) ? UINT32_MAX : (uint32_t)saving;
 }
 
@@ -154,13 +154,14 @@ void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block
         uint8_t len = node->sequence_length;
         uint32_t freq = freqs[i];
         uint32_t saving = per_node_savings[i];
+        uint32_t cost_per_node = path_state->path_per_node_cost[idx][i];
 
         printf("\n -> ");
         if (node->is_RLE) {
             printf("RLE=YES ");
         }
 
-        printf("| id=%u len=%u freq=%u saving=%u | ", node->node_id, len, freq, saving);
+        printf("| id=%u len=%u freq=%u saving=%u cost=%u | ", node->node_id, len, freq, saving, cost_per_node);
 
         print_node_sequence(node, block);
 

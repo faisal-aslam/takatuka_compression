@@ -74,7 +74,7 @@ static inline void set_RLE_data() {
     }
 }
 
-static inline void compute_best_path_and_write_in_file(const uint8_t* block) {
+static inline void compute_best_path_and_write_in_file(const uint8_t *block) {
     Path path_state;
     find_best_saving_path(block, get_last_level_index(), &path_state);
     final_book_keeping(block, &path_state);
@@ -92,6 +92,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     init_seq_freq_map();
     create_root();
     printf("%lu: Started processing nodes", get_elapsed_ms());
+    rle_info.next_RLE_level = UINT16_MAX;
 #ifdef DEBUG
     print_graph_node(get_graph_node(0));
 #endif
@@ -103,15 +104,14 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         uint8_t max_sequence = MIN(current_level, MAX_WEIGHTS);
         uint32_t start;
         // special treatment of RLE nodes.
-        uint8_t created_rle_node = RLE_level(block, block_index, block_size);
-        if (created_rle_node) {
-            while (current_level != rle_info.next_RLE_level) {
-                current_level = create_graph_level();
-                block_index++;
-            }
-            set_RLE_data();
-            continue;
+        if (rle_info.next_RLE_level == UINT16_MAX) {
+            RLE_level(block, block_index, block_size);
         }
+        if (current_level == rle_info.next_RLE_level) {
+            set_RLE_data();
+            rle_info.next_RLE_level = UINT16_MAX;
+        }
+
         // Non-RLE nodes: Make sequences of specific sizes.
         for (uint8_t seq_len = 1; seq_len <= max_sequence; seq_len++) {
             if (seq_len > 1 && seq_len < SEQ_LENGTH_START) continue;
@@ -129,12 +129,9 @@ void process_block(const uint8_t *block, uint32_t block_size) {
                 if (index != UINT32_MAX) {                             // found, same sequence already in the map.
                     GraphNode *old_node = get_graph_node(old_node_id); // get the old node.
                     // as exist multiple times in the graph so mark the old and new node both useful now.
-                    // only increment freq if not overlapping
-                    if (old_node->node_level <= get_parent_level(current_node)) {
-                        seq_freq_increment_with_index(index, current_node->node_id);
-                        current_node->useless = 0;
-                        old_node->useless = 0;
-                    }
+                    seq_freq_increment_with_index(index, current_node->node_id);
+                    current_node->useless = 0;
+                    old_node->useless = 0;
                 } else {
                     seq_freq_increment(&block[current_node->offset], seq_len,
                                        current_node->node_id); // if not in the map then add it.
