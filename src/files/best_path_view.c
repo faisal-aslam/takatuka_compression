@@ -1,20 +1,24 @@
 #include "best_path_view.h"
-#include "shortest_path.h"
+#include <assert.h>
+
+BestPathView view;
 
 
+/**
+ * Each shortest path algorithm must set the best path after finishing otherwise compression will not work.
+ */
+void set_best_path_view(uint32_t *path_ids, uint32_t *path_frequencies, int32_t path_size) {
+    // Safety checks: these arrays must be valid for the lifetime of 'view'.
+    // Do NOT pass pointers to local stack arrays that go out of scope.
+    assert(path_ids != NULL && "path_ids must not be NULL");
+    assert(path_frequencies != NULL && "path_frequencies must not be NULL");
+    assert(path_size >= 0 && "path_size must not be negative");
 
-
-BestPathView get_best_path_view() {
-    const int idx = PATH_BEST;
-
-    return (BestPathView){
-        // Direct pointers to existing arrays
-        .nodes = path_state.path_stack[idx],
-        .freqs = path_state.path_freqs[idx],        
-        // Metadata
-        .path_size = path_state.path_size[idx] + 1, // Convert to count        
-    };
+    view.nodes = path_ids;
+    view.freqs = path_frequencies;
+    view.path_size = path_size;
 }
+
 
 
 /**
