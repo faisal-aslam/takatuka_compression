@@ -9,7 +9,7 @@
 #include <limits.h>
 #include <stdbool.h>
 
-#define MAX_BRUTE_FORCE 3
+#define MAX_BRUTE_FORCE 7
 
 uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
 uint32_t best_savings_node_ids[MAX_LEVELS];
@@ -126,35 +126,32 @@ static inline void update_current_path(GraphNode *node, const uint8_t *block, Pa
  * @param out_best_node_id is return as the best saving node found in the map, or UINT32_MAX if none found.
  * @param out_level the leven of the node id found. Either it will be same as level_in or a parent of level_in.
  */
-static void find_best_in_map(uint16_t level_in, const uint8_t *block, uint32_t *out_best_node_id, uint16_t *out_level) {
+static void find_best_in_map(uint16_t level_in, const uint8_t *block, uint32_t *out_best_node_id) {
     uint32_t freq = 0, map_node_id = 0;
     uint32_t best_cost = 0;
     uint32_t best_savings = 0;
     uint8_t best_length = 0;
     *out_best_node_id = UINT32_MAX;
-    for (uint16_t cur_level = level_in; cur_level >= level_in - MAX_BRUTE_FORCE; cur_level--) {
-        uint32_t start_id = get_level_start_id(cur_level);
-        uint32_t end_id = get_level_end_id(cur_level);
-        for (uint32_t id = start_id; id < end_id; id++) {
-            GraphNode *node = get_graph_node(id);
-            if (node->useless || node->sequence_length <= 1) continue;
-            if (node->is_RLE) {
-                freq = 1;
-            } else {
-                seq_freq_get(&block[node->offset], node->sequence_length, &freq, &map_node_id);
-            }
-            if (freq > 0) {
-                uint32_t cost = calc_cost(node, freq);
-                uint32_t savings = calc_savings(node, freq);
-                if (*out_best_node_id == UINT32_MAX || cost < best_cost ||
-                    (cost == best_cost && savings > best_savings) ||
-                    (cost == best_cost && savings == best_savings && node->sequence_length > best_length)) {
-                    *out_best_node_id = node->node_id;
-                    best_cost = cost;
-                    best_savings = savings;
-                    best_length = node->sequence_length;
-                    *out_level = cur_level;
-                }
+    uint16_t start_level = level_in > MAX_BRUTE_FORCE? (level_in - MAX_BRUTE_FORCE): 0;
+    uint32_t start_id = get_level_start_id(start_level);
+    uint32_t end_id = get_level_end_id(level_in);
+    for (uint32_t id = start_id; id < end_id; id++) {
+        GraphNode *node = get_graph_node(id);
+        if (node->useless || node->sequence_length <= 1) continue;
+        if (node->is_RLE) {
+            freq = 1;
+        } else {
+            seq_freq_get(&block[node->offset], node->sequence_length, &freq, &map_node_id);
+        }
+        if (freq > 0) {
+            uint32_t cost = calc_cost(node, freq);
+            uint32_t savings = calc_savings(node, freq);
+            if (*out_best_node_id == UINT32_MAX || cost < best_cost || (cost == best_cost && savings > best_savings) ||
+                (cost == best_cost && savings == best_savings && node->sequence_length > best_length)) {
+                *out_best_node_id = node->node_id;
+                best_cost = cost;
+                best_savings = savings;
+                best_length = node->sequence_length;
             }
         }
     }
@@ -216,7 +213,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
     uint32_t start_id_of_last_level = get_level_start_id(level);
     uint32_t end_id_of_last_level = get_level_end_id(level);
     for (uint32_t id = start_id_of_last_level; id < end_id_of_last_level; id++) {
-        id = best_savings_node_ids[level]; // remove it later.
+        //id = best_savings_node_ids[level]; // remove it later.
         GraphNode *node = get_graph_node(id);
         if (node->useless) continue;
 
@@ -233,20 +230,19 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
         level = get_parent_level(node);
         while (level < graph.total_levels) {
             uint32_t chosen_node_id;
-            uint16_t out_level;
             Path path_state_intermediate;
-            find_best_in_map(level, block, &chosen_node_id, &out_level);
+            find_best_in_map(level, block, &chosen_node_id);
             if (chosen_node_id == UINT32_MAX) { // if unable to find best in map then use the best_saving_node.
-                chosen_node_id =
-                    best_savings_node_ids[level]; // this needs to be changed too to work with multiple levels.
-            } else if (level > out_level) {
-                find_best_saving_path_to_a_node(block, level, chosen_node_id, &path_state_intermediate);
+                chosen_node_id = best_savings_node_ids[level]; // this needs to be changed too to work with multiple levels.
+                node = get_graph_node(chosen_node_id);
+            } else {
+                node = get_graph_node(chosen_node_id);
+                if (level > node->node_level) {
+                    find_best_saving_path_to_a_node(block, level, chosen_node_id, &path_state_intermediate);
+                }
             }
 
-            node = get_graph_node(chosen_node_id);
-
-
-            if (path_state_intermediate.path_size[PATH_BEST] > 0) {
+            if (level != node->node_level) {
                 append_best_to_current(path_main, &path_state_intermediate);
             } else {
                 update_current_path(node, block, path_main);
@@ -255,6 +251,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
             printf("At level %u selected ", node->node_level);
             print_graph_node(node);
             print_path(1, 1, block, path_main);
+            seq_freq_map_print();
 #endif
             // Stop if root node reached (assumes node 0 is root)
             if (node->node_id == 0) break;
@@ -267,6 +264,6 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
         print_path(1, 1, block, path_main);
 #endif
         update_best_path(block, path_main);
-        break; // remove it later.
+        //break; // remove it later.
     }
 }

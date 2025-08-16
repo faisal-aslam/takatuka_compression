@@ -82,26 +82,13 @@ static inline void process_node(const uint8_t *block, GraphNode *node, Path *pat
 }
 
 static void bookkeeping_best_path(const uint8_t *block, uint16_t starting_level, uint32_t destination_id, Path* path_state) {
-    // Step 1. Mark all nodes useless.
+    
     GraphNode *node;
-    GraphNode *dest_node = get_graph_node(destination_id);
-    uint32_t start_id = get_level_start_id(starting_level);
-    uint32_t end_id = get_level_end_id(dest_node->node_level);
-    for (uint32_t id = start_id; id < end_id; id++) {
-        node = get_graph_node(id);
-        if (!node->useless) {
-            node->useless = 1; // mark it useless.
-        }
-    }
-    // only nodes in the best path are marked useful
+    GraphNode *dest_node = get_graph_node(destination_id);    
+    
     for (int32_t i = 0; i <= path_state->path_size[PATH_BEST]; i++) {
-        uint32_t node_id = path_state->path_stack[PATH_BEST][i];
-        if (node_id < start_id) continue;
+        uint32_t node_id = path_state->path_stack[PATH_BEST][i];        
         node = get_graph_node(node_id);
-#ifdef DEBUG
-        printf("\n Marking useful %u\n", node_id);
-#endif
-        node->useless = 0;
         if (node->sequence_length > 1 && !node->is_RLE) {
             seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
         }
@@ -258,7 +245,7 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
     printf("\nbest_count=%u, \n", best_count);
     print_path(0, 1, block, path_state);
 #endif
-    //bookkeeping_best_path(block, starting_level, destination_id);
+    bookkeeping_best_path(block, starting_level, destination_id, path_state);
 
     // free_path_state();
 }
