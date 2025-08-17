@@ -152,11 +152,23 @@ void seq_freq_set_all(uint32_t freq) {
         fprintf(stderr, "Frequency exceeds 24-bit limit\n");
         abort();
     }
+
     for (uint32_t i = 0; i < SEQ_MAP_CAPACITY; i++) {
         SeqFreqEntry *entry = &seqMap.entries[i];
         if (entry->sequence != NULL) {
+            uint32_t old_freq = META_GET_FREQ(entry->meta);
             uint8_t len = META_GET_LEN(entry->meta);
-            entry->meta = META_ENCODE(freq, len);
+
+            if (old_freq == 1) {
+                // Treat as deleted
+                entry->sequence = NULL;
+                entry->meta = 0;
+                entry->node_id = 0;
+                entry->hash = 0;
+            } else {
+                // Reset frequency to the given value, preserve length
+                entry->meta = META_ENCODE(freq, len);
+            }
         }
     }
 }

@@ -226,14 +226,14 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
 
         code_map_set(&code_map, cand->sequence, cand->length, assigned[code_class], (uint8_t)code_class);
 
-        // #ifdef DEBUG
+    #ifdef DEBUG
         printf("[DEBUG] Encoding candidate #%d (class=%d, code=%u, code_length=3+%u, len=%u): ", i, code_class,
                assigned[code_class], get_code_class_size((uint8_t)code_class, class2_bits), cand->length);
         for (uint8_t j = 0; j < cand->length; ++j) {
             printf("%c", cand->sequence[j]);
         }
         printf("\n");
-        // #endif
+    #endif
 
         // Write code_class (2 bits), sequence length (8 bits), then code index (class sized), then sequence bytes
         SAFE_BITWRITE(writer, code_class, 2, file_to_write, "code_class");
