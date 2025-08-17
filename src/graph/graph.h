@@ -22,6 +22,7 @@
 typedef struct {
     uint32_t node_id;
     uint32_t offset;
+    uint32_t best_savings;
     uint16_t node_level;
     uint8_t useless;
     uint8_t sequence_length;
