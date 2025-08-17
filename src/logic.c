@@ -78,12 +78,14 @@ static inline void compute_best_path_and_write_in_file(const uint8_t *block) {
     Path path_state;
     find_best_saving_path(block, get_last_level_index(), &path_state);
     final_book_keeping(block, &path_state);
+    printf("\n%lu: Computed the best possible path \n", get_elapsed_ms());
     // #ifdef DEBUG
     print_path(0, 1, block, &path_state);
     // #endif
     set_best_path_view(path_state.path_stack[PATH_BEST], path_state.path_freqs[PATH_BEST],
                        path_state.path_size[PATH_BEST]);
     write_compressed_output(output_file, block);
+    printf("\n%lu: Written the path in output file \n", get_elapsed_ms());
 }
 
 void process_block(const uint8_t *block, uint32_t block_size) {
@@ -143,7 +145,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         }
     }
     printf("\n%lu: Done creating %u nodes\n", get_elapsed_ms(), graph.size);
-    // compact_graph(block);
+    compact_graph(block);
 
     compute_best_path_and_write_in_file(block);
 }
