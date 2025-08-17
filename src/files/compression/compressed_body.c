@@ -44,14 +44,13 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
         uint8_t code_class;
         if (node->is_RLE) {
             // RLE case: encoded using code_class = 3 (bits '11') and RLE format
-            if (node->repeat_seq_length > 8) {
+            /*if (node->repeat_seq_length > 8) {
                 fprintf(stderr, "RLE repeat_seq_length too large: %u\n", node->repeat_seq_length);
                 exit(EXIT_FAILURE);
-            }
+            }*/
 
 #ifdef DEBUG
-            printf("[DEBUG] Writing RLE sequence (repeat_len=%u, count=%u)\n", node->repeat_seq_length,
-                   node->length_of_RLE);
+            printf("[DEBUG] Writing RLE sequence (count=%u)\n", node->length_of_RLE);
 #endif
 
             // Write compressed flag (1) then class (3 == 11b)
@@ -66,26 +65,27 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
             bitwriter_print_state(writer);
 #endif
 
-/*            // RLE metadata
-            SAFE_BITWRITE(writer, node->repeat_seq_length, 3, file_to_write, "seq_len");
-#ifdef DEBUG
-            printf("[DEBUG] ➤ Written 3 bits: RLE repeat length = %u\n", node->repeat_seq_length);
-            bitwriter_print_state(writer);
-#endif
-*/
+            /*            // RLE metadata
+                        SAFE_BITWRITE(writer, node->repeat_seq_length, 3, file_to_write, "seq_len");
+            #ifdef DEBUG
+                        printf("[DEBUG] ➤ Written 3 bits: RLE repeat length = %u\n", node->repeat_seq_length);
+                        bitwriter_print_state(writer);
+            #endif
+            */
             SAFE_BITWRITE(writer, node->length_of_RLE, 8, file_to_write, "len_of_RLE");
 #ifdef DEBUG
             printf("[DEBUG] ➤ Written 8 bits: RLE count = %u\n", node->length_of_RLE);
             bitwriter_print_state(writer);
 #endif
 
-            for (uint8_t j = 0; j < node->repeat_seq_length; ++j) {
-                SAFE_BITWRITE(writer, seq[j], 8, file_to_write, "");
+            // for (uint8_t j = 0; j < node->repeat_seq_length; ++j) {
+            uint8_t j = 0;
+            SAFE_BITWRITE(writer, seq[j], 8, file_to_write, "");
 #ifdef DEBUG
-                printf("[DEBUG] ➤ Written 8 bits: RLE pattern byte %02X\n", seq[j]);
-                bitwriter_print_state(writer);
+            printf("[DEBUG] ➤ Written 8 bits: RLE pattern byte %02X\n", seq[j]);
+            bitwriter_print_state(writer);
 #endif
-            }
+            //}
         } else if (len > 1 && code_map_get(&code_map, seq, len, &code, &code_class)) {
             // Compressed regular sequence - write compressed flag, class, and code index.
 #ifdef DEBUG
@@ -145,7 +145,7 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
     long body_end = ftell(file_to_write);
 
     printf("Body size written: %ld bytes\n", body_end - body_start);
-    
+
 #ifdef DEBUG
     printf("[DEBUG] Body written successfully\n");
     bitwriter_print_state(writer);

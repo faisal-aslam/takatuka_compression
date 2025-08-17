@@ -21,39 +21,27 @@ static uint32_t best_count = 0;
  * This is a hot path function - optimized for minimal branching and fast execution.
  * All costs are calculated in bytes of storage required.
  *
- * Cost Rules:
- * - Zero-length sequences: 0 bytes (invalid case, handled defensively)
- * - Single-byte sequences: 1 byte (raw byte)
- * - Multi-byte unique sequences (freq=1): n+1 bytes (n bytes + 1 byte length prefix)
- * - Multi-byte repeated sequences (freq>1): 1 byte (reference to dictionary)
  * - RLE sequences: pattern_length + 1 byte (pattern + repeat count)
  *
  * @param node Pointer to graph node being evaluated
  * @param frequency Frequency count of this sequence in the data
  * @return uint32_t Storage cost in bytes (always >= 0)
  */
-static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
-    const uint8_t len = node->sequence_length;
+static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {    
 
     if (node->node_id == 0) return 0; // no cost for the root node.
 
-    // Handle RLE case first (different cost model)
-    if (node->is_RLE) {
-        // RLE cost: pattern length + 1 byte for repeat count
-        return 1u;
-    }
     
-    // Main cost calculation
-    if (len <= 1 || frequency == 1) {
-        // Cases: 0 bytes = 0 cost, 1 byte = 1 cost
-        return len;
-    } else if (frequency > 1) {
-        // Multi-byte case: 1 byte if repeated
-        return 1u;
-    }
-    perror("illegal cost function use\n");
+    if (node->is_RLE || (frequency > 1 && node->sequence_length > 1)) {       
+        return 1u; //prefer RLE and frequent long sequences.
+    } else if (node->sequence_length == 1) {
+        return 13u;
+    } else if (frequency == 1) {
+        return node->sequence_length;
+    } 
+    fprintf(stderr, "illegal cost calculation\n");
     abort();
-    return 0;
+    return UINT32_MAX;
 }
 
 /**
@@ -66,26 +54,8 @@ static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
 static inline uint32_t calc_savings(GraphNode *node, uint32_t frequency) {
     // No savings for root node
     if (node->node_id == 0) return 0;
-
-    const uint8_t len = node->sequence_length;
-
-    // Handle RLE case first (uses different saving model)
-    if (node->is_RLE) {
-        // RLE saving: pattern length + 1 byte for repeat count
-        // Original was: (len_ratio)^3 in floating point
-        // We'll approximate it here and clamp to avoid overflow.
-        uint32_t ratio = (node->length_of_RLE / node->repeat_seq_length);
-        uint64_t cubic = (uint64_t)ratio * ratio * ratio;
-        return (cubic > UINT32_MAX) ? UINT32_MAX : (uint32_t)cubic;
-    }
-
-    // For sequences of length <= 1, no savings
-    if (len <= 1 || frequency <= 1) {
-        return 0;
-    }
-
-    uint64_t saving = (uint64_t)(frequency - 1) * (len-1) * (len-1);
-    return (saving > UINT32_MAX) ? UINT32_MAX : (uint32_t)saving;
+    if (frequency == 1) return 0;
+    return node->sequence_length;
 }
 
 /**

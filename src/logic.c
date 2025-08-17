@@ -62,7 +62,7 @@ static inline void set_RLE_data() {
         current_node = create_node(rle_info.RLE_offset, rle_info.length_of_RLE);
         current_node->useless = 0;
         current_node->is_RLE = 1;
-        current_node->repeat_seq_length = rle_info.repeat_seq_length;
+        //current_node->repeat_seq_length = rle_info.repeat_seq_length;
         current_node->length_of_RLE = rle_info.length_of_RLE;
 
 #ifdef DEBUG
@@ -145,7 +145,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         }
     }
     printf("\n%lu: Done creating %u nodes\n", get_elapsed_ms(), graph.size);
-    //compact_graph(block);
+    compact_graph(block);
 
     compute_best_path_and_write_in_file(block);
 }

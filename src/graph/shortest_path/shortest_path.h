@@ -8,7 +8,7 @@
 #define PATH_BEST 1
 
 extern uint32_t max_saving_node_ids[MAX_LEVELS];
-extern uint32_t best_savings_node_ids[MAX_LEVELS];
+
 
 typedef struct {
     uint32_t path_stack[2][MAX_LEVELS];          // node IDs

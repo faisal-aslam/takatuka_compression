@@ -1,74 +1,67 @@
 #include "graph_visualizer.h"
 #include "graph.h"
-#include "shortest_path.h"
-#include <stdio.h>
-#include <string.h>
-#include <stdbool.h>
-#include <stdlib.h>
 #include "seq_freq_map.h"
+#include "shortest_path.h"
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
+static const char *LEVEL_COLORS[] = {"#CBA6F7", "#FFCDD2", "#F8BBD0", "#E1BEE7", "#D1C4E9",
+                                     "#C5CAE9", "#BBDEFB", "#B2EBF2", "#B2DFDB", "#C8E6C9",
+                                     "#DCEDC8", "#FFF9C4", "#FFE0B2", "#FFCCBC", "#D7CCC8"};
 
-static const char* LEVEL_COLORS[] = {
-    "#CBA6F7", "#FFCDD2", "#F8BBD0", "#E1BEE7", "#D1C4E9",
-    "#C5CAE9", "#BBDEFB", "#B2EBF2", "#B2DFDB", "#C8E6C9",
-    "#DCEDC8", "#FFF9C4", "#FFE0B2", "#FFCCBC", "#D7CCC8"
-};
-
-
-static void print_node_content(FILE* output, const GraphNode* node, const uint8_t* block) {
+static void print_node_content(FILE *output, const GraphNode *node, const uint8_t *block) {
     if (node->sequence_length == 0) {
         fprintf(output, "Root");
         return;
     }
 
     for (uint8_t i = 0; i < node->sequence_length; i++) {
-       
-        //if (i > 0) fprintf(output, ",");
+
+        // if (i > 0) fprintf(output, ",");
         fprintf(output, "%c", block[node->offset + i]);
     }
 }
 
-static const char* get_node_color(uint16_t level) {
+static const char *get_node_color(uint16_t level) {
     if (level == 0) return "#000000"; // Black for root
     size_t num_colors = sizeof(LEVEL_COLORS) / sizeof(LEVEL_COLORS[0]);
     return LEVEL_COLORS[level % num_colors];
 }
 
-static void print_node(FILE* output, const GraphNode* node, const uint8_t *block) {
-    const char* fillcolor = get_node_color(node->node_level);
-    const char* fontcolor = (node->node_id == 0) ? "white" : "black";
+static void print_node(FILE *output, const GraphNode *node, const uint8_t *block) {
+    const char *fillcolor = get_node_color(node->node_level);
+    const char *fontcolor = (node->node_id == 0) ? "white" : "black";
 
     fprintf(output, "    %d [label=\"%d\\n", node->node_id, node->node_id);
     print_node_content(output, node, block);
     uint32_t freq, node_id;
-    seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id); 
-    if(!node->is_RLE) {
-        fprintf(output, "\n l=%u, f=%u, b=%u, b_n=%u, m_n=%u", node->node_level, freq, node->best_savings, 
-            best_savings_node_ids[node->node_level], max_saving_node_ids[node->node_level]);
+    seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
+    if (!node->is_RLE) {
+        fprintf(output, "\n l=%u, f=%u, m_n=%u", node->node_level, freq, max_saving_node_ids[node->node_level]);
     } else {
-        fprintf(output, "\n l=%u, f=%u, b=%u, b_n=%u, m_n=%u \nRLE", node->node_level, freq, node->best_savings,
-             best_savings_node_ids[node->node_level], max_saving_node_ids[node->node_level]);
+        fprintf(output, "\n l=%u, f=%u, m_n=%u \nRLE", node->node_level, freq, max_saving_node_ids[node->node_level]);
     }
-    fprintf(output, "\", shape=box, style=filled, fillcolor=\"%s\", fontcolor=\"%s\"];\n", 
-            fillcolor, fontcolor);
+    fprintf(output, "\", shape=box, style=filled, fillcolor=\"%s\", fontcolor=\"%s\"];\n", fillcolor, fontcolor);
 }
 
-static void print_links(FILE* output, const GraphNode* node) {
-    if (node->node_id == 0 ) return;
+static void print_links(FILE *output, const GraphNode *node) {
+    if (node->node_id == 0) return;
 
-    uint16_t parent_count = get_parent_nodes_count((GraphNode*)node);
-    GraphNode* parent_nodes = get_parent_nodes((GraphNode*)node);
+    uint16_t parent_count = get_parent_nodes_count((GraphNode *)node);
+    GraphNode *parent_nodes = get_parent_nodes((GraphNode *)node);
 
     for (uint16_t i = 0; i < parent_count; i++) {
-        GraphNode* parent = &parent_nodes[i];
-        if (parent->useless) continue;    
+        GraphNode *parent = &parent_nodes[i];
+        if (parent->useless) continue;
         fprintf(output, "    %u -> %u;\n", node->node_id, parent->node_id);
         break; // Show only one parent per node
     }
 }
 
-void visualize_graph(const uint8_t* block) {
-    FILE* output = fopen("./graph.dot", "w");
+void visualize_graph(const uint8_t *block) {
+    FILE *output = fopen("./graph.dot", "w");
     if (!output) return;
 
     // Graphviz header
@@ -82,9 +75,9 @@ void visualize_graph(const uint8_t* block) {
     // First pass: nodes
     fprintf(output, "  // Nodes\n");
     for (uint32_t i = 0; i < get_graph_size(); i++) {
-        GraphNode* node = get_graph_node(i);        
+        GraphNode *node = get_graph_node(i);
         if (node && !node->useless) {
-            
+
             print_node(output, node, block);
         }
     }
@@ -98,7 +91,7 @@ void visualize_graph(const uint8_t* block) {
 
         // Check if this level has any nodes
         for (uint32_t i = 0; i < get_graph_size(); i++) {
-            GraphNode* node = get_graph_node(i);            
+            GraphNode *node = get_graph_node(i);
             if (node && node->node_level == level && !node->useless) {
                 level_has_nodes = true;
                 break;
@@ -113,7 +106,7 @@ void visualize_graph(const uint8_t* block) {
         fprintf(output, "  subgraph level_%u {\n    rank=same;\n", level);
         for (uint32_t i = 0; i < get_graph_size(); i++) {
             GraphNode *node = get_graph_node(i);
-          
+
             if (node && node->node_level == level && !node->useless) {
                 fprintf(output, "    %d;\n", node->node_id);
             }
@@ -125,8 +118,8 @@ void visualize_graph(const uint8_t* block) {
     // Third pass: edges
     fprintf(output, "  // Edges\n");
     for (uint32_t i = 0; i < get_graph_size(); i++) {
-        GraphNode* node = get_graph_node(i);
-        
+        GraphNode *node = get_graph_node(i);
+
         if (node && node->node_id != 0 && !node->useless) {
             print_links(output, node);
         }

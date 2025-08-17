@@ -79,8 +79,7 @@ static inline void process_node(const uint8_t *block, GraphNode *node, Path *pat
 #endif
 }
 
-static void bookkeeping_best_path(const uint8_t *block, uint16_t starting_level, uint32_t destination_id,
-                                  Path *path_state) {
+static void bookkeeping_best_path(const uint8_t *block, uint32_t destination_id, Path *path_state) {
 
     GraphNode *node;
     GraphNode *dest_node = get_graph_node(destination_id);
@@ -239,7 +238,7 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
     printf("\nbest_count=%u, \n", best_count);
     print_path(0, 1, block, path_state);
 #endif
-    bookkeeping_best_path(block, starting_level, destination_id, path_state);
+    bookkeeping_best_path(block, destination_id, path_state);
 
     // free_path_state();
 }

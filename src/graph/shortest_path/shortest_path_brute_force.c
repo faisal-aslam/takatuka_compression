@@ -7,7 +7,7 @@
 int prune_count = 0;
 
 uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
-uint32_t best_savings_node_ids[MAX_LEVELS];
+
 
 /**
  * Performs a DFS-based traversal (using a manual stack to avoid recursion)
