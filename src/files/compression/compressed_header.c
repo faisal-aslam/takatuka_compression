@@ -53,7 +53,6 @@ static inline uint8_t sequence_seen(const uint8_t *block, uint8_t length, uint32
 
 void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to_write, BitWriter *writer) {
     init_seq_freq_map();
-    
 
 #ifdef DEBUG
     printf("[DEBUG] Initialized sequence frequency map with capacity: %u\n", best_path.path_size * 2);
@@ -107,9 +106,7 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
         }
 
         const uint8_t *sequence = &block[offset];
-        candidates[candidate_count++] = (CodeCandidate){.savings = (uint64_t)freq,
-                                                        .sequence = sequence,
-                                                        .length = len};
+        candidates[candidate_count++] = (CodeCandidate){.savings = (uint64_t)freq, .sequence = sequence, .length = len};
 
 #ifdef DEBUG
         printf("[DEBUG] Added candidate #%d: len=%u, savings=%lu, offset=%u\n", candidate_count, len,
@@ -189,14 +186,10 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
 
     printf("Computed class2_bits = %u\n", class2_bits);
 
-
     // Compute actual capacities now (including dynamic class2)
     uint32_t max_class2 = get_code_class_threshold(2, class2_bits);
 
-
-    printf("Capacities after class2_bits: class0=%u, class1=%u, class2=%u\n", max_class0, max_class1,
-           max_class2);
-
+    printf("Capacities after class2_bits: class0=%u, class1=%u, class2=%u\n", max_class0, max_class1, max_class2);
 
     // Write the class2_bits byte into the header so decoder knows how many bits to read for class 2.
     // Place it right after the reserved 16-bit code count placeholder.
@@ -233,15 +226,14 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
 
         code_map_set(&code_map, cand->sequence, cand->length, assigned[code_class], (uint8_t)code_class);
 
-#ifdef DEBUG
-        printf("[DEBUG] Encoding candidate #%d (class=%d, code=%u, len=%u): ", i, code_class, assigned[code_class],
-               cand->length);
-        for (uint8_t j = 0; j < cand->length && j < 8; ++j) {
-            printf("%02X ", cand->sequence[j]);
+        // #ifdef DEBUG
+        printf("[DEBUG] Encoding candidate #%d (class=%d, code=%u, code_length=3+%u, len=%u): ", i, code_class,
+               assigned[code_class], get_code_class_size((uint8_t)code_class, class2_bits), cand->length);
+        for (uint8_t j = 0; j < cand->length; ++j) {
+            printf("%c", cand->sequence[j]);
         }
-        if (cand->length > 8) printf("...");
         printf("\n");
-#endif
+        // #endif
 
         // Write code_class (2 bits), sequence length (8 bits), then code index (class sized), then sequence bytes
         SAFE_BITWRITE(writer, code_class, 2, file_to_write, "code_class");
@@ -284,12 +276,20 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
     // Overwrite the placeholder 16-bit field with the actual candidate_count
     bitwriter_overwrite_at(writer, header_start_bit, candidate_count, 16);
 
+    // Record file offset before flush
+    long header_start = ftell(file_to_write);
+
     // Flush header buffer to file
     if (!bitwriter_write_to_file(writer, file_to_write)) {
         fprintf(stderr, "Failed to write header to file\n");
         exit(EXIT_FAILURE);
     }
 
+    // Record file offset after flush
+    long header_end = ftell(file_to_write);
+
+    printf("Header size written: %ld bytes\n", header_end - header_start);
+    
 #ifdef DEBUG
     printf("[DEBUG] Header written successfully (%d codes), BitWriter reset\n", candidate_count);
     bitwriter_print_state(writer);

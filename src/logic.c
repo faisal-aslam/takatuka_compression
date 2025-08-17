@@ -145,7 +145,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         }
     }
     printf("\n%lu: Done creating %u nodes\n", get_elapsed_ms(), graph.size);
-    compact_graph(block);
+    //compact_graph(block);
 
     compute_best_path_and_write_in_file(block);
 }

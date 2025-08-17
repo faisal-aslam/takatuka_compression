@@ -133,12 +133,18 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
 #ifdef DEBUG
     printf("[DEBUG] Body writing complete, flushing...\n");
 #endif
+    // Record file offset before flush
+    long body_start = ftell(file_to_write);
 
     if (!bitwriter_write_to_file(writer, file_to_write)) {
         fprintf(stderr, "Failed to write final body data to file\n");
         exit(EXIT_FAILURE);
     }
+    // Record file offset after flush
+    long body_end = ftell(file_to_write);
 
+    printf("Body size written: %ld bytes\n", body_end - body_start);
+    
 #ifdef DEBUG
     printf("[DEBUG] Body written successfully\n");
     bitwriter_print_state(writer);
