@@ -62,11 +62,11 @@ void read_body_using_decoder_map(BitReader *reader, const char *decompress_file_
 #endif
 
             if (code_class == 3) { // RLE
-                uint32_t rle_len;
-                if (!bitreader_read(reader, &rle_len, 3)) {
+                uint32_t rle_len = 1;
+                /*if (!bitreader_read(reader, &rle_len, 3)) {
                     fprintf(stderr, "Failed to read RLE length\n");
                     exit(EXIT_FAILURE);
-                }
+                }*/
 
                 uint32_t rle_count;
                 if (!bitreader_read(reader, &rle_count, 8)) {

@@ -66,12 +66,13 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
             bitwriter_print_state(writer);
 #endif
 
-            // RLE metadata
+/*            // RLE metadata
             SAFE_BITWRITE(writer, node->repeat_seq_length, 3, file_to_write, "seq_len");
 #ifdef DEBUG
             printf("[DEBUG] ➤ Written 3 bits: RLE repeat length = %u\n", node->repeat_seq_length);
             bitwriter_print_state(writer);
 #endif
+*/
             SAFE_BITWRITE(writer, node->length_of_RLE, 8, file_to_write, "len_of_RLE");
 #ifdef DEBUG
             printf("[DEBUG] ➤ Written 8 bits: RLE count = %u\n", node->length_of_RLE);

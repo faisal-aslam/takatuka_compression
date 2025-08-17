@@ -111,7 +111,8 @@ uint8_t is_RLE_sequence(uint8_t *repeat_seq_length, uint8_t *length_of_RLE, uint
 
         return 1;
     }
-
+    if (1) return 0; //not supporting multiple byte pattern.
+    
     // ===== Stage 2: Pattern-Based RLE Check (for whole sequence or prefix) =====
     if (block_size < 16) {
         return 0;
