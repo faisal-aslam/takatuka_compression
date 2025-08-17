@@ -112,6 +112,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         if (current_level == rle_info.next_RLE_level) {
             set_RLE_data();
             rle_info.next_RLE_level = UINT16_MAX;
+            max_sequence = max_sequence -1; //as we have an extra node. Either we have to fix our counting or this hack.
         }
 
         // Non-RLE nodes: Make sequences of specific sizes.

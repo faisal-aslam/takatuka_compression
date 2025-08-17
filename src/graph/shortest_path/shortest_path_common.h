@@ -52,10 +52,9 @@ static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
  * @return uint32_t Storage saving in bytes (integer approximation).
  */
 static inline uint32_t calc_savings(GraphNode *node, uint32_t frequency) {
-    // No savings for root node
-    if (node->node_id == 0) return 0;
-    if (frequency == 1) return 0;
-    return node->sequence_length;
+    // No savings for root node    
+    if (node->is_RLE || frequency > 1) return node->sequence_length;
+    return 0;
 }
 
 /**

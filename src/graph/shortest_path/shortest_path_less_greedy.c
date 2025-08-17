@@ -11,7 +11,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define MAX_BRUTE_FORCE 23
+#define MAX_BRUTE_FORCE 31
 
 uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
 
