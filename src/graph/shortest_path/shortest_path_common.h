@@ -18,27 +18,24 @@ static uint32_t best_count = 0;
 /**
  * @brief Calculates the storage cost in bytes for adding a graph node to a path
  *
- * This is a hot path function - optimized for minimal branching and fast execution.
- * All costs are calculated in bytes of storage required.
- *
- * - RLE sequences: pattern_length + 1 byte (pattern + repeat count)
  *
  * @param node Pointer to graph node being evaluated
  * @param frequency Frequency count of this sequence in the data
  * @return uint32_t Storage cost in bytes (always >= 0)
  */
-static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {    
+static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
 
     if (node->node_id == 0) return 0; // no cost for the root node.
 
-    
-    if (node->is_RLE || (frequency > 1 && node->sequence_length > 1)) {       
-        return 1u; //prefer RLE and frequent long sequences.
+    if (node->is_RLE) {
+        return 1u; // prefer RLE the most.
+    } else if (frequency > 1 && node->sequence_length > 1) {
+        return 2u; //next perfer repeated sequences with freq more than 1.
     } else if (node->sequence_length == 1) {
-        return 13u;
+        return 3u; //do not use sequences of length 1 unless needed.
     } else if (frequency == 1) {
-        return node->sequence_length;
-    } 
+        return 3u*node->sequence_length; //avoid making new sequences unless they are rewarded in future.
+    }
     fprintf(stderr, "illegal cost calculation\n");
     abort();
     return UINT32_MAX;
@@ -52,8 +49,12 @@ static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
  * @return uint32_t Storage saving in bytes (integer approximation).
  */
 static inline uint32_t calc_savings(GraphNode *node, uint32_t frequency) {
-    // No savings for root node    
-    if (node->is_RLE || frequency > 1) return node->sequence_length;
+    // No savings for root node
+    if (node->is_RLE) {
+        return node->sequence_length * 2u;
+    } else if (frequency > 1) {
+        return node->sequence_length;
+    }
     return 0;
 }
 
