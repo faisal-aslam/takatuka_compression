@@ -184,7 +184,7 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
     uint8_t class2_bits = calculate_class2_bits((uint16_t)will_fill_class2);
     global_class2_bits = class2_bits; // export for use by body writer/decoder
 
-    printf("Computed class2_bits = %u\n", class2_bits);
+    printf("Total number of codes=%d, Computed class2_bits = %u\n", candidate_count, class2_bits);
 
     // Compute actual capacities now (including dynamic class2)
     uint32_t max_class2 = get_code_class_threshold(2, class2_bits);
