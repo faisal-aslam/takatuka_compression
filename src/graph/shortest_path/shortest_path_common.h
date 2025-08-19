@@ -176,7 +176,7 @@ void final_book_keeping(const uint8_t *block, Path *path_state) {
 
 void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
     if (graph.total_levels < 2) return;
-
+    seq_freq_set_all(1);
     for (uint16_t level = graph.total_levels - 1; level != 0; level--) {
         uint32_t start = graph.first_node_of_level[level];
         uint32_t end = (level + 1 < graph.total_levels) ? graph.first_node_of_level[level + 1] : graph.size;
@@ -205,15 +205,15 @@ void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
                 continue;
             }
 
-            uint32_t freq = 1, dummay_node;
+            uint32_t freq = 1, dummy_node, index;
             if (node->sequence_length > 1 && !node->is_RLE) {
-                seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummay_node);                
+                index = seq_freq_get_with_index(&block[node->offset], node->sequence_length, &freq, &dummy_node);                
             }
             if (!node->is_RLE && freq  <= 3) continue;
             uint32_t saving = calc_savings(node, freq);
 
 #ifdef DEBUG
-            printf("  Node %u: seq_len = %u, is_RLE = %u, freq = %u, saving = %u\n", node->node_id,
+            printf("  Node %u: seq_len = %u, lsis_RLE = %u, freq = %u, saving = %u\n", node->node_id,
                    node->sequence_length, node->is_RLE, freq, saving);
 #endif
 

@@ -11,89 +11,10 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define MAX_BRUTE_FORCE 5
+#define MAX_BRUTE_FORCE 31
 
 uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
-uint32_t best_savings_node_ids[MAX_LEVELS];
 
-/**
- * Compute the best cumulative savings node for every level in the graph.
- * Cumulative savings = own savings + inherited savings from the best node in the parent level.
- *
- * @param block                  Pointer to the data block being analyzed.
- * @param max_saving_node_ids    Array mapping each level to the node with the maximum immediate savings.
- * @param best_savings_node_ids  Output array mapping each level to the node with the highest cumulative savings.
- */
-void compute_best_savings_all(const uint8_t *block, const uint32_t *max_saving_node_ids,
-                              uint32_t *best_savings_node_ids) {
-    for (uint16_t level = 0; level < graph.total_levels; level++) {
-        uint32_t start = get_level_start_id(level);
-        uint32_t end = get_level_end_id(level);
-
-        uint32_t max_saving = 0;
-        best_savings_node_ids[level] = UINT32_MAX; // No valid node yet
-
-#ifdef DEBUG
-        printf("\n[Level %u] start=%u, end=%u\n", level, start, end);
-#endif
-
-        for (uint32_t i = start; i < end; i++) {
-            GraphNode *node = &graph.nodes[i];
-
-            if (node->useless) {
-                node->best_savings = 0;
-                continue;
-            }
-
-            // Get frequency (fallback to 1 if missing)
-            uint32_t freq = 1, dummy_id = 0;
-            if (!node->is_RLE && node->sequence_length > 1) {
-                if (!seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_id)) {
-                    freq = 1; // Fallback if sequence not found
-#ifdef DEBUG
-                    printf("  Node %u: seq_freq not found, fallback freq = 1\n", node->node_id);
-#endif
-                }
-            }
-
-            uint32_t own_saving = calc_savings(node, freq);
-            uint32_t inherited_saving = 0;
-
-            // Add best savings from parent level if available
-            if (level > 0) {
-                uint16_t parent_level = get_parent_level(node);
-                if (parent_level < graph.total_levels && max_saving_node_ids[parent_level] != UINT32_MAX) {
-                    GraphNode *parent = get_graph_node(max_saving_node_ids[parent_level]);
-                    inherited_saving = parent->best_savings;
-                }
-            }
-
-            node->best_savings = own_saving + inherited_saving;
-
-#ifdef DEBUG
-            printf("  Node %u: freq=%u, own=%u, inherited=%u, total=%u\n", node->node_id, freq, own_saving,
-                   inherited_saving, node->best_savings);
-#endif
-
-            // Update best node for this level
-            if (node->best_savings > max_saving || best_savings_node_ids[level] == UINT32_MAX) {
-                max_saving = node->best_savings;
-                best_savings_node_ids[level] = node->node_id;
-#ifdef DEBUG
-                printf("    --> Node %u becomes best so far with total saving %u\n", node->node_id, node->best_savings);
-#endif
-            }
-        }
-
-#ifdef DEBUG
-        if (best_savings_node_ids[level] != UINT32_MAX) {
-            printf("[Level %u] Best node: %u with saving %u\n", level, best_savings_node_ids[level], max_saving);
-        } else {
-            printf("[Level %u] No valid best node found.\n", level);
-        }
-#endif
-    }
-}
 
 /**
  * Append a node to the current path, update sequence frequency map, and
@@ -208,7 +129,7 @@ static inline void find_longest_in_n_level(uint16_t last_level, uint32_t *out_no
     uint16_t start_level = last_level > MAX_BRUTE_FORCE ? (last_level - MAX_BRUTE_FORCE) : 0;
 
     for (uint16_t level = start_level; level <= last_level; level++) {
-        uint32_t cur_node_id = best_savings_node_ids[level];
+        uint32_t cur_node_id = max_saving_node_ids[level];
         GraphNode *node = get_graph_node(cur_node_id);
         if (node->useless) continue;
         uint32_t cur_length = node->best_savings;
@@ -260,7 +181,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
     compute_max_saving_node_ids(block, max_saving_node_ids);
 
     // Step 2: Compute cumulative best savings nodes
-    compute_best_savings_all(block, max_saving_node_ids, best_savings_node_ids);
+   // compute_best_savings_all(block, max_saving_node_ids, best_savings_node_ids);
 
 #ifdef DEBUG
     fflush(stdout);
@@ -317,9 +238,8 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
             /* Search for a candidate in the seq map (within the allowed brute-force window). */
             find_best_in_map(level, block, &chosen_node_id);
 
-            /* If nothing found in the seq map, fall back to the precomputed best node for that level. */
-            if (chosen_node_id == UINT32_MAX) {
-                // chosen_node_id = best_savings_node_ids[level];
+            /* If nothing found in the seq map, fall back to the precomputed best node for n levels. */
+            if (chosen_node_id == UINT32_MAX) {               
                 find_longest_in_n_level(level, &chosen_node_id);
             }
 

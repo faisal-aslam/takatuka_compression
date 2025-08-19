@@ -106,15 +106,16 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         uint8_t max_sequence = MIN(current_level, MAX_WEIGHTS);
         uint32_t start;
         // special treatment of RLE nodes.
-        if (rle_info.next_RLE_level == UINT16_MAX) {
-            RLE_level(block, block_index, block_size);
-        }
-        if (current_level == rle_info.next_RLE_level) {
+         // special treatment of RLE nodes.
+        uint8_t created_rle_node = RLE_level(block, block_index, block_size);
+        if (created_rle_node) {
+            while (current_level != rle_info.next_RLE_level) {
+                current_level = create_graph_level();
+                block_index++;
+            }
             set_RLE_data();
-            rle_info.next_RLE_level = UINT16_MAX;
-            //max_sequence = max_sequence -1; //as we have an extra node. Either we have to fix our counting or this hack.
+            continue;
         }
-
         // Non-RLE nodes: Make sequences of specific sizes.
         for (uint8_t seq_len = 1; seq_len <= max_sequence; seq_len++) {
             if (seq_len > 1 && seq_len < SEQ_LENGTH_START) continue;
