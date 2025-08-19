@@ -30,11 +30,11 @@ static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
     if (node->is_RLE) {
         return 1u; // prefer RLE the most.
     } else if (frequency > 1 && node->sequence_length > 1) {
-        return 2u; //next perfer repeated sequences with freq more than 1.
+        return 2u; // next perfer repeated sequences with freq more than 1.
     } else if (node->sequence_length == 1) {
-        return 3u; //do not use sequences of length 1 unless needed.
+        return 3u; // do not use sequences of length 1 unless needed.
     } else if (frequency == 1) {
-        return 3u*node->sequence_length; //avoid making new sequences unless they are rewarded in future.
+        return 3u * node->sequence_length; // avoid making new sequences unless they are rewarded in future.
     }
     fprintf(stderr, "illegal cost calculation\n");
     abort();
@@ -205,17 +205,11 @@ void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
                 continue;
             }
 
-            uint32_t freq = 1;
+            uint32_t freq = 1, dummay_node;
             if (node->sequence_length > 1 && !node->is_RLE) {
-                uint32_t dummy_id;
-                if (!seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_id)) {
-                    freq = 1;
-#ifdef DEBUG
-                    printf("  Node %u: seq_freq not found, fallback freq = 1\n", node->node_id);
-#endif
-                }
+                seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummay_node);                
             }
-
+            if (!node->is_RLE && freq  <= 3) continue;
             uint32_t saving = calc_savings(node, freq);
 
 #ifdef DEBUG
@@ -233,32 +227,12 @@ void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
         }
 
         max_ids[level] = best_node_id;
+#ifdef DEBUG
+        if (best_node_id == UINT32_MAX) {
 
-        if (best_node_id != UINT32_MAX) {
-            GraphNode *node = get_graph_node(best_node_id);
-#ifdef DEBUG
-            printf("[Level %u] Best node selected: %u (saving %u)\n", level, best_node_id, max_saving);
-#endif
-            if (0 && node->sequence_length > 1 && !node->is_RLE) {
-                uint32_t freq, node_id;
-                uint32_t index = seq_freq_get_with_index(&block[node->offset], node->sequence_length, &freq, &node_id);
-                if (index != UINT32_MAX) {
-                    seq_freq_set_existing(index, freq + 1, node_id);
-#ifdef DEBUG
-                    printf("  Boosted frequency of node %u to %u at index %u\n", node_id, freq + 3, index);
-#endif
-                }
-#ifdef DEBUG
-                else {
-                    printf("  Could not boost frequency: node %u sequence not found in map.\n", node->node_id);
-                }
-#endif
-            }
-        } else {
-#ifdef DEBUG
             printf("[Level %u] No valid best node found.\n", level);
-#endif
         }
+#endif
     }
 }
 

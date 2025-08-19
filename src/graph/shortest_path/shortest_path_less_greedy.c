@@ -11,7 +11,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define MAX_BRUTE_FORCE 31
+#define MAX_BRUTE_FORCE 5
 
 uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
 uint32_t best_savings_node_ids[MAX_LEVELS];
@@ -223,15 +223,12 @@ static inline void find_longest_in_n_level(uint16_t last_level, uint32_t *out_no
 
 static inline void populate_map_with_best_savings(const uint8_t *block) {
     for (uint32_t level = 1; level <= get_last_level_index(); level++) {
-        uint32_t best_saver_id = best_savings_node_ids[level];
+        uint32_t best_saver_id = max_saving_node_ids[level];
         if (best_saver_id >= get_graph_size()) continue;
         GraphNode *best_saver_node = get_graph_node(best_saver_id);
         if (best_saver_node->sequence_length <= 1) continue;
-        uint32_t out_freq, out_node_id;
-        seq_freq_get(&block[best_saver_node->offset], best_saver_node->sequence_length, &out_freq, &out_node_id);
-        if (out_freq == 0) {
-            seq_freq_increment(&block[best_saver_node->offset], best_saver_node->sequence_length, best_saver_id);
-        }
+
+        seq_freq_set(&block[best_saver_node->offset], best_saver_node->sequence_length, 2, 1);
     }
 }
 /**
@@ -277,11 +274,6 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
     path_init_current(path_main);
     init_seq_freq_map();
 
-    //populate_map_with_best_savings(block); // add best serving nodes in the maps
-#ifdef DEBUG
-    seq_freq_map_print();
-#endif
-
     /* Start climbing to parents from the starting node. get_parent_level() should return
      * a special out-of-range value (>= graph.total_levels) if there is no parent; the loop uses that.
      */
@@ -299,6 +291,11 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
         /* Prepare a fresh current path and a fresh sequence-frequency map for this attempt. */
         path_init_current(path_main);
         init_seq_freq_map();
+
+        populate_map_with_best_savings(block); // add best serving nodes in the maps
+                                               // #ifdef DEBUG
+        seq_freq_map_print();
+        // #endif
 
 #ifdef DEBUG
         printf("At starting level %u selected ", start_node->node_level);
