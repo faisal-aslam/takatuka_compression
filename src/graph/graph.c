@@ -14,13 +14,36 @@
 
 Graph graph; // Actual single definition
 
+static void compact_levels(const uint8_t* block) {    
+    for (uint32_t l = 0; l < graph.total_levels; l++) {
+        uint32_t start_level_id = get_level_start_id(l);
+        uint32_t end_level_id = get_level_end_id(l);
+        uint32_t prevFreq;
+        for (uint32_t id=start_level_id+1; id < end_level_id; id++) {
+            GraphNode *node = get_graph_node(id);
+            if (node->useless) continue;
+            uint32_t freq, dummy_node_id;
+            seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_node_id);
+            if (id != start_level_id+1 && prevFreq <= freq) {                            
+                //make previous node useless.
+                //we have found a larger combination with same or more freq.
+                GraphNode *pre_node = get_graph_node(id-1);
+                pre_node->useless = 1;
+            }
+            prevFreq = freq;
+        }
+    }
+
+}
+
 void compact_graph(const uint8_t *block) {
     (void)block; // Mark as intentionally unused
     if (graph.size == 0) return;
 
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
-
+    //init_seq_freq_map();
+    //compact_levels(block);
     // Pre-process: mark all levels as invalid initially
     for (uint32_t l = 0; l < graph.total_levels; l++) {
         graph.first_node_of_level[l] = UINT32_MAX;
@@ -49,6 +72,7 @@ void compact_graph(const uint8_t *block) {
         // Copy node (use memmove if overlapping is possible)
         graph.nodes[write_idx] = *node;
         GraphNode *new_node = &graph.nodes[write_idx];
+        //seq_freq_increment(&block[new_node->offset], new_node->sequence_length, 1);
         new_node->node_id = write_idx;
 
 
@@ -59,6 +83,7 @@ void compact_graph(const uint8_t *block) {
     printf("%lu: Done with graph compaction from %u to %u nodes\n",get_elapsed_ms(), graph.size, write_idx);
     graph.size = write_idx;
     graph.total_levels = current_level + 1;
+    seq_freq_map_print();
 
 }
 
