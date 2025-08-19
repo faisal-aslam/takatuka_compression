@@ -178,7 +178,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
     if (starting_level >= graph.total_levels) return;
 
     /* Step 1: Find immediate best nodes (per-level). */
-    compute_max_saving_node_ids(block, max_saving_node_ids);
+    //compute_max_saving_node_ids(block, max_saving_node_ids);
 
 
 #ifdef DEBUG
@@ -200,9 +200,10 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
 
         /* Prepare a fresh current path and a fresh sequence-frequency map for this attempt. */
         path_init_current(path_main);
-        init_seq_freq_map();
+        seq_freq_set_all(2, 5, 4);
+        //init_seq_freq_map();
 
-        populate_map_with_best_savings(block); // add best serving nodes in the maps
+        //populate_map_with_best_savings(block); // add best serving nodes in the maps
                                                // #ifdef DEBUG
         seq_freq_map_print();
         // #endif
