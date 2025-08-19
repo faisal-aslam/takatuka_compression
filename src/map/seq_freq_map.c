@@ -147,8 +147,8 @@ bool seq_freq_get(const uint8_t *seq, uint8_t len, uint32_t *out_freq, uint32_t 
 }
 
 
-void seq_freq_set_all(uint32_t freq) {
-    if (freq > 0xFFFFFF) {
+void seq_freq_set_all(uint32_t freq_to_set, uint32_t freq_to_delete) {
+    if (freq_to_set > 0xFFFFFF) {
         fprintf(stderr, "Frequency exceeds 24-bit limit\n");
         abort();
     }
@@ -159,7 +159,7 @@ void seq_freq_set_all(uint32_t freq) {
             uint32_t old_freq = META_GET_FREQ(entry->meta);
             uint8_t len = META_GET_LEN(entry->meta);
 
-            if (old_freq == 1) {
+            if (old_freq <= freq_to_delete) {
                 // Treat as deleted
                 entry->sequence = NULL;
                 entry->meta = 0;
@@ -167,7 +167,7 @@ void seq_freq_set_all(uint32_t freq) {
                 entry->hash = 0;
             } else {
                 // Reset frequency to the given value, preserve length
-                entry->meta = META_ENCODE(freq, len);
+                entry->meta = META_ENCODE(freq_to_set, len);
             }
         }
     }
