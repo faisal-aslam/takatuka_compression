@@ -1,1342 +1,239 @@
-Network Working Group                                      R. Fielding
-Request for Comments: 2616                                   UC Irvine
-Obsoletes: 2068                                              J. Gettys
-Category: Standards Track                                   Compaq/W3C
-                                                              J. Mogul
-                                                                Compaq
-                                                            H. Frystyk
-                                                               W3C/MIT
-                                                           L. Masinter
-                                                                 Xerox
-                                                              P. Leach
-                                                             Microsoft
-                                                        T. Berners-Lee
-                                                               W3C/MIT
-                                                             June 1999
-
-
-                Hypertext Transfer Protocol -- HTTP/1.1
-
-Status of this Memo
-
-   This document specifies an Internet standards track protocol for the
-   Internet community, and requests discussion and suggestions for
-   improvements.  Please refer to the current edition of the "Internet
-   Official Protocol Standards" (STD 1) for the standardization state
-   and status of this protocol.  Distribution of this memo is unlimited.
-
-Copyright Notice
-
-   Copyright (C) The Internet Society (1999).  All Rights Reserved.
-
-Abstract
-
-   The Hypertext Transfer Protocol (HTTP) is an application-level
-   protocol for distributed, collaborative, hypermedia information
-   systems. It is a generic, stateless, protocol which can be used for
-   many tasks beyond its use for hypertext, such as name servers and
-   distributed object management systems, through extension of its
-   request methods, error codes and headers [47]. A feature of HTTP is
-   the typing and negotiation of data representation, allowing systems
-   to be built independently of the data being transferred.
-
-   HTTP has been in use by the World-Wide Web global information
-   initiative since 1990. This specification defines the protocol
-   referred to as "HTTP/1.1", and is an update to RFC 2068 [33].
-
-
-
-
-
-
-Fielding, et al.            Standards Track                     [Page 1]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-Table of Contents
-
-   1   Introduction ...................................................7
-   1.1    Purpose......................................................7
-   1.2   Requirements .................................................8
-   1.3   Terminology ..................................................8
-   1.4   Overall Operation ...........................................12
-   2   Notational Conventions and Generic Grammar ....................14
-   2.1   Augmented BNF ...............................................14
-   2.2   Basic Rules .................................................15
-   3   Protocol Parameters ...........................................17
-   3.1   HTTP Version ................................................17
-   3.2   Uniform Resource Identifiers ................................18
-   3.2.1    General Syntax ...........................................19
-   3.2.2    http URL .................................................19
-   3.2.3    URI Comparison ...........................................20
-   3.3   Date/Time Formats ...........................................20
-   3.3.1    Full Date ................................................20
-   3.3.2    Delta Seconds ............................................21
-   3.4   Character Sets ..............................................21
-   3.4.1    Missing Charset ..........................................22
-   3.5   Content Codings .............................................23
-   3.6   Transfer Codings ............................................24
-   3.6.1    Chunked Transfer Coding ..................................25
-   3.7   Media Types .................................................26
-   3.7.1    Canonicalization and Text Defaults .......................27
-   3.7.2    Multipart Types ..........................................27
-   3.8   Product Tokens ..............................................28
-   3.9   Quality Values ..............................................29
-   3.10  Language Tags ...............................................29
-   3.11  Entity Tags .................................................30
-   3.12  Range Units .................................................30
-   4   HTTP Message ..................................................31
-   4.1   Message Types ...............................................31
-   4.2   Message Headers .............................................31
-   4.3   Message Body ................................................32
-   4.4   Message Length ..............................................33
-   4.5   General Header Fields .......................................34
-   5   Request .......................................................35
-   5.1   Request-Line ................................................35
-   5.1.1    Method ...................................................36
-   5.1.2    Request-URI ..............................................36
-   5.2   The Resource Identified by a Request ........................38
-   5.3   Request Header Fields .......................................38
-   6   Response ......................................................39
-   6.1   Status-Line .................................................39
-   6.1.1    Status Code and Reason Phrase ............................39
-   6.2   Response Header Fields ......................................41
-
-
-
-Fielding, et al.            Standards Track                     [Page 2]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   7   Entity ........................................................42
-   7.1   Entity Header Fields ........................................42
-   7.2   Entity Body .................................................43
-   7.2.1    Type .....................................................43
-   7.2.2    Entity Length ............................................43
-   8   Connections ...................................................44
-   8.1   Persistent Connections ......................................44
-   8.1.1    Purpose ..................................................44
-   8.1.2    Overall Operation ........................................45
-   8.1.3    Proxy Servers ............................................46
-   8.1.4    Practical Considerations .................................46
-   8.2   Message Transmission Requirements ...........................47
-   8.2.1    Persistent Connections and Flow Control ..................47
-   8.2.2    Monitoring Connections for Error Status Messages .........48
-   8.2.3    Use of the 100 (Continue) Status .........................48
-   8.2.4    Client Behavior if Server Prematurely Closes Connection ..50
-   9   Method Definitions ............................................51
-   9.1   Safe and Idempotent Methods .................................51
-   9.1.1    Safe Methods .............................................51
-   9.1.2    Idempotent Methods .......................................51
-   9.2   OPTIONS .....................................................52
-   9.3   GET .........................................................53
-   9.4   HEAD ........................................................54
-   9.5   POST ........................................................54
-   9.6   PUT .........................................................55
-   9.7   DELETE ......................................................56
-   9.8   TRACE .......................................................56
-   9.9   CONNECT .....................................................57
-   10   Status Code Definitions ......................................57
-   10.1  Informational 1xx ...........................................57
-   10.1.1   100 Continue .............................................58
-   10.1.2   101 Switching Protocols ..................................58
-   10.2  Successful 2xx ..............................................58
-   10.2.1   200 OK ...................................................58
-   10.2.2   201 Created ..............................................59
-   10.2.3   202 Accepted .............................................59
-   10.2.4   203 Non-Authoritative Information ........................59
-   10.2.5   204 No Content ...........................................60
-   10.2.6   205 Reset Content ........................................60
-   10.2.7   206 Partial Content ......................................60
-   10.3  Redirection 3xx .............................................61
-   10.3.1   300 Multiple Choices .....................................61
-   10.3.2   301 Moved Permanently ....................................62
-   10.3.3   302 Found ................................................62
-   10.3.4   303 See Other ............................................63
-   10.3.5   304 Not Modified .........................................63
-   10.3.6   305 Use Proxy ............................................64
-   10.3.7   306 (Unused) .............................................64
-
-
-
-Fielding, et al.            Standards Track                     [Page 3]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   10.3.8   307 Temporary Redirect ...................................65
-   10.4  Client Error 4xx ............................................65
-   10.4.1    400 Bad Request .........................................65
-   10.4.2    401 Unauthorized ........................................66
-   10.4.3    402 Payment Required ....................................66
-   10.4.4    403 Forbidden ...........................................66
-   10.4.5    404 Not Found ...........................................66
-   10.4.6    405 Method Not Allowed ..................................66
-   10.4.7    406 Not Acceptable ......................................67
-   10.4.8    407 Proxy Authentication Required .......................67
-   10.4.9    408 Request Timeout .....................................67
-   10.4.10   409 Conflict ............................................67
-   10.4.11   410 Gone ................................................68
-   10.4.12   411 Length Required .....................................68
-   10.4.13   412 Precondition Failed .................................68
-   10.4.14   413 Request Entity Too Large ............................69
-   10.4.15   414 Request-URI Too Long ................................69
-   10.4.16   415 Unsupported Media Type ..............................69
-   10.4.17   416 Requested Range Not Satisfiable .....................69
-   10.4.18   417 Expectation Failed ..................................70
-   10.5  Server Error 5xx ............................................70
-   10.5.1   500 Internal Server Error ................................70
-   10.5.2   501 Not Implemented ......................................70
-   10.5.3   502 Bad Gateway ..........................................70
-   10.5.4   503 Service Unavailable ..................................70
-   10.5.5   504 Gateway Timeout ......................................71
-   10.5.6   505 HTTP Version Not Supported ...........................71
-   11   Access Authentication ........................................71
-   12   Content Negotiation ..........................................71
-   12.1  Server-driven Negotiation ...................................72
-   12.2  Agent-driven Negotiation ....................................73
-   12.3  Transparent Negotiation .....................................74
-   13   Caching in HTTP ..............................................74
-   13.1.1   Cache Correctness ........................................75
-   13.1.2   Warnings .................................................76
-   13.1.3   Cache-control Mechanisms .................................77
-   13.1.4   Explicit User Agent Warnings .............................78
-   13.1.5   Exceptions to the Rules and Warnings .....................78
-   13.1.6   Client-controlled Behavior ...............................79
-   13.2  Expiration Model ............................................79
-   13.2.1   Server-Specified Expiration ..............................79
-   13.2.2   Heuristic Expiration .....................................80
-   13.2.3   Age Calculations .........................................80
-   13.2.4   Expiration Calculations ..................................83
-   13.2.5   Disambiguating Expiration Values .........................84
-   13.2.6   Disambiguating Multiple Responses ........................84
-   13.3  Validation Model ............................................85
-   13.3.1   Last-Modified Dates ......................................86
-
-
-
-Fielding, et al.            Standards Track                     [Page 4]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   13.3.2   Entity Tag Cache Validators ..............................86
-   13.3.3   Weak and Strong Validators ...............................86
-   13.3.4   Rules for When to Use Entity Tags and Last-Modified Dates.89
-   13.3.5   Non-validating Conditionals ..............................90
-   13.4  Response Cacheability .......................................91
-   13.5  Constructing Responses From Caches ..........................92
-   13.5.1   End-to-end and Hop-by-hop Headers ........................92
-   13.5.2   Non-modifiable Headers ...................................92
-   13.5.3   Combining Headers ........................................94
-   13.5.4   Combining Byte Ranges ....................................95
-   13.6  Caching Negotiated Responses ................................95
-   13.7  Shared and Non-Shared Caches ................................96
-   13.8  Errors or Incomplete Response Cache Behavior ................97
-   13.9  Side Effects of GET and HEAD ................................97
-   13.10   Invalidation After Updates or Deletions ...................97
-   13.11   Write-Through Mandatory ...................................98
-   13.12   Cache Replacement .........................................99
-   13.13   History Lists .............................................99
-   14   Header Field Definitions ....................................100
-   14.1  Accept .....................................................100
-   14.2  Accept-Charset .............................................102
-   14.3  Accept-Encoding ............................................102
-   14.4  Accept-Language ............................................104
-   14.5  Accept-Ranges ..............................................105
-   14.6  Age ........................................................106
-   14.7  Allow ......................................................106
-   14.8  Authorization ..............................................107
-   14.9  Cache-Control ..............................................108
-   14.9.1   What is Cacheable .......................................109
-   14.9.2   What May be Stored by Caches ............................110
-   14.9.3   Modifications of the Basic Expiration Mechanism .........111
-   14.9.4   Cache Revalidation and Reload Controls ..................113
-   14.9.5   No-Transform Directive ..................................115
-   14.9.6   Cache Control Extensions ................................116
-   14.10   Connection ...............................................117
-   14.11   Content-Encoding .........................................118
-   14.12   Content-Language .........................................118
-   14.13   Content-Length ...........................................119
-   14.14   Content-Location .........................................120
-   14.15   Content-MD5 ..............................................121
-   14.16   Content-Range ............................................122
-   14.17   Content-Type .............................................124
-   14.18   Date .....................................................124
-   14.18.1   Clockless Origin Server Operation ......................125
-   14.19   ETag .....................................................126
-   14.20   Expect ...................................................126
-   14.21   Expires ..................................................127
-   14.22   From .....................................................128
-
-
-
-Fielding, et al.            Standards Track                     [Page 5]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   14.23   Host .....................................................128
-   14.24   If-Match .................................................129
-   14.25   If-Modified-Since ........................................130
-   14.26   If-None-Match ............................................132
-   14.27   If-Range .................................................133
-   14.28   If-Unmodified-Since ......................................134
-   14.29   Last-Modified ............................................134
-   14.30   Location .................................................135
-   14.31   Max-Forwards .............................................136
-   14.32   Pragma ...................................................136
-   14.33   Proxy-Authenticate .......................................137
-   14.34   Proxy-Authorization ......................................137
-   14.35   Range ....................................................138
-   14.35.1    Byte Ranges ...........................................138
-   14.35.2    Range Retrieval Requests ..............................139
-   14.36   Referer ..................................................140
-   14.37   Retry-After ..............................................141
-   14.38   Server ...................................................141
-   14.39   TE .......................................................142
-   14.40   Trailer ..................................................143
-   14.41  Transfer-Encoding..........................................143
-   14.42   Upgrade ..................................................144
-   14.43   User-Agent ...............................................145
-   14.44   Vary .....................................................145
-   14.45   Via ......................................................146
-   14.46   Warning ..................................................148
-   14.47   WWW-Authenticate .........................................150
-   15 Security Considerations .......................................150
-   15.1      Personal Information....................................151
-   15.1.1   Abuse of Server Log Information .........................151
-   15.1.2   Transfer of Sensitive Information .......................151
-   15.1.3   Encoding Sensitive Information in URI's .................152
-   15.1.4   Privacy Issues Connected to Accept Headers ..............152
-   15.2  Attacks Based On File and Path Names .......................153
-   15.3  DNS Spoofing ...............................................154
-   15.4  Location Headers and Spoofing ..............................154
-   15.5  Content-Disposition Issues .................................154
-   15.6  Authentication Credentials and Idle Clients ................155
-   15.7  Proxies and Caching ........................................155
-   15.7.1    Denial of Service Attacks on Proxies....................156
-   16   Acknowledgments .............................................156
-   17   References ..................................................158
-   18   Authors' Addresses ..........................................162
-   19   Appendices ..................................................164
-   19.1  Internet Media Type message/http and application/http ......164
-   19.2  Internet Media Type multipart/byteranges ...................165
-   19.3  Tolerant Applications ......................................166
-   19.4  Differences Between HTTP Entities and RFC 2045 Entities ....167
-
-
-
-Fielding, et al.            Standards Track                     [Page 6]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   19.4.1   MIME-Version ............................................167
-   19.4.2   Conversion to Canonical Form ............................167
-   19.4.3   Conversion of Date Formats ..............................168
-   19.4.4   Introduction of Content-Encoding ........................168
-   19.4.5   No Content-Transfer-Encoding ............................168
-   19.4.6   Introduction of Transfer-Encoding .......................169
-   19.4.7   MHTML and Line Length Limitations .......................169
-   19.5  Additional Features ........................................169
-   19.5.1   Content-Disposition .....................................170
-   19.6  Compatibility with Previous Versions .......................170
-   19.6.1   Changes from HTTP/1.0 ...................................171
-   19.6.2   Compatibility with HTTP/1.0 Persistent Connections ......172
-   19.6.3   Changes from RFC 2068 ...................................172
-   20   Index .......................................................175
-   21   Full Copyright Statement ....................................176
-
-1 Introduction
-
-1.1 Purpose
-
-   The Hypertext Transfer Protocol (HTTP) is an application-level
-   protocol for distributed, collaborative, hypermedia information
-   systems. HTTP has been in use by the World-Wide Web global
-   information initiative since 1990. The first version of HTTP,
-   referred to as HTTP/0.9, was a simple protocol for raw data transfer
-   across the Internet. HTTP/1.0, as defined by RFC 1945 [6], improved
-   the protocol by allowing messages to be in the format of MIME-like
-   messages, containing metainformation about the data transferred and
-   modifiers on the request/response semantics. However, HTTP/1.0 does
-   not sufficiently take into consideration the effects of hierarchical
-   proxies, caching, the need for persistent connections, or virtual
-   hosts. In addition, the proliferation of incompletely-implemented
-   applications calling themselves "HTTP/1.0" has necessitated a
-   protocol version change in order for two communicating applications
-   to determine each other's true capabilities.
-
-   This specification defines the protocol referred to as "HTTP/1.1".
-   This protocol includes more stringent requirements than HTTP/1.0 in
-   order to ensure reliable implementation of its features.
-
-   Practical information systems require more functionality than simple
-   retrieval, including search, front-end update, and annotation. HTTP
-   allows an open-ended set of methods and headers that indicate the
-   purpose of a request [47]. It builds on the discipline of reference
-   provided by the Uniform Resource Identifier (URI) [3], as a location
-   (URL) [4] or name (URN) [20], for indicating the resource to which a
-
-
-
-
-
-Fielding, et al.            Standards Track                     [Page 7]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   method is to be applied. Messages are passed in a format similar to
-   that used by Internet mail [9] as defined by the Multipurpose
-   Internet Mail Extensions (MIME) [7].
-
-   HTTP is also used as a generic protocol for communication between
-   user agents and proxies/gateways to other Internet systems, including
-   those supported by the SMTP [16], NNTP [13], FTP [18], Gopher [2],
-   and WAIS [10] protocols. In this way, HTTP allows basic hypermedia
-   access to resources available from diverse applications.
-
-1.2 Requirements
-
-   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
-   "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
-   document are to be interpreted as described in RFC 2119 [34].
-
-   An implementation is not compliant if it fails to satisfy one or more
-   of the MUST or REQUIRED level requirements for the protocols it
-   implements. An implementation that satisfies all the MUST or REQUIRED
-   level and all the SHOULD level requirements for its protocols is said
-   to be "unconditionally compliant"; one that satisfies all the MUST
-   level requirements but not all the SHOULD level requirements for its
-   protocols is said to be "conditionally compliant."
-
-1.3 Terminology
-
-   This specification uses a number of terms to refer to the roles
-   played by participants in, and objects of, the HTTP communication.
-
-   connection
-      A transport layer virtual circuit established between two programs
-      for the purpose of communication.
-
-   message
-      The basic unit of HTTP communication, consisting of a structured
-      sequence of octets matching the syntax defined in section 4 and
-      transmitted via the connection.
-
-   request
-      An HTTP request message, as defined in section 5.
-
-   response
-      An HTTP response message, as defined in section 6.
-
-
-
-
-
-
-
-
-Fielding, et al.            Standards Track                     [Page 8]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   resource
-      A network data object or service that can be identified by a URI,
-      as defined in section 3.2. Resources may be available in multiple
-      representations (e.g. multiple languages, data formats, size, and
-      resolutions) or vary in other ways.
-
-   entity
-      The information transferred as the payload of a request or
-      response. An entity consists of metainformation in the form of
-      entity-header fields and content in the form of an entity-body, as
-      described in section 7.
-
-   representation
-      An entity included with a response that is subject to content
-      negotiation, as described in section 12. There may exist multiple
-      representations associated with a particular response status.
-
-   content negotiation
-      The mechanism for selecting the appropriate representation when
-      servicing a request, as described in section 12. The
-      representation of entities in any response can be negotiated
-      (including error responses).
-
-   variant
-      A resource may have one, or more than one, representation(s)
-      associated with it at any given instant. Each of these
-      representations is termed a `varriant'.  Use of the term `variant'
-      does not necessarily imply that the resource is subject to content
-      negotiation.
-
-   client
-      A program that establishes connections for the purpose of sending
-      requests.
-
-   user agent
-      The client which initiates a request. These are often browsers,
-      editors, spiders (web-traversing robots), or other end user tools.
-
-   server
-      An application program that accepts connections in order to
-      service requests by sending back responses. Any given program may
-      be capable of being both a client and a server; our use of these
-      terms refers only to the role being performed by the program for a
-      particular connection, rather than to the program's capabilities
-      in general. Likewise, any server may act as an origin server,
-      proxy, gateway, or tunnel, switching behavior based on the nature
-      of each request.
-
-
-
-
-Fielding, et al.            Standards Track                     [Page 9]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   origin server
-      The server on which a given resource resides or is to be created.
-
-   proxy
-      An intermediary program which acts as both a server and a client
-      for the purpose of making requests on behalf of other clients.
-      Requests are serviced internally or by passing them on, with
-      possible translation, to other servers. A proxy MUST implement
-      both the client and server requirements of this specification. A
-      "transparent proxy" is a proxy that does not modify the request or
-      response beyond what is required for proxy authentication and
-      identification. A "non-transparent proxy" is a proxy that modifies
-      the request or response in order to provide some added service to
-      the user agent, such as group annotation services, media type
-      transformation, protocol reduction, or anonymity filtering. Except
-      where either transparent or non-transparent behavior is explicitly
-      stated, the HTTP proxy requirements apply to both types of
-      proxies.
-
-   gateway
-      A server which acts as an intermediary for some other server.
-      Unlike a proxy, a gateway receives requests as if it were the
-      origin server for the requested resource; the requesting client
-      may not be aware that it is communicating with a gateway.
-
-   tunnel
-      An intermediary program which is acting as a blind relay between
-      two connections. Once active, a tunnel is not considered a party
-      to the HTTP communication, though the tunnel may have been
-      initiated by an HTTP request. The tunnel ceases to exist when both
-      ends of the relayed connections are closed.
-
-   cache
-      A program's local store of response messages and the subsystem
-      that controls its message storage, retrieval, and deletion. A
-      cache stores cacheable responses in order to reduce the response
-      time and network bandwidth consumption on future, equivalent
-      requests. Any client or server may include a cache, though a cache
-      cannot be used by a server that is acting as a tunnel.
-
-   cacheable
-      A response is cacheable if a cache is allowed to store a copy of
-      the response message for use in answering subsequent requests. The
-      rules for determining the cacheability of HTTP responses are
-      defined in section 13. Even if a resource is cacheable, there may
-      be additional constraints on whether a cache can use the cached
-      copy for a particular request.
-
-
-
-
-Fielding, et al.            Standards Track                    [Page 10]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   first-hand
-      A response is first-hand if it comes directly and without
-      unnecessary delay from the origin server, perhaps via one or more
-      proxies. A response is also first-hand if its validity has just
-      been checked directly with the origin server.
-
-   explicit expiration time
-      The time at which the origin server intends that an entity should
-      no longer be returned by a cache without further validation.
-
-   heuristic expiration time
-      An expiration time assigned by a cache when no explicit expiration
-      time is available.
-
-   age
-      The age of a response is the time since it was sent by, or
-      successfully validated with, the origin server.
-
-   freshness lifetime
-      The length of time between the generation of a response and its
-      expiration time.
-
-   fresh
-      A response is fresh if its age has not yet exceeded its freshness
-      lifetime.
-
-   stale
-      A response is stale if its age has passed its freshness lifetime.
-
-   semantically transparent
-      A cache behaves in a "semantically transparent" manner, with
-      respect to a particular response, when its use affects neither the
-      requesting client nor the origin server, except to improve
-      performance. When a cache is semantically transparent, the client
-      receives exactly the same response (except for hop-by-hop headers)
-      that it would have received had its request been handled directly
-      by the origin server.
-
-   validator
-      A protocol element (e.g., an entity tag or a Last-Modified time)
-      that is used to find out whether a cache entry is an equivalent
-      copy of an entity.
-
-   upstream/downstream
-      Upstream and downstream describe the flow of a message: all
-      messages flow from upstream to downstream.
-
-
-
-
-
-Fielding, et al.            Standards Track                    [Page 11]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   inbound/outbound
-      Inbound and outbound refer to the request and response paths for
-      messages: "inbound" means "traveling toward the origin server",
-      and "outbound" means "traveling toward the user agent"
-
-1.4 Overall Operation
-
-   The HTTP protocol is a request/response protocol. A client sends a
-   request to the server in the form of a request method, URI, and
-   protocol version, followed by a MIME-like message containing request
-   modifiers, client information, and possible body content over a
-   connection with a server. The server responds with a status line,
-   including the message's protocol version and a success or error code,
-   followed by a MIME-like message containing server information, entity
-   metainformation, and possible entity-body content. The relationship
-   between HTTP and MIME is described in appendix 19.4.
-
-   Most HTTP communication is initiated by a user agent and consists of
-   a request to be applied to a resource on some origin server. In the
-   simplest case, this may be accomplished via a single connection (v)
-   between the user agent (UA) and the origin server (O).
-
-          request chain ------------------------>
-       UA -------------------v------------------- O
-          <----------------------- response chain
-
-   A more complicated situation occurs when one or more intermediaries
-   are present in the request/response chain. There are three common
-   forms of intermediary: proxy, gateway, and tunnel. A proxy is a
-   forwarding agent, receiving requests for a URI in its absolute form,
-   rewriting all or part of the message, and forwarding the reformatted
-   request toward the server identified by the URI. A gateway is a
-   receiving agent, acting as a layer above some other server(s) and, if
-   necessary, translating the requests to the underlying server's
-   protocol. A tunnel acts as a relay point between two connections
-   without changing the messages; tunnels are used when the
-   communication needs to pass through an intermediary (such as a
-   firewall) even when the intermediary cannot understand the contents
-   of the messages.
-
-          request chain -------------------------------------->
-       UA -----v----- A -----v----- B -----v----- C -----v----- O
-          <------------------------------------- response chain
-
-   The figure above shows three intermediaries (A, B, and C) between the
-   user agent and origin server. A request or response message that
-   travels the whole chain will pass through four separate connections.
-   This distinction is important because some HTTP communication options
-
-
-
-Fielding, et al.            Standards Track                    [Page 12]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   may apply only to the connection with the nearest, non-tunnel
-   neighbor, only to the end-points of the chain, or to all connections
-   along the chain. Although the diagram is linear, each participant may
-   be engaged in multiple, simultaneous communications. For example, B
-   may be receiving requests from many clients other than A, and/or
-   forwarding requests to servers other than C, at the same time that it
-   is handling A's request.
-
-   Any party to the communication which is not acting as a tunnel may
-   employ an internal cache for handling requests. The effect of a cache
-   is that the request/response chain is shortened if one of the
-   participants along the chain has a cached response applicable to that
-   request. The following illustrates the resulting chain if B has a
-   cached copy of an earlier response from O (via C) for a request which
-   has not been cached by UA or A.
-
-          request chain ---------->
-       UA -----v----- A -----v----- B - - - - - - C - - - - - - O
-          <--------- response chain
-
-   Not all responses are usefully cacheable, and some requests may
-   contain modifiers which place special requirements on cache behavior.
-   HTTP requirements for cache behavior and cacheable responses are
-   defined in section 13.
-
-   In fact, there are a wide variety of architectures and configurations
-   of caches and proxies currently being experimented with or deployed
-   across the World Wide Web. These systems include national hierarchies
-   of proxy caches to save transoceanic bandwidth, systems that
-   broadcast or multicast cache entries, organizations that distribute
-   subsets of cached data via CD-ROM, and so on. HTTP systems are used
-   in corporate intranets over high-bandwidth links, and for access via
-   PDAs with low-power radio links and intermittent connectivity. The
-   goal of HTTP/1.1 is to support the wide diversity of configurations
-   already deployed while introducing protocol constructs that meet the
-   needs of those who build web applications that require high
-   reliability and, failing that, at least reliable indications of
-   failure.
-
-   HTTP communication usually takes place over TCP/IP connections. The
-   default port is TCP 80 [19], but other ports can be used. This does
-   not preclude HTTP from being implemented on top of any other protocol
-   on the Internet, or on other networks. HTTP only presumes a reliable
-   transport; any protocol that provides such guarantees can be used;
-   the mapping of the HTTP/1.1 request and response structures onto the
-   transport data units of the protocol in question is outside the scope
-   of this specification.
-
-
-
-
-Fielding, et al.            Standards Track                    [Page 13]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   In HTTP/1.0, most implementations used a new connection for each
-   request/response exchange. In HTTP/1.1, a connection may be used for
-   one or more request/response exchanges, although connections may be
-   closed for a variety of reasons (see section 8.1).
-
-2 Notational Conventions and Generic Grammar
-
-2.1 Augmented BNF
-
-   All of the mechanisms specified in this document are described in
-   both prose and an augmented Backus-Naur Form (BNF) similar to that
-   used by RFC 822 [9]. Implementors will need to be familiar with the
-   notation in order to understand this specification. The augmented BNF
-   includes the following constructs:
-
-   name = definition
-      The name of a rule is simply the name itself (without any
-      enclosing "<" and ">") and is separated from its definition by the
-      equal "=" character. White space is only significant in that
-      indentation of continuation lines is used to indicate a rule
-      definition that spans more than one line. Certain basic rules are
-      in uppercase, such as SP, LWS, HT, CRLF, DIGIT, ALPHA, etc. Angle
-      brackets are used within definitions whenever their presence will
-      facilitate discerning the use of rule names.
-
-   "literal"
-      Quotation marks surround literal text. Unless stated otherwise,
-      the text is case-insensitive.
-
-   rule1 | rule2
-      Elements separated by a bar ("|") are alternatives, e.g., "yes |
-      no" will accept yes or no.
-
-   (rule1 rule2)
-      Elements enclosed in parentheses are treated as a single element.
-      Thus, "(elem (foo | bar) elem)" allows the token sequences "elem
-      foo elem" and "elem bar elem".
-
-   *rule
-      The character "*" preceding an element indicates repetition. The
-      full form is "<n>*<m>element" indicating at least <n> and at most
-      <m> occurrences of element. Default values are 0 and infinity so
-      that "*(element)" allows any number, including zero; "1*element"
-      requires at least one; and "1*2element" allows one or two.
-
-   [rule]
-      Square brackets enclose optional elements; "[foo bar]" is
-      equivalent to "*1(foo bar)".
-
-
-
-Fielding, et al.            Standards Track                    [Page 14]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   N rule
-      Specific repetition: "<n>(element)" is equivalent to
-      "<n>*<n>(element)"; that is, exactly <n> occurrences of (element).
-      Thus 2DIGIT is a 2-digit number, and 3ALPHA is a string of three
-      alphabetic characters.
-
-   #rule
-      A construct "#" is defined, similar to "*", for defining lists of
-      elements. The full form is "<n>#<m>element" indicating at least
-      <n> and at most <m> elements, each separated by one or more commas
-      (",") and OPTIONAL linear white space (LWS). This makes the usual
-      form of lists very easy; a rule such as
-         ( *LWS element *( *LWS "," *LWS element ))
-      can be shown as
-         1#element
-      Wherever this construct is used, null elements are allowed, but do
-      not contribute to the count of elements present. That is,
-      "(element), , (element) " is permitted, but counts as only two
-      elements. Therefore, where at least one element is required, at
-      least one non-null element MUST be present. Default values are 0
-      and infinity so that "#element" allows any number, including zero;
-      "1#element" requires at least one; and "1#2element" allows one or
-      two.
-
-   ; comment
-      A semi-colon, set off some distance to the right of rule text,
-      starts a comment that continues to the end of line. This is a
-      simple way of including useful notes in parallel with the
-      specifications.
-
-   implied *LWS
-      The grammar described by this specification is word-based. Except
-      where noted otherwise, linear white space (LWS) can be included
-      between any two adjacent words (token or quoted-string), and
-      between adjacent words and separators, without changing the
-      interpretation of a field. At least one delimiter (LWS and/or
-
-      separators) MUST exist between any two tokens (for the definition
-      of "token" below), since they would otherwise be interpreted as a
-      single token.
-
-2.2 Basic Rules
-
-   The following rules are used throughout this specification to
-   describe basic parsing constructs. The US-ASCII coded character set
-   is defined by ANSI X3.4-1986 [21].
-
-
-
-
-
-Fielding, et al.            Standards Track                    [Page 15]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-       OCTET          = <any 8-bit sequence of data>
-       CHAR           = <any US-ASCII character (octets 0 - 127)>
-       UPALPHA        = <any US-ASCII uppercase letter "A".."Z">
-       LOALPHA        = <any US-ASCII lowercase letter "a".."z">
-       ALPHA          = UPALPHA | LOALPHA
-       DIGIT          = <any US-ASCII digit "0".."9">
-       CTL            = <any US-ASCII control character
-                        (octets 0 - 31) and DEL (127)>
-       CR             = <US-ASCII CR, carriage return (13)>
-       LF             = <US-ASCII LF, linefeed (10)>
-       SP             = <US-ASCII SP, space (32)>
-       HT             = <US-ASCII HT, horizontal-tab (9)>
-       <">            = <US-ASCII double-quote mark (34)>
-
-   HTTP/1.1 defines the sequence CR LF as the end-of-line marker for all
-   protocol elements except the entity-body (see appendix 19.3 for
-   tolerant applications). The end-of-line marker within an entity-body
-   is defined by its associated media type, as described in section 3.7.
-
-       CRLF           = CR LF
-
-   HTTP/1.1 header field values can be folded onto multiple lines if the
-   continuation line begins with a space or horizontal tab. All linear
-   white space, including folding, has the same semantics as SP. A
-   recipient MAY replace any linear white space with a single SP before
-   interpreting the field value or forwarding the message downstream.
-
-       LWS            = [CRLF] 1*( SP | HT )
-
-   The TEXT rule is only used for descriptive field contents and values
-   that are not intended to be interpreted by the message parser. Words
-   of *TEXT MAY contain characters from character sets other than ISO-
-   8859-1 [22] only when encoded according to the rules of RFC 2047
-   [14].
-
-       TEXT           = <any OCTET except CTLs,
-                        but including LWS>
-
-   A CRLF is allowed in the definition of TEXT only as part of a header
-   field continuation. It is expected that the folding LWS will be
-   replaced with a single SP before interpretation of the TEXT value.
-
-   Hexadecimal numeric characters are used in several protocol elements.
-
-       HEX            = "A" | "B" | "C" | "D" | "E" | "F"
-                      | "a" | "b" | "c" | "d" | "e" | "f" | DIGIT
-
-
-
-
-
-Fielding, et al.            Standards Track                    [Page 16]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   Many HTTP/1.1 header field values consist of words separated by LWS
-   or special characters. These special characters MUST be in a quoted
-   string to be used within a parameter value (as defined in section
-   3.6).
-
-       token          = 1*<any CHAR except CTLs or separators>
-       separators     = "(" | ")" | "<" | ">" | "@"
-                      | "," | ";" | ":" | "\" | <">
-                      | "/" | "[" | "]" | "?" | "="
-                      | "{" | "}" | SP | HT
-
-   Comments can be included in some HTTP header fields by surrounding
-   the comment text with parentheses. Comments are only allowed in
-   fields containing "comment" as part of their field value definition.
-   In all other fields, parentheses are considered part of the field
-   value.
-
-       comment        = "(" *( ctext | quoted-pair | comment ) ")"
-       ctext          = <any TEXT excluding "(" and ")">
-
-   A string of text is parsed as a single word if it is quoted using
-   double-quote marks.
-
-       quoted-string  = ( <"> *(qdtext | quoted-pair ) <"> )
-       qdtext         = <any TEXT except <">>
-
-   The backslash character ("\") MAY be used as a single-character
-   quoting mechanism only within quoted-string and comment constructs.
-
-       quoted-pair    = "\" CHAR
-
-3 Protocol Parameters
-
-3.1 HTTP Version
-
-   HTTP uses a "<major>.<minor>" numbering scheme to indicate versions
-   of the protocol. The protocol versioning policy is intended to allow
-   the sender to indicate the format of a message and its capacity for
-   understanding further HTTP communication, rather than the features
-   obtained via that communication. No change is made to the version
-   number for the addition of message components which do not affect
-   communication behavior or which only add to extensible field values.
-   The <minor> number is incremented when the changes made to the
-   protocol add features which do not change the general message parsing
-   algorithm, but which may add to the message semantics and imply
-   additional capabilities of the sender. The <major> number is
-   incremented when the format of a message within the protocol is
-   changed. See RFC 2145 [36] for a fuller explanation.
-
-
-
-Fielding, et al.            Standards Track                    [Page 17]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   The version of an HTTP message is indicated by an HTTP-Version field
-   in the first line of the message.
-
-       HTTP-Version   = "HTTP" "/" 1*DIGIT "." 1*DIGIT
-
-   Note that the major and minor numbers MUST be treated as separate
-   integers and that each MAY be incremented higher than a single digit.
-   Thus, HTTP/2.4 is a lower version than HTTP/2.13, which in turn is
-   lower than HTTP/12.3. Leading zeros MUST be ignored by recipients and
-   MUST NOT be sent.
-
-   An application that sends a request or response message that includes
-   HTTP-Version of "HTTP/1.1" MUST be at least conditionally compliant
-   with this specification. Applications that are at least conditionally
-   compliant with this specification SHOULD use an HTTP-Version of
-   "HTTP/1.1" in their messages, and MUST do so for any message that is
-   not compatible with HTTP/1.0. For more details on when to send
-   specific HTTP-Version values, see RFC 2145 [36].
-
-   The HTTP version of an application is the highest HTTP version for
-   which the application is at least conditionally compliant.
-
-   Proxy and gateway applications need to be careful when forwarding
-   messages in protocol versions different from that of the application.
-   Since the protocol version indicates the protocol capability of the
-   sender, a proxy/gateway MUST NOT send a message with a version
-   indicator which is greater than its actual version. If a higher
-   version request is received, the proxy/gateway MUST either downgrade
-   the request version, or respond with an error, or switch to tunnel
-   behavior.
-
-   Due to interoperability problems with HTTP/1.0 proxies discovered
-   since the publication of RFC 2068[33], caching proxies MUST, gateways
-   MAY, and tunnels MUST NOT upgrade the request to the highest version
-   they support. The proxy/gateway's response to that request MUST be in
-   the same major version as the request.
-
-      Note: Converting between versions of HTTP may involve modification
-      of header fields required or forbidden by the versions involved.
-
-3.2 Uniform Resource Identifiers
-
-   URIs have been known by many names: WWW addresses, Universal Document
-   Identifiers, Universal Resource Identifiers [3], and finally the
-   combination of Uniform Resource Locators (URL) [4] and Names (URN)
-   [20]. As far as HTTP is concerned, Uniform Resource Identifiers are
-   simply formatted strings which identify--via name, location, or any
-   other characteristic--a resource.
-
-
-
-Fielding, et al.            Standards Track                    [Page 18]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-3.2.1 General Syntax
-
-   URIs in HTTP can be represented in absolute form or relative to some
-   known base URI [11], depending upon the context of their use. The two
-   forms are differentiated by the fact that absolute URIs always begin
-   with a scheme name followed by a colon. For definitive information on
-   URL syntax and semantics, see "Uniform Resource Identifiers (URI):
-   Generic Syntax and Semantics," RFC 2396 [42] (which replaces RFCs
-   1738 [4] and RFC 1808 [11]). This specification adopts the
-   definitions of "URI-reference", "absoluteURI", "relativeURI", "port",
-   "host","abs_path", "rel_path", and "authority" from that
-   specification.
-
-   The HTTP protocol does not place any a priori limit on the length of
-   a URI. Servers MUST be able to handle the URI of any resource they
-   serve, and SHOULD be able to handle URIs of unbounded length if they
-   provide GET-based forms that could generate such URIs. A server
-   SHOULD return 414 (Request-URI Too Long) status if a URI is longer
-   than the server can handle (see section 10.4.15).
-
-      Note: Servers ought to be cautious about depending on URI lengths
-      above 255 bytes, because some older client or proxy
-      implementations might not properly support these lengths.
-
-3.2.2 http URL
-
-   The "http" scheme is used to locate network resources via the HTTP
-   protocol. This section defines the scheme-specific syntax and
-   semantics for http URLs.
-
-   http_URL = "http:" "//" host [ ":" port ] [ abs_path [ "?" query ]]
-
-   If the port is empty or not given, port 80 is assumed. The semantics
-   are that the identified resource is located at the server listening
-   for TCP connections on that port of that host, and the Request-URI
-   for the resource is abs_path (section 5.1.2). The use of IP addresses
-   in URLs SHOULD be avoided whenever possible (see RFC 1900 [24]). If
-   the abs_path is not present in the URL, it MUST be given as "/" when
-   used as a Request-URI for a resource (section 5.1.2). If a proxy
-   receives a host name which is not a fully qualified domain name, it
-   MAY add its domain to the host name it received. If a proxy receives
-   a fully qualified domain name, the proxy MUST NOT change the host
-   name.
-
-
-
-
-
-
-
-
-Fielding, et al.            Standards Track                    [Page 19]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-3.2.3 URI Comparison
-
-   When comparing two URIs to decide if they match or not, a client
-   SHOULD use a case-sensitive octet-by-octet comparison of the entire
-   URIs, with these exceptions:
-
-      - A port that is empty or not given is equivalent to the default
-        port for that URI-reference;
-
-        - Comparisons of host names MUST be case-insensitive;
-
-        - Comparisons of scheme names MUST be case-insensitive;
-
-        - An empty abs_path is equivalent to an abs_path of "/".
-
-   Characters other than those in the "reserved" and "unsafe" sets (see
-   RFC 2396 [42]) are equivalent to their ""%" HEX HEX" encoding.
-
-   For example, the following three URIs are equivalent:
-
-      http://abc.com:80/~smith/home.html
-      http://ABC.com/%7Esmith/home.html
-      http://ABC.com:/%7esmith/home.html
-
-3.3 Date/Time Formats
-
-3.3.1 Full Date
-
-   HTTP applications have historically allowed three different formats
-   for the representation of date/time stamps:
-
-      Sun, 06 Nov 1994 08:49:37 GMT  ; RFC 822, updated by RFC 1123
-      Sunday, 06-Nov-94 08:49:37 GMT ; RFC 850, obsoleted by RFC 1036
-      Sun Nov  6 08:49:37 1994       ; ANSI C's asctime() format
-
-   The first format is preferred as an Internet standard and represents
-   a fixed-length subset of that defined by RFC 1123 [8] (an update to
-   RFC 822 [9]). The second format is in common use, but is based on the
-   obsolete RFC 850 [12] date format and lacks a four-digit year.
-   HTTP/1.1 clients and servers that parse the date value MUST accept
-   all three formats (for compatibility with HTTP/1.0), though they MUST
-   only generate the RFC 1123 format for representing HTTP-date values
-   in header fields. See section 19.3 for further information.
-
-      Note: Recipients of date values are encouraged to be robust in
-      accepting date values that may have been sent by non-HTTP
-      applications, as is sometimes the case when retrieving or posting
-      messages via proxies/gateways to SMTP or NNTP.
-
-
-
-Fielding, et al.            Standards Track                    [Page 20]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   All HTTP date/time stamps MUST be represented in Greenwich Mean Time
-   (GMT), without exception. For the purposes of HTTP, GMT is exactly
-   equal to UTC (Coordinated Universal Time). This is indicated in the
-   first two formats by the inclusion of "GMT" as the three-letter
-   abbreviation for time zone, and MUST be assumed when reading the
-   asctime format. HTTP-date is case sensitive and MUST NOT include
-   additional LWS beyond that specifically included as SP in the
-   grammar.
-
-       HTTP-date    = rfc1123-date | rfc850-date | asctime-date
-       rfc1123-date = wkday "," SP date1 SP time SP "GMT"
-       rfc850-date  = weekday "," SP date2 SP time SP "GMT"
-       asctime-date = wkday SP date3 SP time SP 4DIGIT
-       date1        = 2DIGIT SP month SP 4DIGIT
-                      ; day month year (e.g., 02 Jun 1982)
-       date2        = 2DIGIT "-" month "-" 2DIGIT
-                      ; day-month-year (e.g., 02-Jun-82)
-       date3        = month SP ( 2DIGIT | ( SP 1DIGIT ))
-                      ; month day (e.g., Jun  2)
-       time         = 2DIGIT ":" 2DIGIT ":" 2DIGIT
-                      ; 00:00:00 - 23:59:59
-       wkday        = "Mon" | "Tue" | "Wed"
-                    | "Thu" | "Fri" | "Sat" | "Sun"
-       weekday      = "Monday" | "Tuesday" | "Wednesday"
-                    | "Thursday" | "Friday" | "Saturday" | "Sunday"
-       month        = "Jan" | "Feb" | "Mar" | "Apr"
-                    | "May" | "Jun" | "Jul" | "Aug"
-                    | "Sep" | "Oct" | "Nov" | "Dec"
-
-      Note: HTTP requirements for the date/time stamp format apply only
-      to their usage within the protocol stream. Clients and servers are
-      not required to use these formats for user presentation, request
-      logging, etc.
-
-3.3.2 Delta Seconds
-
-   Some HTTP header fields allow a time value to be specified as an
-   integer number of seconds, represented in decimal, after the time
-   that the message was received.
-
-       delta-seconds  = 1*DIGIT
-
-3.4 Character Sets
-
-   HTTP uses the same definition of the term "character set" as that
-   described for MIME:
-
-
-
-
-
-Fielding, et al.            Standards Track                    [Page 21]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   The term "character set" is used in this document to refer to a
-   method used with one or more tables to convert a sequence of octets
-   into a sequence of characters. Note that unconditional conversion in
-   the other direction is not required, in that not all characters may
-   be available in a given character set and a character set may provide
-   more than one sequence of octets to represent a particular character.
-   This definition is intended to allow various kinds of character
-   encoding, from simple single-table mappings such as US-ASCII to
-   complex table switching methods such as those that use ISO-2022's
-   techniques. However, the definition associated with a MIME character
-   set name MUST fully specify the mapping to be performed from octets
-   to characters. In particular, use of external profiling information
-   to determine the exact mapping is not permitted.
-
-      Note: This use of the term "character set" is more commonly
-      referred to as a "character encoding." However, since HTTP and
-      MIME share the same registry, it is important that the terminology
-      also be shared.
-
-   HTTP character sets are identified by case-insensitive tokens. The
-   complete set of tokens is defined by the IANA Character Set registry
-   [19].
-
-       charset = token
-
-   Although HTTP allows an arbitrary token to be used as a charset
-   value, any token that has a predefined value within the IANA
-   Character Set registry [19] MUST represent the character set defined
-   by that registry. Applications SHOULD limit their use of character
-   sets to those defined by the IANA registry.
-
-   Implementors should be aware of IETF character set requirements [38]
-   [41].
-
-3.4.1 Missing Charset
-
-   Some HTTP/1.0 software has interpreted a Content-Type header without
-   charset parameter incorrectly to mean "recipient should guess."
-   Senders wishing to defeat this behavior MAY include a charset
-   parameter even when the charset is ISO-8859-1 and SHOULD do so when
-   it is known that it will not confuse the recipient.
-
-   Unfortunately, some older HTTP/1.0 clients did not deal properly with
-   an explicit charset parameter. HTTP/1.1 recipients MUST respect the
-   charset label provided by the sender; and those user agents that have
-   a provision to "guess" a charset MUST use the charset from the
-
-
-
-
-
-Fielding, et al.            Standards Track                    [Page 22]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   content-type field if they support that charset, rather than the
-   recipient's preference, when initially displaying a document. See
-   section 3.7.1.
-
-3.5 Content Codings
-
-   Content coding values indicate an encoding transformation that has
-   been or can be applied to an entity. Content codings are primarily
-   used to allow a document to be compressed or otherwise usefully
-   transformed without losing the identity of its underlying media type
-   and without loss of information. Frequently, the entity is stored in
-   coded form, transmitted directly, and only decoded by the recipient.
-
-       content-coding   = token
-
-   All content-coding values are case-insensitive. HTTP/1.1 uses
-   content-coding values in the Accept-Encoding (section 14.3) and
-   Content-Encoding (section 14.11) header fields. Although the value
-   describes the content-coding, what is more important is that it
-   indicates what decoding mechanism will be required to remove the
-   encoding.
-
-   The Internet Assigned Numbers Authority (IANA) acts as a registry for
-   content-coding value tokens. Initially, the registry contains the
-   following tokens:
-
-   gzip An encoding format produced by the file compression program
-        "gzip" (GNU zip) as described in RFC 1952 [25]. This format is a
-        Lempel-Ziv coding (LZ77) with a 32 bit CRC.
-
-   compress
-        The encoding format produced by the common UNIX file compression
-        program "compress". This format is an adaptive Lempel-Ziv-Welch
-        coding (LZW).
-
-        Use of program names for the identification of encoding formats
-        is not desirable and is discouraged for future encodings. Their
-        use here is representative of historical practice, not good
-        design. For compatibility with previous implementations of HTTP,
-        applications SHOULD consider "x-gzip" and "x-compress" to be
-        equivalent to "gzip" and "compress" respectively.
-
-   deflate
-        The "zlib" format defined in RFC 1950 [31] in combination with
-        the "deflate" compression mechanism described in RFC 1951 [29].
-
-
-
-
-
-
-Fielding, et al.            Standards Track                    [Page 23]
-
-RFC 2616                        HTTP/1.1                       June 1999
-
-
-   identity
-        The default (identity) encoding; the use of no transformation
-        whatsoever. This content-coding is used only in the Accept-
-        Encoding header, and SHOULD NOT be used in the Content-Encoding
-        header.
-
-   New content-coding value tokens SHOULD be registered; to allow
-   interoperability between clients and servers, specifications of the
-   content coding algorithms needed to implement a new value SHOULD be
-   publicly available and adequate for independent implementation, and
-   conform to the purpose of content coding defined in this section.
-
-3.6 Transfer Codings
-
-   Transfer-coding values are used to indicate an encoding
-   transformation that has been, can be, or may need to be applied to an
-   entity-body in order to ensure "safe transport" through the network.
-   This differs from a content coding in that the transfer-coding is a
-   property of the message, not of the original entity.
-
-       transfer-coding         = "chunked" | transfer-extension
-       transfer-extension      = token *( ";" parameter )
-
-   Parameters are in  the form of attribute/value pairs.
-
-       parameter               = attribute "=" value
-       attribute               = token
-       value                   = token | quoted-string
-
-   All transfer-coding values are case-insensitive. HTTP/1.1 uses
-   transfer-coding values in the TE header field (section 14.39) and in
-   the Transfer-Encoding header field (section 14.41).
-
-   Whenever a transfer-coding is applied to a message-body, the set of
-   transfer-codings MUST include "chunked", unless the message is
-   terminated by closing the connection. When the "chunked" transfer-
-   coding is used, it MUST be the last transfer-coding applied to the
-   message-body. The "chunked" transfer-coding MUST NOT be applied more
-   than once to a message-body. These rules allow the recipient to
-   determine the transfer-length of the message (section 4.4).
-
-   Transfer-codings are analogous to the Content-Transfer-Encoding
-   values of MIME [7], which were designed to enable safe transport of
-   binary data over a 7-bit transport service. However, safe transport
-   has a different focus for an 8bit-clean transfer protocol. In HTTP,
-   the only unsafe characteristic of message-bodies is the difficulty in
-   determining the exact body length (section 7.2.2), or the desire to
-   encrypt data over a shared transport.
-
-
-
-Fielding, et al.            Standards Track                    [Page 24]
-
-RFC 2616                        HTTP/1.1        
+This article is about the religion. For other uses, see Islam (disambiguation).
+Islam
+ٱلْإِسْلَام‎
+al-Islām
+
+The Kaaba at Masjid al-Haram in Mecca, Saudi Arabia, the holiest Islamic site
+Classification	Abrahamic
+Scripture	Quran
+Prophetic traditions: Hadith[1]
+Theology	Monotheistic
+Region	Middle East, North Africa, East Africa, West Africa, Central Asia, South Asia, Southeast Asia, Caucasus, Balkans, Guianas[2][3]
+Language	Quranic Arabic
+Territory	Muslim world
+Founder	Muhammad[4]
+Origin	610 CE
+Jabal al-Nour, Mecca, Hejaz, Arabian Peninsula
+Separations	
+Bábism[5]Baháʼí Faith[6]Druze faith[7]Yarsanism[8]Din-i Ilahi[9]Ali-Illahism[10]
+Number of followers	est. 2 billion[11] Increase (individually referred to as Muslims, collectively referred to as the Ummah)
+Part of a series on
+Islam
+
+Beliefs
+Practices
+TextsFoundations
+History
+Culture and society
+Related topics
+ Islam portal
+vte
+Part of a series on
+Islam Iman Ihsan
+Islam
+Iman
+Ihsan
+Individuals
+Mumin – Believer
+Muslim – Submitter (to God)
+Martyr – Arabic: Shahid
+Fasiq – Open sinner, corrupt
+Fajir – Sinner (by action)
+Kafir – Disbeliever
+Munafiq – Hypocrite
+Groups
+Ahl al-Kitab – People of the Book
+Ahl al-Fatrah – People of the Interval
+Terms
+Dīn – Religion
+vte
+Islam[a] is an Abrahamic monotheistic religion based on the Quran,[13] and the teachings of Muhammad.[14] Adherents of Islam are called Muslims, who are estimated to number 2 billion worldwide and are the world's second-largest religious population after Christians.[11]
+
+
+Surah al Fatiha (The Opener), from the Quran.
+Muslims believe that Islam is the complete and universal version of a primordial faith that was revealed many times through earlier prophets and messengers, including Adam, Noah, Abraham, Moses, and Jesus. Muslims consider the Quran to be the verbatim word of God and the unaltered, final revelation. Alongside the Quran, Muslims also believe in previous revelations, such as the Tawrat (the Torah), the Zabur (Psalms), and the Injil (Gospel). They believe that Muhammad is the main and final of God's prophets, through whom the religion was completed. The teachings and normative examples of Muhammad, called the Sunnah, documented in accounts called the hadith, provide a constitutional model for Muslims. Islam is based on the belief in the oneness and uniqueness of God (tawhid), and belief in an afterlife (akhirah) with the Last Judgment—wherein the righteous will be rewarded in paradise (jannah) and the unrighteous will be punished in hell (jahannam). The Five Pillars, considered obligatory acts of worship, are the Islamic oath and creed (shahada), daily prayers (salah), almsgiving (zakat), fasting (sawm) in the month of Ramadan, and a pilgrimage (hajj) to Mecca. Islamic law, sharia, touches on virtually every aspect of life, from banking and finance and welfare to men's and women's roles and the environment. The two main religious festivals are Eid al-Fitr and Eid al-Adha. The three holiest sites in Islam are Masjid al-Haram in Mecca, Prophet's Mosque in Medina, and al-Aqsa Mosque in Jerusalem.
+
+The religion of Islam originated in Mecca in 610 CE. Muslims believe this is when Muhammad received his first revelation. By the time of his death, most of the Arabian Peninsula had converted to Islam. Muslim rule expanded outside Arabia under the Rashidun Caliphate and the subsequent Umayyad Caliphate ruled from the Iberian Peninsula to the Indus Valley. In the Islamic Golden Age, specifically during the reign of the Abbasid Caliphate, most of the Muslim world experienced a scientific, economic and cultural flourishing. The expansion of the Muslim world involved various states and caliphates as well as extensive trade and religious conversion as a result of Islamic missionary activities (dawah), as well as through conquests, imperialism, and colonialism.
+
+The two main Islamic branches are Sunni Islam (87–90%) and Shia Islam (10–13%). While the Shia–Sunni divide initially arose from disagreements over the succession to Muhammad, they grew to cover a broader dimension, both theologically and juridically. The Sunni canonical hadith collection consists of six books, while the Shia canonical hadith collection consists of four books. Muslims make up a majority of the population in 53 countries.[11] Approximately 12% of the world's Muslims live in Indonesia, the most populous Muslim-majority country; 31% live in South Asia; 20% live in the Middle East–North Africa; and 15% live in sub-Saharan Africa. Muslim communities are also present in the Americas, China, and Europe. Muslims are the world's fastest-growing major religious group, according to Pew Research. This is primarily due to a higher fertility rate and younger age structure compared to other major religions.
+
+Etymology
+See also: Muslims § Etymology
+In Arabic, Islam (Arabic: إسلام, lit. 'submission [to God]')[15][16][17] is the verbal noun of Form IV originating from the verb سلم (salama), from the triliteral root س-ل-م (S-L-M), which forms a large class of words mostly relating to concepts of submission, safeness, and peace.[18] In a religious context, it refers to the total surrender to the will of God.[19] A Muslim (مُسْلِم), the word for a follower of Islam,[20] is the active participle of the same verb form, and means "submitter (to God)" or "one who surrenders (to God)". However, Quranic studies scholar Mohsen Goudarzi has argued that in the Quran the word dīn means "worship", the islām means "monotheism" and the muslim means "monotheist".[21] In the Hadith of Gabriel, Islam is presented as one part of a triad that also includes imān (faith), and ihsān (excellence).[22][23]
+
+Islam itself was historically called Mohammedanism in the English-speaking world. This term has fallen out of use and is sometimes said to be offensive, as it suggests that a human being, rather than God, is central to Muslims' religion.[24]
+
+Articles of faith
+Main articles: Aqidah and Iman
+The Islamic creed (aqidah) requires belief in six articles: God, angels, revelation, prophets, the Day of Resurrection, and the divine predestination.[25]
+
+God
+
+Calligraphy showing the word Allah in Arabic in Hagia Sophia, Istanbul, Turkey
+Main article: God in Islam
+The central concept of Islam is tawḥīd (Arabic: توحيد), the oneness of God. It is usually thought of as a precise monotheism, but is also panentheistic in Islamic mystical teachings.[26][27] God is seen as incomparable and without multiplicity of persons such as in the Christian Trinity, and associating multiplicity to God or attributing God's attributes to others is seen as idolatory, called shirk. Thus, Muslims are not iconodules and do not attribute forms to God. God is instead described and referred to by several names or attributes, the most common being Ar-Rahmān (الرحمان) meaning "The Entirely Merciful", and Ar-Rahīm (الرحيم) meaning "The Especially Merciful" which are invoked at the beginning of most chapters of the Quran.[28][29]
+
+Islam teaches that the creation of everything in the universe was brought into being by God's command as expressed by the wording, "Be, and it is,"[i][15] and that the purpose of existence is to worship God.[30] He is viewed as a personal god[15] and there are no intermediaries, such as clergy, to contact God. Consciousness and awareness of God is referred to as Taqwa. Allāh is a term with no plural or gender being ascribed to it and is also used by Muslims and Arabic-speaking Christians and Jews in reference to God, whereas ʾilāh (إله) is a term used for a deity or a god in general.[31]
+
+Angels
+
+Muhammad receiving his first revelation from the angel Gabriel. From the manuscript Jami' al-Tawarikh by Rashid-al-Din Hamadani, 1307.
+Main article: Angels in Islam
+Angels (singular: Arabic: ملك, malak) are beings described in the Quran[32] and hadith.[33] They are described as created to worship God and also to serve in other specific duties such as communicating revelations from God, recording every person's actions, and taking a person's soul at the time of death. They are described as being created variously from 'light' (nūr)[34][35][36] or 'fire' (nār).[37][38][39][40] Islamic angels are often represented in anthropomorphic forms combined with supernatural images, such as wings, being of great size or wearing heavenly articles.[41][42][43][44] Common characteristics for angels include a lack of bodily needs and desires, such as eating and drinking.[45] Some of them, such as Gabriel (Jibrīl) and Michael (Mika'il), are mentioned by name in the Quran. Angels play a significant role in literature about the Mi'raj, where Muhammad encounters several angels during his journey through the heavens.[33] Further angels have often been featured in Islamic eschatology, theology and philosophy.[46]
+
+Scriptures
+
+A Quran manuscript resting on a rehal, a book rest for the holy text, c. 9th-century
+Main articles: Islamic holy books, Quran, and Wahy
+See also: History of the Quran
+The pre-eminent holy text of Islam is the Quran. Muslims believe that the verses of the Quran were revealed to Muhammad by God, through the archangel Gabriel, on multiple occasions between 610 CE[47][48] and 632, the year Muhammad died.[49] While Muhammad was alive, these revelations were written down by his companions, although the primary method of transmission was orally through memorization.[50] The Quran is divided into 114 chapters (sūrah) which contain a combined 6,236 verses (āyāt). The chronologically earlier chapters, revealed at Mecca, are concerned primarily with spiritual topics, while the later Medinan chapters discuss more social and legal issues relevant to the Muslim community.[15][51] Muslim jurists consult the hadith ('accounts'), or the written record of Muhammad's life, to both supplement the Quran and assist with its interpretation. The science of Quranic commentary and exegesis is known as tafsir.[52][53] In addition to its religious significance, the Quran is widely regarded as the finest work in Arabic literature,[54][55] and has influenced art and the Arabic language.[56]
+
+Islam also holds that God has sent revelations, called wahy, to different prophets numerous times throughout history. However, Islam teaches that parts of the previously revealed scriptures, such as the Tawrat (Torah) and the Injil (Gospel), have become distorted—either in interpretation, in text, or both,[57][58][59][60] while the Quran (lit. 'Recitation') is viewed as the final, verbatim and unaltered word of God.[51][61][62][63]
+
+Prophets
+Main articles: Prophets and messengers in Islam, Sunnah, and Hadith
+
+A 15th century[64] Persian miniature depicting Muhammad leading Abraham, Moses, Jesus and other prophets in prayer
+Prophets (Arabic: أنبياء, anbiyāʾ) are believed to have been chosen by God to preach a divine message. Some of these prophets additionally deliver a new book and are called "messengers" (رسول‎, rasūl).[65] Muslims believe prophets are human and not divine. All of the prophets are said to have preached the same basic message of Islam – submission to the will of God – to various nations in the past, and this is said to account for many similarities among religions. The Quran recounts the names of numerous figures considered prophets in Islam, including Adam, Noah, Abraham, Moses and Jesus, among others.[15][66] The stories associated with the prophets beyond the Quranic accounts are collected and explored in the Qisas al-Anbiya (Stories of the Prophets).
+
+Muslims believe that God sent Muhammad as the final prophet ("Seal of the prophets") to convey the completed message of Islam.[67][68] In Islam, the "normative" example of Muhammad's life is called the sunnah (literally "trodden path"). Muslims are encouraged to emulate Muhammad's moral behaviors in their daily lives, and the sunnah is seen as crucial to guiding interpretation of the Quran.[69][70][71][72] This example is preserved in traditions known as hadith, which are accounts of his words, actions, and personal characteristics. Hadith Qudsi is a sub-category of hadith, regarded as God's verbatim words quoted by Muhammad that are not part of the Quran. A hadith involves two elements: a chain of narrators, called sanad, and the actual wording, called matn. There are various methodologies to classify the authenticity of hadiths, with the commonly used grading scale being "authentic" or "correct" (صحيح, ṣaḥīḥ); "good" (حسن, ḥasan); or "weak" (ضعيف, ḍaʻīf), among others. The Kutub al-Sittah are a collection of six books, regarded as the most authentic reports in Sunni Islam. Among them is Sahih al-Bukhari, often considered by Sunnis to be one of the most authentic sources after the Quran.[73] Another well-known source of hadiths is known as The Four Books, which Shias consider as the most authentic hadith reference.[74][75]
+
+Resurrection and judgment
+
+The Umayyad Mosque in Damascus, where according to Islamic tradition Isa (Jesus, seen as an Islamic prophet) will appear close to the Day of Judgment
+Main article: Islamic eschatology
+Belief in the "Day of Resurrection" or Yawm al-Qiyāmah (Arabic: يوم القيامة) is also crucial for Muslims. It is believed that the time of Qiyāmah is preordained by God, but unknown to man. The Quran and the hadith, as well as the commentaries of scholars, describe the trials and tribulations preceding and during the Qiyāmah. The Quran emphasizes bodily resurrection, a break from the pre-Islamic Arabian understanding of death.[76][77][78]
+
+On Yawm al-Qiyāmah, Muslims believe all humankind will be judged by their good and bad deeds and consigned to Jannah (paradise) or Jahannam (hell).[79] The Quran in Surat al-Zalzalah describes this as: "So whoever does an atom's weight of good will see it. And whoever does an atom's weight of evil will see it." The Quran lists several sins that can condemn a person to hell. However, the Quran makes it clear that God will forgive the sins of those who repent if he wishes. Good deeds, like charity, prayer, and compassion towards animals[80] will be rewarded with entry to heaven. Muslims view heaven as a place of joy and blessings, with Quranic references describing its features. Mystical traditions in Islam place these heavenly delights in the context of an ecstatic awareness of God.[81][82][83] Yawm al-Qiyāmah is also identified in the Quran as Yawm ad-Dīn (يوم الدين "Day of Religion");[ii] as-Sāʿah (الساعة "the Last Hour");[iii] and al-Qāriʿah (القارعة "The Clatterer").[iv]
+
+Divine predestination
+Main article: Predestination in Islam
+The concept of divine predestination in Islam (Arabic: القضاء والقدر, al-qadāʾ wa l-qadar) means that every matter, good or bad, is believed to have been decreed by God. Al-qadar, meaning "power", derives from a root that means "to measure" or "calculating".[84][85][86][87] Muslims often express this belief in divine destiny with the phrase "In-sha-Allah" (Arabic: إن شاء الله) meaning "if God wills" when speaking on future events.[88]
+
+Acts of worship
+Main articles: Five Pillars of Islam and Ibadah
+There are five acts of worship that are considered duties–the Shahada (declaration of faith), the five daily prayers, Zakat (almsgiving), fasting during Ramadan, and the Hajj pilgrimage–collectively known as "The Pillars of Islam" (Arkān al-Islām).[89] In addition, Muslims also perform other optional supererogatory acts that are encouraged but not considered to be duties.[90]
+
+Declaration of faith
+
+Silver coin of the Mughal Emperor Akbar, c. 16th century, inscribed with the Shahadah
+Main article: Shahada
+The shahadah[91] is an oath declaring belief in Islam. The expanded statement is "ʾašhadu ʾal-lā ʾilāha ʾillā-llāhu wa ʾašhadu ʾanna muħammadan rasūlu-llāh" (أشهد أن لا إله إلا الله وأشهد أن محمداً رسول الله), or, "I testify that there is no deity except God and I testify that Muhammad is the messenger of God."[92] Islam is sometimes argued to have a very simple creed with the shahada being the premise for the rest of the religion. Non-Muslims wishing to convert to Islam are required to recite the shahada in front of witnesses.[93][94]
+
+Prayer
+Main article: Salah
+See also: Mosque and Jumu'ah
+
+Muslim men prostrating in prayer, at the Umayyad Mosque, Damascus
+Prayer in Islam, called as-salah or aṣ-ṣalāt (Arabic: الصلاة), is seen as a personal communication with God and consists of repeating units called rakat that include bowing and prostrating to God. There are five timed prayers each day that are considered duties. The prayers are recited in the Arabic language and performed in the direction of the Kaaba. The act also requires a state of ritual purity achieved by means of either a routine wudu ritual wash or, in certain circumstances, a ghusl full body ritual wash.[95][96][97][98]
+
+A mosque is a place of worship for Muslims, who often refer to it by its Arabic name masjid. Although the primary purpose of the mosque is to serve as a place of prayer, it is also an important social centre for the Muslim community. For example, the Masjid an-Nabawi ("Prophetic Mosque") in Medina, Saudi Arabia, used to also serve as a shelter for the poor.[99] Minarets are towers used to call the adhan, a vocal call to signal the prayer time.[100][101]
+
+Almsgiving
+Main article: Zakat
+See also: Sadaqah
+
+A slot for giving zakat at the Zawiya of Moulay Idris II in Fez, Morocco
+Zakat (Arabic: زكاة, zakāh), also spelled Zakāt or Zakah, is a type of almsgiving characterized by the giving of a fixed portion (2.5% annually)[102] of accumulated wealth by those who can afford it to help the poor or needy, such as for freeing captives, those in debt, or for (stranded) travellers, and for those employed to collect zakat. It acts as a form of welfare in Muslim societies.[103] It is considered a religious obligation that the well-off owe the needy because their wealth is seen as a trust from God's bounty,[104] and is seen as a purification of one's excess wealth.[105] The total annual value contributed due to zakat is 15 times greater than global humanitarian aid donations, using conservative estimates.[106] Sadaqah, as opposed to Zakat, is a much-encouraged optional charity.[107][108] A waqf is a perpetual charitable trust, which finances hospitals and schools in Muslim societies.[109]
+
+Fasting
+
+A fast-breaking feast, known as Iftar, is served traditionally with dates.
+Main article: Fasting in Islam
+See also: Fasting during Ramadan
+In Islam, fasting (Arabic: صوم, ṣawm) precludes food and drink, as well as other forms of consumption, such as smoking, and is performed from dawn to sunset. During the month of Ramadan, it is considered a duty for Muslims to fast.[110] The fast is to encourage a feeling of nearness to God by restraining oneself for God's sake from what is otherwise permissible and to think of the needy. In addition, there are other days, such as the Day of Arafah, when fasting is optional.[111]
+
+Pilgrimage
+Main articles: Hajj and Umrah
+See also: Holiest sites in Islam
+
+Pilgrims at the Great Mosque of Mecca during the Hajj season
+The Islamic pilgrimage, called the ḥajj (Arabic: حج), is to be done at least once a lifetime by every Muslim with the means to do so during the Islamic month of Dhu al-Hijjah. Rituals of the Hajj mostly imitate the story of the family of Abraham. In Mecca, pilgrims walk seven times around the Kaaba, which Muslims believe Abraham built as a place of worship, and they walk seven times between Mount Safa and Marwa, recounting the steps of Abraham's wife, Hagar, who was looking for water for her baby Ishmael in the desert before Mecca developed into a settlement.[112][113][114] The pilgrimage also involves spending a day praying and worshipping in the plain of Mount Arafat as well as symbolically stoning the Devil.[115] All Muslim men wear only two simple white unstitched pieces of cloth called ihram, intended to bring continuity through generations and uniformity among pilgrims despite class or origin.[116][117] Another form of pilgrimage, Umrah, is optional and can be undertaken at any time of the year. Other sites of Islamic pilgrimage are Medina, where Muhammad died, as well as Jerusalem, a city of many Islamic prophets and the site of Al-Aqsa, which was the direction of prayer before Mecca.[118][119]
+
+Other acts of worship
+See also: Quran § Recitation, Dua, and Dhikr
+
+Muslim men reading the Quran in the Umayyad Mosque of Damascus
+Duration: 14 minutes and 30 seconds.14:30Subtitles available.CC
+A young man reciting the Qur'an in the United States.
+
+Al-Ikhlas
+Duration: 22 seconds.0:22
+Sincerity is the Quran's 112th chapter as recited by Imam Mishary Rashid Alafasy
+Problems playing this file? See media help.
+Muslims recite and memorize the whole or parts of the Quran as acts of virtue. Tajwid refers to the set of rules for the proper elocution of the Quran.[120] Many Muslims recite the whole Quran during the month of Ramadan.[121] One who has memorized the whole Quran is called a hafiz ("memorizer"), and hadiths mention that these individuals will be able to intercede for others on Judgment Day.[122]
+
+Supplication to God, called in Arabic duʿāʾ (Arabic: دعاء IPA: [dʊˈʕæːʔ]) has its own etiquette such as raising hands as if begging.[123]
+
+Remembrance of God (ذكر, Dhikr') refers to phrases repeated referencing God. Commonly, this includes Tahmid, declaring praise be due to God (الحمد لله, al-Ḥamdu lillāh) during prayer or when feeling thankful, Tasbih, declaring glory to God during prayer or when in awe of something and saying 'in the name of God' (بسملة, basmalah) before starting an act such as eating.[124]
+
+History
+Main article: History of Islam
+For a chronological guide, see Timeline of the history of Islam.
+See also: List of Muslim empires and dynasties
+
+A 2004 panoramic view of Al-Masjid al-Nabawi (the Mosque of the Prophet) in Medina, Hejaz region, present-day Saudi Arabia. It is considered the second most sacred mosque in Islam
+Muhammad and the beginning of Islam (570–632)
+Main articles: Muhammad and Muhammad in Islam
+For a chronological guide, see Timeline of early Islamic history.
+Further information: Muhammad in Mecca, Early social changes under Islam, and First Islamic state
+
+Cave of Hira
+According to Islamic tradition, Muhammad was born in Mecca in 570 CE and was orphaned early in life. Growing up as a trader, he became known as the "trusted one" (Arabic: الامين) and was sought after as an impartial arbitrator. He later married his employer, the businesswoman Khadija.[125] In the year 610 CE, troubled by the moral decline and idolatry prevalent in Mecca and seeking seclusion and spiritual contemplation, Muhammad retreated to the Cave of Hira in the mountain Jabal al-Nour, near Mecca. It was during his time in the cave that he is said to have received the first revelation of the Quran from the angel Gabriel.[126] The event of Muhammad's retreat to the cave and subsequent revelation is known as the "Night of Power" (Laylat al-Qadr) and is considered a significant event in Islamic history. During the next 22 years of his life, from age 40 onwards, Muhammad continued to receive revelations from God, becoming the last or seal of the prophets sent to mankind.[57][58][127]
+
+
+"Muhammad at the Ka'ba" from the Siyer-i Nebi.[128] Muhammad is shown with veiled face, c. 1595.
+During this time, while in Mecca, Muhammad preached first in secret and then in public, imploring his listeners to abandon polytheism and worship one God. Many early converts to Islam were women, the poor, foreigners, and slaves like the first muezzin Bilal ibn Rabah al-Habashi.[129] The Meccan elite felt Muhammad was destabilizing their social order by preaching about one God and giving questionable ideas to the poor and slaves because they profited from the pilgrimages to the idols of the Kaaba.[130][131]
+
+After 12 years of the persecution of Muslims by the Meccans, Muhammad and his companions performed the Hijra ("emigration") in 622 to the city of Yathrib (current-day Medina). He established the first Islamic state there with the Medinan converts (the Ansar) and the Meccan migrants (the Muhajirun). The Constitution of Medina was signed by all the tribes of Medina. This established religious freedoms and freedom to use their own laws among the Muslim and non-Muslim communities as well as an agreement to defend Medina from external threats.[132] Meccan forces and their allies lost against the Muslims at the Battle of Badr in 624 and then fought an inconclusive battle in the Battle of Uhud[133] before unsuccessfully besieging Medina in the Battle of the Trench (March–April 627). In 628, the Treaty of Hudaybiyyah was signed between Mecca and the Muslims, but it was broken by Mecca two years later. As more tribes converted to Islam, Meccan trade routes were cut off by the Muslims.[134][135] By 629 Muhammad was victorious in the nearly bloodless conquest of Mecca, and by the time of his death in 632 (at age 62) he had united the tribes of Arabia into a single religious polity.[136][47]
+
+Early Islamic period (632–750)
+Further information: Succession to Muhammad and Early Muslim conquests
+See also: Ghadir Khumm and Saqifa
+
+Expansion of Rashidun Caliphate
+
+Dome of the Rock in Jerusalem built by caliph Abd al-Malik ibn Marwan; completed at the end of the Second Fitna
+Muhammad died in 632 and the first successors, called Caliphs – Abu Bakr, Umar, Uthman ibn al-Affan, Ali ibn Abi Talib and sometimes Hasan ibn Ali[137] – are known in Sunni Islam as al-khulafā' ar-rāshidūn ("Rightly Guided Caliphs").[138] Some tribes left Islam and rebelled under leaders who declared themselves new prophets but were crushed by Abu Bakr in the Ridda wars.[139][140][141][142][143] Local populations of Jews and indigenous Christians, persecuted as religious minorities and heretics and taxed heavily, often helped Muslims take over their [ambiguous] lands,[144] resulting in rapid expansion of the caliphate into the Persian and Byzantine empires.[145][146][147][148] Uthman was elected in 644 and his assassination by rebels led to Ali being elected the next Caliph. In the First Civil War, Muhammad's widow, Aisha, raised an army against Ali, attempting to avenge the death of Uthman, but was defeated at the Battle of the Camel. Ali attempted to remove the governor of Syria, Mu'awiya, who was seen as corrupt. Mu'awiya then declared war on Ali and was defeated in the Battle of Siffin. Ali's decision to arbitrate angered the Kharijites, an extremist sect, who felt that by not fighting a sinner, Ali became a sinner as well. The Kharijites rebelled and were defeated in the Battle of Nahrawan but a Kharijite assassin later killed Ali. Ali's son, Hasan ibn Ali, was elected Caliph and signed a peace treaty to avoid further fighting, abdicating to Mu'awiya in return for Mu'awiya not appointing a successor.[149] Mu'awiya began the Umayyad dynasty with the appointment of his son Yazid I as successor, sparking the Second Civil War. During the Battle of Karbala, Husayn ibn Ali was killed by Yazid's forces; the event has been annually commemorated by Shias ever since. Sunnis, led by Ibn al-Zubayr and opposed to a dynastic caliphate, were defeated in the siege of Mecca. These disputes over leadership would give rise to the Sunni-Shia schism,[150] with the Shia believing leadership belongs to Muhammad's family through Ali, called the ahl al-bayt.[151] Abu Bakr's leadership oversaw the beginning of the compilation of the Quran. The Caliph Umar ibn Abd al-Aziz set up the committee, The Seven Fuqaha of Medina,[152][153] and Malik ibn Anas wrote one of the earliest books on Islamic jurisprudence, the Muwatta, as a consensus of the opinion of those jurists.[154][155][156] The Kharijites believed there was no compromised middle ground between good and evil, and any Muslim who committed a grave sin would become an unbeliever. The term "kharijites" would also be used to refer to later groups such as ISIS.[157] The Murji'ah taught that people's righteousness could be judged by God alone. Therefore, wrongdoers might be considered misguided, but not denounced as unbelievers.[158] This attitude came to prevail into mainstream Islamic beliefs.[159]
+
+The Umayyad dynasty conquered the Maghreb, the Iberian Peninsula, Narbonnese Gaul and Sindh.[160] The Umayyads struggled with a lack of legitimacy and relied on a heavily patronized military.[161] Since the jizya tax was a tax paid by non-Muslims which exempted them from military service, the Umayyads denied recognizing the conversion of non-Arabs, as it reduced revenue.[159] While the Rashidun Caliphate emphasized austerity, with Umar even requiring an inventory of each official's possessions,[162] Umayyad luxury bred dissatisfaction among the pious.[159] The Kharijites led the Berber Revolt, leading to the first Muslim states independent of the Caliphate. In the Abbasid Revolution, non-Arab converts (mawali), Arab clans pushed aside by the Umayyad clan, and some Shi'a rallied and overthrew the Umayyads, inaugurating the more cosmopolitan Abbasid dynasty in 750.[163][164]
+
+Classical era (750–1258)
+Further information: Hadith studies and Islamic philosophy
+See also: Islamic world contributions to Medieval Europe and Turco-Persian tradition
+Al-Shafi'i codified a method to determine the reliability of hadith.[165] During the early Abbasid era, scholars such as Muhammad al-Bukhari and Muslim ibn al-Hajjaj compiled the major Sunni hadith collections while scholars like Al-Kulayni and Ibn Babawayh compiled major Shia hadith collections. The four Sunni Madh'habs, the Hanafi, Hanbali, Maliki, and Shafi'i, were established around the teachings of Abū Ḥanīfa, Ahmad ibn Hanbal, Malik ibn Anas and al-Shafi'i. In contrast, the teachings of Ja'far al-Sadiq formed the Ja'fari jurisprudence. In the 9th century, Al-Tabari completed the first commentary of the Quran, the Tafsir al-Tabari, which became one of the most cited commentaries in Sunni Islam. Some Muslims began questioning the piety of indulgence in worldly life and emphasized poverty, humility, and avoidance of sin based on renunciation of bodily desires. Ascetics such as Hasan al-Basri inspired a movement that would evolve into tasawwuf or Sufism.[166][167]
+
+At this time, theological problems, notably on free will, were prominently tackled, with Hasan al Basri holding that although God knows people's actions, good and evil come from abuse of free will and the devil.[168][b] Greek rationalist philosophy influenced a speculative school of thought known as Muʿtazila, who famously advocated the notion of free-will originated by Wasil ibn Ata.[170] Caliph Mamun al Rashid made it an official creed and unsuccessfully attempted to force this position on the majority.[171] Caliph Al-Mu'tasim carried out inquisitions, with the traditionalist Ahmad ibn Hanbal notably refusing to conform to the Muʿtazila idea that the Quran was created rather than being eternal, which resulted in him being tortured and kept in an unlit prison cell for nearly thirty months.[172] However, other schools of speculative theology – Māturīdism founded by Abu Mansur al-Maturidi and Ash'ari founded by Al-Ash'ari – were more successful in being widely adopted. Philosophers such as Al-Farabi, Avicenna and Averroes sought to harmonize Aristotle's ideas with the teachings of Islam, similar to later scholasticism within Christianity in Europe and Maimonides' work within Judaism, while others like Al-Ghazali argued against such syncretism and ultimately prevailed.[173][174]
+
+
+The eye, according to Hunain ibn Ishaq from a manuscript dated c. 1200
+This era is sometimes called the "Islamic Golden Age".[175][176][177][178][146] Islamic scientific achievements spanned a wide range of subject areas including medicine, mathematics, astronomy, and agriculture as well as physics, economics, engineering and optics.[179][180][181][182] Avicenna was a pioneer in experimental medicine,[183][184] and his The Canon of Medicine was used as a standard medicinal text in the Islamic world and Europe for centuries. Rhazes was the first to identify the diseases smallpox and measles.[185] Public hospitals of the time issued the first medical diplomas to license doctors.[186][187] Ibn al-Haytham is regarded as the father of the modern scientific method and often referred to as the "world's first true scientist", in particular regarding his work in optics.[188][189][190] In engineering, the Banū Mūsā brothers' automatic flute player is considered to have been the first programmable machine.[191] In mathematics, the concept of the algorithm is named after Muhammad ibn Musa al-Khwarizmi, who is considered a founder of algebra, which is named after his book al-jabr, while others developed the concept of a function.[192] The government paid scientists the equivalent salary of professional athletes today.[193] Guinness World Records recognizes the University of Al Karaouine, founded in 859, as the world's oldest degree-granting university.[194] Many non-Muslims, such as Christians, Jews and Sabians,[195] contributed to the Islamic civilization in various fields,[196][197] and the institution known as the House of Wisdom employed Christian and Persian scholars to both translate works into Arabic and to develop new knowledge.[198][195][199]
+
+Soldiers broke away from the Abbasid empire and established their own dynasties, such as the Tulunids in 868 in Egypt[200] and the Ghaznavid dynasty in 977 in Central Asia.[201] In this fragmentation came the Shi'a Century, roughly between 945 and 1055, which saw the rise of the millennialist Isma'ili Shi'a missionary movement. One Isma'ili group, the Fatimid dynasty, took control of North Africa in the 10th century[202] and another Isma'ili group, the Qarmatians, sacked Mecca and stole the Black Stone, a rock placed within the Kaaba, in their unsuccessful rebellion.[203] Yet another Isma'ili group, the Buyid dynasty, conquered Baghdad and turned the Abbasids into a figurehead monarchy. The Sunni Seljuk dynasty campaigned to reassert Sunni Islam by promulgating the scholarly opinions of the time, notably with the construction of educational institutions known as Nezamiyeh, which are associated with Al-Ghazali and Saadi Shirazi.[204]
+
+The expansion of the Muslim world continued with religious missions converting Volga Bulgaria to Islam. The Delhi Sultanate reached deep into the Indian Subcontinent and many converted to Islam,[205] in particular low-caste Hindus whose descendants make up the vast majority of Indian Muslims.[206] Trade brought many Muslims to China, where they virtually dominated the import and export industry of the Song dynasty.[207] Muslims were recruited as a governing minority class in the Yuan dynasty.[208]
+
+Pre-modern era (1258 – 18th century)
+Further information: Safavid conversion of Iran to Shia Islam
+
+Ghazan Khan, 7th Ilkhanate ruler of the Mongol Empire, converts to Islam. 14th-century depiction
+Through Muslim trade networks and the activity of Sufi orders,[209] Islam spread into new areas[210] and Muslims assimilated into new cultures.
+
+Under the Ottoman Empire, Islam spread to Southeast Europe.[211] Conversion to Islam often involved a degree of syncretism,[212] as illustrated by Muhammad's appearance in Hindu folklore.[213] Muslim Turks incorporated elements of Turkish Shamanism beliefs to Islam.[c][215] Muslims in Ming Dynasty China who were descended from earlier immigrants were assimilated, sometimes through laws mandating assimilation,[216] by adopting Chinese names and culture while Nanjing became an important centre of Islamic study.[217][218]
+
+Cultural shifts were evident with the decrease in Arab influence after the Mongol destruction of the Abbasid Caliphate.[219] The Muslim Mongol Khanates in Iran and Central Asia benefited from increased cross-cultural access to East Asia under Mongol rule and thus flourished and developed more distinctively from Arab influence, such as the Timurid Renaissance under the Timurid dynasty.[220] Nasir al-Din al-Tusi (1201–1274) proposed the mathematical model that was later argued to be adopted by Copernicus unrevised in his heliocentric model,[221] and Jamshīd al-Kāshī's estimate of pi would not be surpassed for 180 years.[222]
+
+After the introduction of gunpowder weapons, large and centralized Muslim states consolidated around gunpowder empires, these had been previously splintered amongst various territories. The caliphate was claimed by the Ottoman dynasty of the Ottoman Empire and its claims were strengthened in 1517 as Selim I became the ruler of Mecca and Medina.[223] The Shia Safavid dynasty rose to power in 1501 and later conquered all of Iran.[224] In South Asia, Babur founded the Mughal Empire.[225]
+
+The religion of the centralized states of the gunpowder empires influenced the religious practice of their constituent populations. A symbiosis between Ottoman rulers and Sufism strongly influenced Islamic reign by the Ottomans from the beginning. The Mevlevi Order and the Bektashis had a close relation to the sultans,[226] as Sufi-mystical as well as heterodox and syncretic approaches to Islam flourished.[227] The often forceful Safavid conversion of Iran to the Twelver Shia Islam of the Safavid Empire ensured the final dominance of the Twelver sect within Shia Islam. Persian migrants to South Asia, as influential bureaucrats and landholders, helped spread Shia Islam, forming some of the largest Shia populations outside Iran.[228] Nader Shah, who overthrew the Safavids, attempted to improve relations with Sunnis by propagating the integration of Twelverism into Sunni Islam as a fifth madhhab, called Ja'farism,[229] which failed to gain recognition from the Ottomans.[230]
+
+Modern era (18th–20th centuries)
+
+Abdülmecid II, the last Caliph from the Ottoman dynasty.
+Earlier in the 14th century, Ibn Taymiyya promoted a puritanical form of Islam,[231] rejecting philosophical approaches in favour of simpler theology,[231] and called to open the gates of itjihad rather than blind imitation of scholars.[232] He called for a jihad against those he deemed heretics,[233] but his writings only played a marginal role during his lifetime.[234] During the 18th century in Arabia, Muhammad ibn 'Abd al-Wahhab, influenced by the works of Ibn Taymiyya and Ibn al-Qayyim, founded a movement called Wahhabi to return to what he saw as unadultered Islam.[235][236] He condemned many local Islamic customs, such as visiting the grave of Muhammad or saints, as later innovations and sinful[236][237] and destroyed sacred rocks and trees, Sufi shrines, the tombs of Muhammad and his companions and the tomb of Husayn at Karbala, a major Shia pilgrimage site.[237][238][239] He formed an alliance with the Saud family, which, by the 1920s, completed their conquest of the area that would become Saudi Arabia.[237][240] Ma Wanfu and Ma Debao promoted salafist movements in the 19th century such as Sailaifengye in China after returning from Mecca but were eventually persecuted and forced into hiding by Sufi groups.[241] Other groups sought to reform Sufism rather than reject it, with the Senusiyya and Muhammad Ahmad both waging war and establishing states in Libya and Sudan respectively.[242][page needed] In India, Shah Waliullah Dehlawi attempted a more conciliatory style against Sufism and influenced the Deobandi movement.[243] In response to the Deobandi movement, the Barelwi movement was founded as a mass movement, defending popular Sufism and reforming its practices.[244][245]
+
+The Muslim world was generally in political decline starting the 1800s, especially compared to non-Muslim European powers. Earlier, in the 15th century, the Reconquista succeeded in ending the Muslim presence in Iberia. By the 19th century, the British East India Company had formally annexed the Mughal dynasty in India.[246] As a response to Western Imperialism, many intellectuals sought to reform Islam.[247] Islamic modernism, initially labelled by Western scholars as Salafiyya, embraced modern values and institutions such as democracy while being scripture oriented. Notable forerunners in the movement include Muhammad 'Abduh and Jamal al-Din al-Afghani.[248] Abul A'la Maududi helped influence modern political Islam.[249][250] Similar to contemporary codification, sharia was for the first time partially codified into law in 1869 in the Ottoman Empire's Mecelle code.[251]
+
+The Ottoman Empire dissolved after World War I, the Ottoman Caliphate was abolished in 1924[252] and the subsequent Sharifian Caliphate fell quickly,[253][254][255] thus leaving Islam without a Caliph.[255] Pan-Islamists attempted to unify Muslims and competed with growing nationalist forces, such as pan-Arabism.[256][257] The Organisation of Islamic Cooperation (OIC), consisting of Muslim-majority countries, was established in 1969 after the burning of the Al-Aqsa Mosque in Jerusalem.[258]
+
+Contact with industrialized nations brought Muslim populations to new areas through economic migration. Many Muslims migrated as indentured servants (mostly from India and Indonesia) to the Caribbean, forming the largest Muslim populations by percentage in the Americas.[259] Migration from Syria and Lebanon contributed to the Muslim population in Latin America.[260] The resulting urbanization and increase in trade in sub-Saharan Africa brought Muslims to settle in new areas and spread their faith,[261] likely doubling its Muslim population between 1869 and 1914.[262]

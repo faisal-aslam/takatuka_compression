@@ -11,7 +11,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define MAX_BRUTE_FORCE 71
+#define MAX_BRUTE_FORCE 37
 
 uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
 
@@ -31,7 +31,7 @@ static inline void update_current_path(GraphNode *node, const uint8_t *block, Pa
          */
         freq = seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
 #ifdef DEBUG
-        seq_freq_map_print();
+       // seq_freq_map_print();
 #endif
     }
 
@@ -178,7 +178,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
     if (starting_level >= graph.total_levels) return;
 
     /* Step 1: Find immediate best nodes (per-level). */
-    //compute_max_saving_node_ids(block, max_saving_node_ids);
+    compute_max_saving_node_ids(block, max_saving_node_ids);
 
 
 #ifdef DEBUG
@@ -200,12 +200,12 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
 
         /* Prepare a fresh current path and a fresh sequence-frequency map for this attempt. */
         path_init_current(path_main);
-        seq_freq_set_all(1, 3, 4);
+        seq_freq_set_all(1, 3, 5);
         //init_seq_freq_map();
 
         //populate_map_with_best_savings(block); // add best serving nodes in the maps
                                                // #ifdef DEBUG
-        seq_freq_map_print();
+        //seq_freq_map_print();
         // #endif
 
 #ifdef DEBUG
@@ -263,7 +263,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
             printf("At level %u selected ", chosen_node->node_level);
             print_graph_node(chosen_node);
             print_path(1, 1, block, path_main);
-            seq_freq_map_print();
+            //seq_freq_map_print();
 #endif
 
             /* Stop if we appended the root node (assumes node_id 0 is the root). */

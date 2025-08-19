@@ -176,7 +176,7 @@ void final_book_keeping(const uint8_t *block, Path *path_state) {
 
 void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
     if (graph.total_levels < 2) return;
-    seq_freq_set_all(1, 7, 4);
+    seq_freq_set_all(1, 3, 3);
     for (uint16_t level = graph.total_levels - 1; level != 0; level--) {
         uint32_t start = graph.first_node_of_level[level];
         uint32_t end = (level + 1 < graph.total_levels) ? graph.first_node_of_level[level + 1] : graph.size;

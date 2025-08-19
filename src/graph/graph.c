@@ -82,8 +82,7 @@ void compact_graph(const uint8_t *block) {
     // Finalize graph metadata
     printf("%lu: Done with graph compaction from %u to %u nodes\n",get_elapsed_ms(), graph.size, write_idx);
     graph.size = write_idx;
-    graph.total_levels = current_level + 1;
-    seq_freq_map_print();
+    graph.total_levels = current_level + 1;    
 
 }
 
