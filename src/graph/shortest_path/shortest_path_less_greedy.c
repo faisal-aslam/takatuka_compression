@@ -180,8 +180,6 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
     /* Step 1: Find immediate best nodes (per-level). */
     compute_max_saving_node_ids(block, max_saving_node_ids);
 
-    // Step 2: Compute cumulative best savings nodes
-   // compute_best_savings_all(block, max_saving_node_ids, best_savings_node_ids);
 
 #ifdef DEBUG
     fflush(stdout);
@@ -191,17 +189,8 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
 
     /* Initialize (global) path structure. Individual runs will reinitialize PATH_CURRENT. */
     path_init(path_main);
-    /* Prepare a fresh current path and a fresh sequence-frequency map for this attempt. */
-    path_init_current(path_main);
-    init_seq_freq_map();
 
-    /* Start climbing to parents from the starting node. get_parent_level() should return
-     * a special out-of-range value (>= graph.total_levels) if there is no parent; the loop uses that.
-     */
-    /* Initialize (global) path structure. Individual runs will reinitialize PATH_CURRENT. */
-    path_init(path_main);
-
-    /* Step 3: Iterate over every node in the starting level as a possible starting point. */
+    /* Iterate over every node in the starting level as a possible starting point. */
     uint32_t start_id_of_level = get_level_start_id(starting_level);
     uint32_t end_id_of_level = get_level_end_id(starting_level);
 
