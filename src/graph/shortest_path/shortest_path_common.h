@@ -32,9 +32,9 @@ static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
     } else if (frequency > 1 && node->sequence_length > 1) {
         return 2u; // next perfer repeated sequences with freq more than 1.
     } else if (node->sequence_length == 1) {
-        return 3u; // do not use sequences of length 1 unless needed.
+        return 5u; // do not use sequences of length 1 unless needed.
     } else if (frequency == 1) {
-        return 3u * node->sequence_length; // avoid making new sequences unless they are rewarded in future.
+        return 5u * node->sequence_length; // avoid making new sequences unless they are rewarded in future.
     }
     fprintf(stderr, "illegal cost calculation\n");
     abort();
@@ -176,7 +176,7 @@ void final_book_keeping(const uint8_t *block, Path *path_state) {
 
 void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
     if (graph.total_levels < 2) return;
-    seq_freq_set_all(1, 3, 3);
+    //seq_freq_set_all(1, 3, 3);
     for (uint16_t level = graph.total_levels - 1; level != 0; level--) {
         uint32_t start = graph.first_node_of_level[level];
         uint32_t end = (level + 1 < graph.total_levels) ? graph.first_node_of_level[level + 1] : graph.size;
@@ -208,12 +208,12 @@ void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
             uint32_t freq = 1, dummy_node, index;
             if (node->sequence_length > 1 && !node->is_RLE) {
                 index = seq_freq_get_with_index(&block[node->offset], node->sequence_length, &freq, &dummy_node);
-                if (freq == 3) {
-                    continue; //seen before.
-                } else if (index != UINT32_MAX) {
-                    seq_freq_set_existing(index, 3, 1);
-                    freq = 3;
-                }
+                //if (freq == 3) {
+                  //  continue; //seen before.
+                //} else if (index != UINT32_MAX) {
+                   /// seq_freq_set_existing(index, 3, 1);
+                  //  freq = 3;
+                //}
             }           
             
             uint32_t saving = calc_savings(node, freq);
