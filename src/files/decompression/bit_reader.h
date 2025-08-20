@@ -7,6 +7,8 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <sys/types.h>
+
 
 
 /*
@@ -31,36 +33,48 @@
 
 
 typedef struct {
-const uint8_t* buffer; /* pointer to current buffer (owned_buf or external) */
-size_t buffer_size; /* number of valid bytes in buffer */
-size_t byte_pos; /* current byte index within buffer */
-uint8_t bit_pos; /* bit index within current byte [0..7] */
-bool overflow; /* set on unrecoverable errors (invalid args / EOF without file) */
+    /* Current readable window */
+    const uint8_t* buffer;   /* points to owned_buf when attached to a file; otherwise external */
+    size_t         buffer_size;  /* bytes currently valid in buffer */
+    size_t         byte_pos;     /* current byte index in buffer */
+    uint8_t        bit_pos;      /* current bit index in current byte: 0 (MSB)..7 (LSB) */
 
+    /* Error/EOF state */
+    bool           overflow;     /* sticky error: set on unrecoverable failure */
 
-FILE* file; /* optional file for streaming refill */
-uint8_t* owned_buf; /* internal buffer used when streaming from file */
-size_t buffer_cap; /* capacity of owned_buf */
+    /* Optional backing file + owned staging buffer */
+    FILE*          file;         /* non-NULL if attached to a file */
+    uint8_t*       owned_buf;    /* staging buffer we own when file-attached */
+    size_t         buffer_cap;   /* capacity of owned_buf in bytes */
 } BitReader;
 
-
-void bitreader_attach_file(BitReader* br, FILE* file, size_t buffer_cap);
-bool bitreader_fill_next_chunk(BitReader* br);
-
-
+/* Attach to an existing memory buffer (we do not take ownership) */
 void bitreader_init(BitReader* br, const uint8_t* buffer, size_t size);
+
+/* Attach to a FILE* and allocate an internal buffer of capacity buffer_cap, preloading the first chunk */
+void bitreader_attach_file(BitReader* br, FILE* file, size_t buffer_cap);
+
+/* Read num_bits (<=32) into *value; returns true on success, false on (true) EOF/error.
+   This function auto-refills from FILE* as needed and is atomic (state restored on failure). */
 bool bitreader_read(BitReader* br, uint32_t* value, uint8_t num_bits);
-uint8_t* bitreader_load_from_file(FILE* fp, size_t* out_size);
 
-
-void bitreader_print_state(const BitReader* br);
-void bitreader_reset(BitReader* br, const uint8_t* new_buffer, size_t new_size);
-
-
+/* Non-destructive lookahead inside the currently loaded buffer only (no auto-refill). */
 bool bitreader_peek(BitReader* br, uint32_t* value, uint8_t num_bits);
 
+/* Force-aligned to next byte; if at end of buffer, the next read will refill automatically. */
+void bitreader_move_byte_boundary(BitReader* br);
 
+/* Replace the in-memory buffer (no ownership taken). Resets position and clears errors. */
+void bitreader_reset(BitReader* br, const uint8_t* new_buffer, size_t new_size);
+
+/* Utility: read entire FILE into a newly malloc’d buffer. Caller owns/free(). */
+uint8_t* bitreader_load_from_file(FILE* fp, size_t* out_size);
+
+/* Manual chunk refill (mainly for specialized uses/tests). Returns true if more data was loaded. */
+bool bitreader_fill_next_chunk(BitReader* br);
+
+/* Debug helper */
+void bitreader_print_state(const BitReader* br);
+
+/* Release internal resources (owned buffer). Safe to call regardless of how the reader was initialized. */
 void bitreader_close(BitReader* br);
-
-
-void bitreader_move_byte_boundary(BitReader *br);

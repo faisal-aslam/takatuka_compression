@@ -14,7 +14,8 @@
 
 Graph graph; // Actual single definition
 
-static void compact_levels(const uint8_t* block) {    
+
+static void compact_levels_part_2(const uint8_t* block) {    
     for (uint32_t l = 0; l < graph.total_levels; l++) {
         uint32_t start_level_id = get_level_start_id(l);
         uint32_t end_level_id = get_level_end_id(l);
@@ -36,6 +37,52 @@ static void compact_levels(const uint8_t* block) {
 
 }
 
+static void compact_levels(const uint8_t* block) {
+    if (graph.total_levels < 2) return;
+
+    for (uint32_t l = 0; l + 1 < graph.total_levels; ++l) {
+        const uint32_t start_prev = get_level_start_id(l);
+        const uint32_t end_prev   = get_level_end_id(l);     // exclusive
+        const uint32_t start_next = get_level_start_id(l+1);
+        const uint32_t end_next   = get_level_end_id(l+1);   // exclusive
+
+        const uint32_t prev_size = (end_prev > start_prev) ? (end_prev - start_prev) : 0;
+        const uint32_t next_size = (end_next > start_next) ? (end_next - start_next) : 0;
+
+        // If either level is empty, there's nothing to compare for this pair.
+        if (prev_size == 0 || next_size == 0) continue;
+
+        // Walk positions on the previous level.
+        // Position 0 is always kept useful by rule, so start from pos = 1.
+        for (uint32_t pos = 1; pos < prev_size; ++pos) {
+            uint32_t next_pos = pos + 1; // compare with (i+1)-th node on the next level
+
+            // If next level doesn't have (i+1)-th node, skip.
+            if (next_pos >= next_size) continue;
+
+            GraphNode *prev_node = get_graph_node(start_prev + pos);
+            GraphNode *next_node = get_graph_node(start_next + next_pos);
+
+            // If already marked useless, no need to do work.
+            if (prev_node->useless) continue;
+
+            uint32_t prev_freq = 0, next_freq = 0, dummy = 0;
+
+            // Compute frequencies for the exact sequences these nodes represent.
+            seq_freq_get(&block[prev_node->offset], prev_node->sequence_length, &prev_freq, &dummy);
+            seq_freq_get(&block[next_node->offset], next_node->sequence_length, &next_freq, &dummy);
+
+            // If next-level (i+1) node is as or more frequent, the previous-level i-th node is useless.
+            if (next_freq >= prev_freq) {
+                prev_node->useless = 1u;
+            }
+        }
+    }
+    compact_levels_part_2(block);
+}
+
+
+
 void compact_graph(const uint8_t *block) {
     (void)block; // Mark as intentionally unused
     if (graph.size == 0) return;
@@ -43,7 +90,7 @@ void compact_graph(const uint8_t *block) {
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
     //init_seq_freq_map();
-    //compact_levels(block);
+    compact_levels(block);
     // Pre-process: mark all levels as invalid initially
     for (uint32_t l = 0; l < graph.total_levels; l++) {
         graph.first_node_of_level[l] = UINT32_MAX;

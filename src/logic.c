@@ -43,8 +43,8 @@ static inline GraphNode *create_node(uint32_t start, uint8_t length) {
 
 static inline uint8_t RLE_level(const uint8_t *block, uint32_t block_index, uint32_t block_size) {
     uint16_t current_level = get_last_level_index();
-    if (is_RLE_sequence(&rle_info.repeat_seq_length, &rle_info.length_of_RLE,
-                                                                   MIN(block_size, 255), block_index, block)) {
+    if (is_RLE_sequence(&rle_info.repeat_seq_length, &rle_info.length_of_RLE, MIN(block_size, 255), block_index,
+                        block)) {
         // wait for the right level to create node.
         // do not create any RLE nodes before reaching that level.
         // remember data of RLE node to be created later on, at the appropriate level.
@@ -62,7 +62,7 @@ static inline void set_RLE_data() {
         current_node = create_node(rle_info.RLE_offset, rle_info.length_of_RLE);
         current_node->useless = 0;
         current_node->is_RLE = 1;
-        //current_node->repeat_seq_length = rle_info.repeat_seq_length;
+        // current_node->repeat_seq_length = rle_info.repeat_seq_length;
         current_node->length_of_RLE = rle_info.length_of_RLE;
 
 #ifdef DEBUG
@@ -106,7 +106,7 @@ void process_block(const uint8_t *block, uint32_t block_size) {
         uint8_t max_sequence = MIN(current_level, MAX_WEIGHTS);
         uint32_t start;
         // special treatment of RLE nodes.
-         // special treatment of RLE nodes.
+        // special treatment of RLE nodes.
         uint8_t created_rle_node = RLE_level(block, block_index, block_size);
         if (created_rle_node) {
             while (current_level != rle_info.next_RLE_level) {
@@ -148,5 +148,8 @@ void process_block(const uint8_t *block, uint32_t block_size) {
     }
     printf("\n%lu: Done creating %u nodes\n", get_elapsed_ms(), graph.size);
     compact_graph(block);
+#ifdef DEBUG
+    visualize_graph(block);
+#endif
     compute_best_path_and_write_in_file(block);
 }
