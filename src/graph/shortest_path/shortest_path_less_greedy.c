@@ -11,7 +11,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define MAX_BRUTE_FORCE 51
+#define MAX_BRUTE_FORCE 31
 
 uint32_t max_saving_node_ids[MAX_LEVELS]; // Best immediate-savings node per level
 
@@ -200,7 +200,7 @@ void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *
 
         /* Prepare a fresh current path and a fresh sequence-frequency map for this attempt. */
         path_init_current(path_main);
-        seq_freq_set_all(2, 5, 7);
+        seq_freq_set_all(2, 7, 3);
         //init_seq_freq_map();
 
         //populate_map_with_best_savings(block); // add best serving nodes in the maps

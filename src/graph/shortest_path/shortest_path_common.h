@@ -34,7 +34,7 @@ static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
     } else if (node->sequence_length == 1) {
         return 5u; // do not use sequences of length 1 unless needed.
     } else if (frequency == 1) {
-        return 5u * node->sequence_length; // avoid making new sequences unless they are rewarded in future.
+        return 10u; // avoid making new sequences unless they are rewarded in future.
     }
     fprintf(stderr, "illegal cost calculation\n");
     abort();
