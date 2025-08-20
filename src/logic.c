@@ -131,11 +131,14 @@ void process_block(const uint8_t *block, uint32_t block_size) {
                 current_node->useless = 1; // by default the node is useless.
                 uint32_t index = seq_freq_get_with_index(&block[current_node->offset], seq_len, &freq, &old_node_id);
                 if (index != UINT32_MAX) {                             // found, same sequence already in the map.
-                    GraphNode *old_node = get_graph_node(old_node_id); // get the old node.
+                    GraphNode *old_node = get_graph_node(old_node_id); // get the old node.                    
                     // as exist multiple times in the graph so mark the old and new node both useful now.
-                    seq_freq_increment_with_index(index, current_node->node_id);
                     current_node->useless = 0;
                     old_node->useless = 0;
+                    //However, increment its frequency only when it is not self overlapping.
+                    if (old_node->node_level <= get_parent_level(current_node)) {
+                        seq_freq_increment_with_index(index, current_node->node_id);
+                    }
                 } else {
                     seq_freq_increment(&block[current_node->offset], seq_len,
                                        current_node->node_id); // if not in the map then add it.

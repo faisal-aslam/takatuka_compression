@@ -14,37 +14,49 @@
 
 Graph graph; // Actual single definition
 
+void rebuild_seq_freq_map(const uint8_t *block) {
+    init_seq_freq_map(); // start fresh
 
-static void compact_levels_part_2(const uint8_t* block) {    
-    for (uint32_t l = 0; l < graph.total_levels; l++) {
+    for (uint32_t i = 0; i < graph.size; i++) {
+        GraphNode *node = &graph.nodes[i];
+        if (node->useless) continue; // skip useless nodes
+        if (node->sequence_length <= 1) continue; // skip trivial sequences
+        if (node->is_RLE) continue; // skip RLE nodes if not wanted
+
+        seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
+    }
+}
+
+
+static void compact_levels_part_2(const uint8_t *block) {
+    for (uint32_t l = 1; l < graph.total_levels; l++) {
         uint32_t start_level_id = get_level_start_id(l);
         uint32_t end_level_id = get_level_end_id(l);
         uint32_t prevFreq;
-        for (uint32_t id=start_level_id+1; id < end_level_id; id++) {
+        for (uint32_t id = start_level_id; id < end_level_id; id++) {
             GraphNode *node = get_graph_node(id);
-            if (node->useless) continue;
+            if (node->useless || node->is_RLE) continue; 
             uint32_t freq, dummy_node_id;
             seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_node_id);
-            if (id != start_level_id+1 && prevFreq <= freq) {                            
-                //make previous node useless.
-                //we have found a larger combination with same or more freq.
-                GraphNode *pre_node = get_graph_node(id-1);
-                pre_node->useless = 1;
+            if (id != start_level_id + 1 && prevFreq <= freq) {
+                // make previous node useless.
+                // we have found a larger combination with same or more freq.
+                GraphNode *pre_node = get_graph_node(id - 1);
+                if(!pre_node->is_RLE) pre_node->useless = 1;
             }
             prevFreq = freq;
         }
     }
-
 }
 
-static void compact_levels(const uint8_t* block) {
+static void compact_levels(const uint8_t *block) {
     if (graph.total_levels < 2) return;
 
-    for (uint32_t l = 0; l + 1 < graph.total_levels; ++l) {
+    for (uint32_t l = 1; l + 1 < graph.total_levels; ++l) {
         const uint32_t start_prev = get_level_start_id(l);
-        const uint32_t end_prev   = get_level_end_id(l);     // exclusive
-        const uint32_t start_next = get_level_start_id(l+1);
-        const uint32_t end_next   = get_level_end_id(l+1);   // exclusive
+        const uint32_t end_prev = get_level_end_id(l); // exclusive
+        const uint32_t start_next = get_level_start_id(l + 1);
+        const uint32_t end_next = get_level_end_id(l + 1); // exclusive
 
         const uint32_t prev_size = (end_prev > start_prev) ? (end_prev - start_prev) : 0;
         const uint32_t next_size = (end_next > start_next) ? (end_next - start_next) : 0;
@@ -79,18 +91,18 @@ static void compact_levels(const uint8_t* block) {
         }
     }
     compact_levels_part_2(block);
+    
 }
-
-
 
 void compact_graph(const uint8_t *block) {
     (void)block; // Mark as intentionally unused
     if (graph.size == 0) return;
 
     uint32_t write_idx = 0;
-    uint32_t current_level = 0;
-    //init_seq_freq_map();
+    uint32_t current_level = 0;    
     compact_levels(block);
+    
+    
     // Pre-process: mark all levels as invalid initially
     for (uint32_t l = 0; l < graph.total_levels; l++) {
         graph.first_node_of_level[l] = UINT32_MAX;
@@ -103,10 +115,15 @@ void compact_graph(const uint8_t *block) {
     // Main compaction loop
     for (uint32_t read_idx = 1; read_idx < graph.size; read_idx++) {
         GraphNode *node = &graph.nodes[read_idx];
-        
-        // Fast path: skip useless nodes immediately
-        if (node->useless) continue;
-
+        uint32_t freq = 0, dummy_node_id;
+        if (node->node_id != 0) { //never skip root node.
+            // Fast path: skip useless nodes immediately
+            if (node->useless) continue;
+            if (node->sequence_length > 1 && !node->is_RLE) {
+                seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_node_id);
+                if (freq <= 1) continue; // also the useless node.
+            }
+        }
         // Handle level transitions
         if (node->node_level > current_level) {
             // Update all empty levels between current and node's level
@@ -119,18 +136,16 @@ void compact_graph(const uint8_t *block) {
         // Copy node (use memmove if overlapping is possible)
         graph.nodes[write_idx] = *node;
         GraphNode *new_node = &graph.nodes[write_idx];
-        //seq_freq_increment(&block[new_node->offset], new_node->sequence_length, 1);
         new_node->node_id = write_idx;
-
 
         write_idx++;
     }
 
     // Finalize graph metadata
-    printf("%lu: Done with graph compaction from %u to %u nodes\n",get_elapsed_ms(), graph.size, write_idx);
+    printf("%lu: Done with graph compaction from %u to %u nodes\n", get_elapsed_ms(), graph.size, write_idx);
     graph.size = write_idx;
-    graph.total_levels = current_level + 1;    
-
+    graph.total_levels = current_level + 1;
+    rebuild_seq_freq_map(block);
 }
 
 void init_graph(void) {
@@ -182,8 +197,8 @@ uint8_t is_RLE_sequence(uint8_t *repeat_seq_length, uint8_t *length_of_RLE, uint
 
         return 1;
     }
-    if (1) return 0; //not supporting multiple byte pattern.
-    
+    if (1) return 0; // not supporting multiple byte pattern.
+
     // ===== Stage 2: Pattern-Based RLE Check (for whole sequence or prefix) =====
     if (block_size < 16) {
         return 0;
