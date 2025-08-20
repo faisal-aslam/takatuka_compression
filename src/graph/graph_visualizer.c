@@ -39,9 +39,9 @@ static void print_node(FILE *output, const GraphNode *node, const uint8_t *block
     uint32_t freq, node_id;
     seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
     if (!node->is_RLE) {
-        fprintf(output, "\n l=%u, f=%u, m_n=%u", node->node_level, freq, max_saving_node_ids[node->node_level]);
+        fprintf(output, "\n l=%u, f=%u", node->node_level, freq);
     } else {
-        fprintf(output, "\n l=%u, f=%u, m_n=%u \nRLE", node->node_level, freq, max_saving_node_ids[node->node_level]);
+        fprintf(output, "\n l=%u, f=%u, \nRLE", node->node_level, freq);
     }
     fprintf(output, "\", shape=box, style=filled, fillcolor=\"%s\", fontcolor=\"%s\"];\n", fillcolor, fontcolor);
 }

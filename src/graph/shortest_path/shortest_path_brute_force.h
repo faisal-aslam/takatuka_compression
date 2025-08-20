@@ -82,7 +82,6 @@ static inline void process_node(const uint8_t *block, GraphNode *node, Path *pat
 static void bookkeeping_best_path(const uint8_t *block, Path *path_state) {
 
     GraphNode *node;
-    
 
     for (int32_t i = 0; i <= path_state->path_size[PATH_BEST]; i++) {
         uint32_t node_id = path_state->path_stack[PATH_BEST][i];
@@ -173,11 +172,14 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
     path_init(path_state); // Reset path state
     GraphNode *dest_node = get_graph_node(destination_id);
     if (dest_node->node_level > starting_level) return;
-    uint32_t max_nodes = (starting_level - dest_node->node_level) * SEQ_LENGTH_LIMIT * 2 + 1;
+    uint32_t max_nodes = (starting_level - dest_node->node_level) * SEQ_LENGTH_LIMIT * 2;
     max_nodes = next_power_of_two(max_nodes);
 
-    StackItem main_stack[max_nodes];
-
+    StackItem *main_stack = malloc(sizeof(StackItem) * max_nodes);
+    if (!main_stack) {
+        fprintf(stderr, "Error: failed to allocate memory for main_stack\n");
+        exit(1); // or handle gracefully
+    }
     initialize_leaf_nodes(main_stack, &top, starting_level);
     if (top < 0) {
         printf("empty level\n");
@@ -239,6 +241,8 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
     print_path(0, 1, block, path_state);
 #endif
     bookkeeping_best_path(block, path_state);
+
+    free(main_stack);
 
     // free_path_state();
 }
