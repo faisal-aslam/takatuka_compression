@@ -76,7 +76,7 @@ static void compact_levels(const uint8_t *block) {
             GraphNode *next_node = get_graph_node(start_next + next_pos);
 
             // If already marked useless, no need to do work.
-            if (prev_node->useless) continue;
+            if (prev_node->useless || next_node->useless) continue;
 
             uint32_t prev_freq = 0, next_freq = 0, dummy = 0;
 
@@ -85,7 +85,7 @@ static void compact_levels(const uint8_t *block) {
             seq_freq_get(&block[next_node->offset], next_node->sequence_length, &next_freq, &dummy);
 
             // If next-level (i+1) node is as or more frequent, the previous-level i-th node is useless.
-            if (next_freq >= prev_freq) {
+            if (next_freq >= prev_freq && prev_node->sequence_length+1 == next_node->sequence_length) {
                 prev_node->useless = 1u;
             }
         }
@@ -100,7 +100,7 @@ void compact_graph(const uint8_t *block) {
 
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
-    //compact_levels(block);
+    compact_levels(block);
 
     get_graph_node(0)->useless = 0; //make sure that root node is always useful.
     
