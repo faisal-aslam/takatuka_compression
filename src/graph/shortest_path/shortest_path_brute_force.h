@@ -171,11 +171,14 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
 
     path_init(path_state); // Reset path state
     GraphNode *dest_node = get_graph_node(destination_id);
-    if (dest_node->node_level > starting_level) return;
+    if (dest_node->node_level > starting_level) {
+        printf("destination node %u is not reachable from the given level %u\n", dest_node->node_id, starting_level);
+        return;
+    }
     uint32_t max_nodes = (starting_level - dest_node->node_level) * SEQ_LENGTH_LIMIT * 2;
     max_nodes = next_power_of_two(max_nodes);
 
-    StackItem *main_stack = malloc(sizeof(StackItem) * max_nodes);
+    StackItem *main_stack = malloc(sizeof(StackItem) * max_nodes);    
     if (!main_stack) {
         fprintf(stderr, "Error: failed to allocate memory for main_stack\n");
         exit(1); // or handle gracefully

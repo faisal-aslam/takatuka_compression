@@ -35,7 +35,7 @@ static void compact_levels_part_2(const uint8_t *block) {
         uint32_t prevFreq;
         for (uint32_t id = start_level_id; id < end_level_id; id++) {
             GraphNode *node = get_graph_node(id);
-            if (node->useless || node->is_RLE) continue; 
+            if (node->useless || node->is_RLE || node->sequence_length <= 1)  continue; 
             uint32_t freq, dummy_node_id;
             seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_node_id);
             if (id != start_level_id + 1 && prevFreq <= freq) {
@@ -99,9 +99,10 @@ void compact_graph(const uint8_t *block) {
     if (graph.size == 0) return;
 
     uint32_t write_idx = 0;
-    uint32_t current_level = 0;    
+    uint32_t current_level = 0;
     compact_levels(block);
     
+    get_graph_node(0)->useless = 0; //make sure that root node is always useful.
     
     // Pre-process: mark all levels as invalid initially
     for (uint32_t l = 0; l < graph.total_levels; l++) {

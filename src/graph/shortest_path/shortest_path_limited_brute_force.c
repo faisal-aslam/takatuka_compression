@@ -46,6 +46,13 @@ static inline void correct_the_reverse_path(Path *final_reverse_path) {
     }
 }
 
+uint8_t is_level_empty(uint16_t level) {
+    if (get_level_start_id(level) == get_level_end_id(level) ||
+        get_level_start_id(level) + 1 == get_level_end_id(level))
+        return 1;
+    else
+        return 0;
+}
 /*
 We start from the root. Then we find shortest path from root's level (0) plus max_brute_force_levels.
 Then we continue going down the root.
@@ -59,11 +66,11 @@ void find_limited_bute_force_path(const uint8_t *block, uint32_t max_brute_force
 
     // Seed for finding path. If we choose less frequent sequences then path with only one encounter of such sequences
     // will grow resulting in bad path cost. Thus, must choose frequent sequences.
-    // keep only sequences that appear greater than 5 times and larger than 5 bytes of length.
-    seq_freq_filter_freqs_and_length(2, 3, 5); 
+    // keep only sequences that appear greater than 3 times and larger than 3 bytes of length.
+    seq_freq_filter_freqs_and_length(2, 3, 3);
 
     path_init(path_state); // must initialize the path before populating it correctly.
-
+    visualize_graph(block);
 #ifdef DEBUG
     seq_freq_map_print(); // to verify the map contents.
 #endif
@@ -72,6 +79,11 @@ void find_limited_bute_force_path(const uint8_t *block, uint32_t max_brute_force
     while (1) {
         Path intermediate_path;
 
+        //check if the level is empty then try again.
+        if (is_level_empty(level) && get_last_level_index() > level) {
+            level ++;
+            continue; //try again.
+        }
         // the following finds path burte-forcely.
         find_best_saving_path_to_a_node(block, level, dest_node_id, &intermediate_path);
 
@@ -79,11 +91,10 @@ void find_limited_bute_force_path(const uint8_t *block, uint32_t max_brute_force
         print_path(0, 1, block, &intermediate_path); // to verify the intermediate path.
         seq_freq_map_print();                        // check if the map is correct.
 #endif
-        if(intermediate_path.path_size[PATH_BEST] < 0) {
-            fprintf(stderr, "Unable to find a valid path. Aborting...\n");
+        if (intermediate_path.path_size[PATH_BEST] < 0) {
+            fprintf(stderr, "Unable to find a valid path. Level=%u, destination_node=%u\n", level, dest_node_id);
             abort();
         }
-
         // after computing the path append with the previously generated path.
         append_path_in_reverse(path_state, &intermediate_path);
 
@@ -104,5 +115,5 @@ void find_limited_bute_force_path(const uint8_t *block, uint32_t max_brute_force
 void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *path_state) {
     (void)starting_level; // not used but kept for consistency.
 
-    find_limited_bute_force_path(block, 19, path_state);
+    find_limited_bute_force_path(block, 51, path_state);
 }
