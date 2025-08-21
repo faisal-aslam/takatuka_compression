@@ -29,23 +29,45 @@ void rebuild_seq_freq_map(const uint8_t *block) {
 
 static void compact_levels_part_2(const uint8_t *block) {
     for (uint32_t l = 1; l < graph.total_levels; l++) {
-        uint32_t start_level_id = get_level_start_id(l);
-        uint32_t end_level_id = get_level_end_id(l);
-        uint32_t prevFreq;
+        const uint32_t start_level_id = get_level_start_id(l);
+        const uint32_t end_level_id   = get_level_end_id(l);
+
+        uint32_t prev_id = 0;         // previous valid node id in this level
+        uint32_t prevFreq = 0;        // previous valid node frequency
+        int have_prev = 0;            // do we have a previous valid node?
+
         for (uint32_t id = start_level_id; id < end_level_id; id++) {
             GraphNode *node = get_graph_node(id);
-            if (node->useless || node->is_RLE || node->sequence_length <= 1) continue;
-            uint32_t freq, dummy_node_id;
+
+            // Skip nodes that we don't want to consider
+            if (node->useless || node->is_RLE || node->sequence_length <= 1) {
+                // Break the chain: next valid node should not compare with this skipped one
+                have_prev = 0;
+                continue;
+            }
+
+            // Compute current node frequency
+            uint32_t freq = 0, dummy_node_id = 0;
             seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_node_id);
-            if (id != start_level_id + 1 && prevFreq <= freq) {
-                // make previous node useless.
-                // we have found a larger combination with same or more freq.
-                GraphNode *pre_node = get_graph_node(id - 1);
-                if (!pre_node->is_RLE && pre_node->sequence_length+1 == node->sequence_length) {
+
+            if (have_prev) {
+                GraphNode *pre_node = get_graph_node(prev_id);
+
+                // If the previous valid node is the (length-1) variant and not RLE,
+                // and we found same or higher frequency for the longer sequence,
+                // mark the previous one as useless.
+                if (!pre_node->is_RLE &&
+                    pre_node->sequence_length + 1 == node->sequence_length &&
+                    prevFreq <= freq)
+                {
                     pre_node->useless = 1;
                 }
             }
+
+            // Update "previous valid" tracking to this node
+            prev_id = id;
             prevFreq = freq;
+            have_prev = 1;
         }
     }
 }
