@@ -90,7 +90,7 @@ static void compact_levels(const uint8_t *block) {
             }
         }
     }
-    compact_levels_part_2(block);
+    //compact_levels_part_2(block);
     
 }
 
@@ -100,8 +100,8 @@ void compact_graph(const uint8_t *block) {
 
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
-    compact_levels(block);
-    
+    //compact_levels(block);
+
     get_graph_node(0)->useless = 0; //make sure that root node is always useful.
     
     // Pre-process: mark all levels as invalid initially
