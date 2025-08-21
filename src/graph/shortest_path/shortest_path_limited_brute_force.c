@@ -79,6 +79,10 @@ void find_limited_bute_force_path(const uint8_t *block, uint32_t max_brute_force
         print_path(0, 1, block, &intermediate_path); // to verify the intermediate path.
         seq_freq_map_print();                        // check if the map is correct.
 #endif
+        if(intermediate_path.path_size[PATH_BEST] < 0) {
+            fprintf(stderr, "Unable to find a valid path. Aborting...\n");
+            abort();
+        }
 
         // after computing the path append with the previously generated path.
         append_path_in_reverse(path_state, &intermediate_path);
