@@ -19,14 +19,13 @@ void rebuild_seq_freq_map(const uint8_t *block) {
 
     for (uint32_t i = 0; i < graph.size; i++) {
         GraphNode *node = &graph.nodes[i];
-        if (node->useless) continue; // skip useless nodes
+        if (node->useless) continue;              // skip useless nodes
         if (node->sequence_length <= 1) continue; // skip trivial sequences
-        if (node->is_RLE) continue; // skip RLE nodes if not wanted
+        if (node->is_RLE) continue;               // skip RLE nodes if not wanted
 
         seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
     }
 }
-
 
 static void compact_levels_part_2(const uint8_t *block) {
     for (uint32_t l = 1; l < graph.total_levels; l++) {
@@ -35,14 +34,16 @@ static void compact_levels_part_2(const uint8_t *block) {
         uint32_t prevFreq;
         for (uint32_t id = start_level_id; id < end_level_id; id++) {
             GraphNode *node = get_graph_node(id);
-            if (node->useless || node->is_RLE || node->sequence_length <= 1)  continue; 
+            if (node->useless || node->is_RLE || node->sequence_length <= 1) continue;
             uint32_t freq, dummy_node_id;
             seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_node_id);
             if (id != start_level_id + 1 && prevFreq <= freq) {
                 // make previous node useless.
                 // we have found a larger combination with same or more freq.
                 GraphNode *pre_node = get_graph_node(id - 1);
-                if(!pre_node->is_RLE) pre_node->useless = 1;
+                if (!pre_node->is_RLE && pre_node->sequence_length+1 == node->sequence_length) {
+                    pre_node->useless = 1;
+                }
             }
             prevFreq = freq;
         }
@@ -76,7 +77,10 @@ static void compact_levels(const uint8_t *block) {
             GraphNode *next_node = get_graph_node(start_next + next_pos);
 
             // If already marked useless, no need to do work.
-            if (prev_node->useless || next_node->useless) continue;
+            if (prev_node->useless || next_node->useless ||
+                prev_node->sequence_length + 1 != next_node->sequence_length) {
+                continue;
+            }
 
             uint32_t prev_freq = 0, next_freq = 0, dummy = 0;
 
@@ -85,13 +89,12 @@ static void compact_levels(const uint8_t *block) {
             seq_freq_get(&block[next_node->offset], next_node->sequence_length, &next_freq, &dummy);
 
             // If next-level (i+1) node is as or more frequent, the previous-level i-th node is useless.
-            if (next_freq >= prev_freq && prev_node->sequence_length+1 == next_node->sequence_length) {
+            if (next_freq >= prev_freq) {
                 prev_node->useless = 1u;
             }
         }
     }
-    //compact_levels_part_2(block);
-    
+    compact_levels_part_2(block);
 }
 
 void compact_graph(const uint8_t *block) {
@@ -102,8 +105,8 @@ void compact_graph(const uint8_t *block) {
     uint32_t current_level = 0;
     compact_levels(block);
 
-    get_graph_node(0)->useless = 0; //make sure that root node is always useful.
-    
+    get_graph_node(0)->useless = 0; // make sure that root node is always useful.
+
     // Pre-process: mark all levels as invalid initially
     for (uint32_t l = 0; l < graph.total_levels; l++) {
         graph.first_node_of_level[l] = UINT32_MAX;
@@ -117,7 +120,7 @@ void compact_graph(const uint8_t *block) {
     for (uint32_t read_idx = 1; read_idx < graph.size; read_idx++) {
         GraphNode *node = &graph.nodes[read_idx];
         uint32_t freq = 0, dummy_node_id;
-        if (node->node_id != 0) { //never skip root node.
+        if (node->node_id != 0) { // never skip root node.
             // Fast path: skip useless nodes immediately
             if (node->useless) continue;
             if (node->sequence_length > 1 && !node->is_RLE) {
