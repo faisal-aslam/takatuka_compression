@@ -14,7 +14,7 @@
 static inline void append_path_in_reverse(Path *dst, const Path *src) {
     int src_size = src->path_size[PATH_BEST];
     if (src_size < 0) return;
-    if (src_size > 1) src_size --; //remove the boundary one
+
     for (int i = src_size; i >= 0; i--) {
         int dst_idx = ++dst->path_size[PATH_BEST];
         dst->path_stack[PATH_BEST][dst_idx] = src->path_stack[PATH_BEST][i];
@@ -63,13 +63,13 @@ void find_limited_bute_force_path(const uint8_t *block, uint32_t max_brute_force
 
     uint32_t dest_node_id = 0; // at the start our destination (sink) is root but it will change later as we proceed.
 
-    uint16_t level = MIN(graph.total_levels, max_brute_force_levels); // level to end at (source level).
+    uint16_t level = MIN(get_last_level_index(), max_brute_force_levels); // level to end at (source level).
 
     visualize_graph(block);
     // Seed for finding path. If we choose less frequent sequences then path with only one encounter of such sequences
     // will grow resulting in bad path cost. Thus, must choose frequent sequences.
     // keep only sequences that appear greater than 4 times.
-    seq_freq_filter_freqs_and_length(2, 10, 4);
+    seq_freq_filter_freqs_and_length(2, 10, 7);
     //init_seq_freq_map();
 
     path_init(path_state); // must initialize the path before populating it correctly.
@@ -119,5 +119,5 @@ void find_limited_bute_force_path(const uint8_t *block, uint32_t max_brute_force
 void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *path_state) {
     (void)starting_level; // not used but kept for consistency.
 
-    find_limited_bute_force_path(block, 200, path_state);
+    find_limited_bute_force_path(block, 100, path_state);
 }
