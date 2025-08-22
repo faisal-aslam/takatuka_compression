@@ -13,7 +13,7 @@ int prune_count = 0;
 static inline void append_path_in_reverse(Path *dst, const Path *src) {
     int src_size = src->path_size[PATH_BEST];
     if (src_size < 0) return;
-
+    if (src_size > 1) src_size --; //remove the boundary one
     for (int i = src_size; i >= 0; i--) {
         int dst_idx = ++dst->path_size[PATH_BEST];
         dst->path_stack[PATH_BEST][dst_idx] = src->path_stack[PATH_BEST][i];
@@ -117,5 +117,5 @@ void find_limited_bute_force_path(const uint8_t *block, uint32_t max_brute_force
 void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *path_state) {
     (void)starting_level; // not used but kept for consistency.
 
-    find_limited_bute_force_path(block, 51, path_state);
+    find_limited_bute_force_path(block, 71, path_state);
 }
