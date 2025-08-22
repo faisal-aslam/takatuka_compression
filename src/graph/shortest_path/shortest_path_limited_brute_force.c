@@ -1,10 +1,11 @@
 // shortest_path.c
 
 #include "shortest_path_brute_force.h"
+#include "timer.h"
 #include <math.h>
 #include <stdbool.h>
 
-int prune_count = 0;
+
 
 /**
  * Append PATH_BEST of src into PATH_BEST of dst.
@@ -68,7 +69,7 @@ void find_limited_bute_force_path(const uint8_t *block, uint32_t max_brute_force
     // Seed for finding path. If we choose less frequent sequences then path with only one encounter of such sequences
     // will grow resulting in bad path cost. Thus, must choose frequent sequences.
     // keep only sequences that appear greater than 4 times.
-    seq_freq_filter_freqs_and_length(2, 5, 3);
+    seq_freq_filter_freqs_and_length(2, 10, 4);
     //init_seq_freq_map();
 
     path_init(path_state); // must initialize the path before populating it correctly.
@@ -99,6 +100,7 @@ void find_limited_bute_force_path(const uint8_t *block, uint32_t max_brute_force
         }
         // after computing the path append with the previously generated path.
         append_path_in_reverse(path_state, &intermediate_path);
+        printf ("%lu: Done till level %u\n",get_elapsed_ms(),  level);
 
 #ifdef DEBUG
         print_path(0, 1, block, path_state); // check if append was successful.
@@ -117,5 +119,5 @@ void find_limited_bute_force_path(const uint8_t *block, uint32_t max_brute_force
 void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *path_state) {
     (void)starting_level; // not used but kept for consistency.
 
-    find_limited_bute_force_path(block, 71, path_state);
+    find_limited_bute_force_path(block, 200, path_state);
 }

@@ -10,6 +10,7 @@ typedef struct {
     uint32_t hash_index_cache;
 } StackItem;
 
+static uint64_t push_count;
 /**
  * Handles backtracking by removing the node from current path,
  * decreasing its frequency if needed, and updating savings.
@@ -46,7 +47,7 @@ static inline void backtrack_node(const uint8_t *block, Path *path_state) {
  * and calculating its saving contribution.
  */
 static inline void process_node(const uint8_t *block, GraphNode *node, Path *path_state) {
-
+    push_count++;
     int32_t index = ++path_state->path_size[PATH_CURRENT];
 #ifdef DEBUG
     printf("Add in path node %u, stack_size=%u, seq=", node->node_id, index);
@@ -168,7 +169,8 @@ static inline uint32_t next_power_of_two(uint32_t x) {
 void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_level, uint32_t destination_id,
                                      Path *path_state) {
     int top = -1;
-
+    best_count = 0;
+    push_count = 0;
     path_init(path_state); // Reset path state
     GraphNode *dest_node = get_graph_node(destination_id);
     if (dest_node->node_level > starting_level) {
@@ -177,8 +179,8 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
     }
     uint32_t max_nodes = (starting_level - dest_node->node_level) * SEQ_LENGTH_LIMIT * 2;
     max_nodes = next_power_of_two(max_nodes);
-
-    StackItem *main_stack = malloc(sizeof(StackItem) * max_nodes);    
+    uint64_t max_push = 1000 * max_nodes;
+    StackItem *main_stack = malloc(sizeof(StackItem) * max_nodes);
     if (!main_stack) {
         fprintf(stderr, "Error: failed to allocate memory for main_stack\n");
         exit(1); // or handle gracefully
@@ -189,6 +191,11 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
         return; // no path exist.
     }
     while (top >= 0) {
+        if ((best_count > 7 && push_count > max_push)|| best_count > 1 && push_count > max_nodes*10000) {
+            printf("Max push=%lu, push_count=%lu, best_count=%u\n", max_push, push_count, best_count);
+            break; // we are done trying.
+        }
+        
         StackItem current = main_stack[top--];
 #ifdef DEBUG
         printf("pop stack node_id=%u, from top=%d, node_id_popped=%u\n", current.node_id, top + 1,
@@ -208,7 +215,6 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
         if (should_prune(node, dest_node, path_state)) {
             continue;
         }
-
         process_node(block, node, path_state);
 
         // Push backtrack marker
@@ -224,7 +230,7 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
             print_path(1, 1, block, path_state);
 #endif
             if (update_best_path(block, path_state)) {
-
+                push_count = 0;
 #ifdef DEBUG
                 printf("Saved the path %d with saving: %u\n", best_count, path_state->path_total_saving[PATH_CURRENT]);
                 print_path(0, 1, block, path_state);

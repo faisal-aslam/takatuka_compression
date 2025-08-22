@@ -11,9 +11,9 @@
         abort();                                                                                                       \
     }
 
-#ifdef DEBUG
+
 static uint32_t best_count = 0;
-#endif
+
 
 /**
  * @brief Calculates the storage cost in bytes for adding a graph node to a path
@@ -32,9 +32,9 @@ static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
     } else if (frequency > 1 && node->sequence_length > 1) {
         return 2u; // next perfer repeated sequences with freq more than 1.
     } else if (node->sequence_length == 1) {
-        return 4u; // do not use sequences of length 1 unless needed.
+        return 5u; // do not use sequences of length 1 unless needed.
     } else if (frequency == 1 && node->sequence_length > 1) {
-        return node->sequence_length*4u; // avoid making new sequences unless they are rewarded in future.
+        return node->sequence_length*5u; // avoid making new sequences unless they are rewarded in future.
     }
     fprintf(stderr, "illegal cost calculation\n");
     abort();
@@ -174,74 +174,6 @@ void final_book_keeping(const uint8_t *block, Path *path_state) {
     }
 }
 
-void compute_max_saving_node_ids(const uint8_t *block, uint32_t *max_ids) {
-    if (graph.total_levels < 2) return;
-    //seq_freq_set_all(1, 3, 3);
-    for (uint16_t level = graph.total_levels - 1; level != 0; level--) {
-        uint32_t start = graph.first_node_of_level[level];
-        uint32_t end = (level + 1 < graph.total_levels) ? graph.first_node_of_level[level + 1] : graph.size;
-
-        if (start == UINT32_MAX || start >= end) {
-            max_ids[level] = UINT32_MAX; // No nodes in this level
-#ifdef DEBUG
-            printf("[Level %u] Empty or invalid range (start=%u, end=%u), skipping.\n", level, start, end);
-#endif
-            continue;
-        }
-
-        uint32_t max_saving = 0;
-        uint32_t best_node_id = UINT32_MAX;
-
-#ifdef DEBUG
-        printf("\n[Level %u] start=%u, end=%u\n", level, start, end);
-#endif
-
-        for (uint32_t i = start; i < end; i++) {
-            GraphNode *node = &graph.nodes[i];
-            if (node->useless) {
-#ifdef DEBUG
-                printf("  Node %u: useless, skipping\n", node->node_id);
-#endif
-                continue;
-            }
-
-            uint32_t freq = 1, dummy_node, index;
-            if (node->sequence_length > 1 && !node->is_RLE) {
-                index = seq_freq_get_with_index(&block[node->offset], node->sequence_length, &freq, &dummy_node);
-                //if (freq == 3) {
-                  //  continue; //seen before.
-                //} else if (index != UINT32_MAX) {
-                   /// seq_freq_set_existing(index, 3, 1);
-                  //  freq = 3;
-                //}
-            }           
-            
-            uint32_t saving = calc_savings(node, freq);
-
-#ifdef DEBUG
-            printf("  Node %u: seq_len = %u, lsis_RLE = %u, freq = %u, saving = %u\n", node->node_id,
-                   node->sequence_length, node->is_RLE, freq, saving);
-#endif
-
-            if (saving > max_saving || best_node_id == UINT32_MAX) {
-                max_saving = saving;
-                best_node_id = node->node_id;
-#ifdef DEBUG
-                printf("    --> New best node: %u with saving %u\n", best_node_id, saving);
-#endif
-            }
-        }
-
-        max_ids[level] = best_node_id;
-#ifdef DEBUG
-        if (best_node_id == UINT32_MAX) {
-
-            printf("[Level %u] No valid best node found.\n", level);
-        }
-#endif
-    }
-}
-
 /**
  * @brief Roll back all sequence frequency increments for the given path.
  *
@@ -305,8 +237,8 @@ static inline uint8_t update_best_path(const uint8_t *block, Path *path_state) {
         memcpy(path_state->path_freqs[PATH_BEST], path_state->path_freqs[PATH_CURRENT], size * sizeof(uint32_t));
 
         ret = 1;
-#ifdef DEBUG
         best_count++;
+#ifdef DEBUG        
         printf("[update_best_path] Best path updated %llu times\n", (unsigned long long)best_count);
 #endif
     }
