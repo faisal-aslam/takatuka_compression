@@ -69,7 +69,7 @@ void find_limited_bute_force_path(const uint8_t *block, uint32_t max_brute_force
     // Seed for finding path. If we choose less frequent sequences then path with only one encounter of such sequences
     // will grow resulting in bad path cost. Thus, must choose frequent sequences.
     // keep only sequences that appear greater than 4 times.
-    seq_freq_filter_freqs_and_length(2, 10, 7);
+    seq_freq_filter_freqs_and_length(2, 10, 2);
     //init_seq_freq_map();
 
     path_init(path_state); // must initialize the path before populating it correctly.
@@ -100,7 +100,7 @@ void find_limited_bute_force_path(const uint8_t *block, uint32_t max_brute_force
         }
         // after computing the path append with the previously generated path.
         append_path_in_reverse(path_state, &intermediate_path);
-        printf ("%lu: Done till level %u\n",get_elapsed_ms(),  level);
+        printf ("%lu: Done till level %u, best_count=%u\n",get_elapsed_ms(),  level, best_count);
 
 #ifdef DEBUG
         print_path(0, 1, block, path_state); // check if append was successful.
