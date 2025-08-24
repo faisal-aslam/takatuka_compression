@@ -193,7 +193,8 @@ void find_best_saving_path_to_a_node(const uint8_t *block, uint16_t starting_lev
     while (top >= 0) {
         if (push_count > UINT32_MAX) {
             printf("Max push=%lu, push_count=%lu, best_count=%u\n", max_push, push_count, best_count);
-            break; // we are done trying.
+            push_count = 0;
+            if (best_count > 1) break; // we are done trying.
         }
         
         StackItem current = main_stack[top--];
