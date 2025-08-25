@@ -18,3 +18,6 @@ extern uint8_t global_class2_bits;
 
 /* Reconstructs DecoderMap by reading the header of the compressed file */
 void read_header_and_create_decoder_map(BitReader* reader);
+
+/* Frees the single contiguous codebook pool allocated by the header reader. */
+void free_decoder_codebook_pool(void);

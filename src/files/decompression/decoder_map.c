@@ -10,6 +10,7 @@ void init_decoder_map(DecoderMap* map, size_t capacity) {
 }
 
 void free_decoder_map(DecoderMap* map) {
+    if (!map) return;
     free(map->entries);
     map->entries = NULL;
     map->capacity = 0;
