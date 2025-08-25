@@ -16,16 +16,19 @@
  * semantics (here returning number of bits).
  */
 uint8_t get_header_overhead(uint8_t code_class, uint16_t seq_length, uint8_t class2_bits) {
-    if (code_class == 0 || code_class == 1 || code_class == 2) {
-        /* 3 bits + seq_length*8 + 2 bits class + code bits for that class */
-        uint8_t code_bits = get_code_class_size(code_class, class2_bits);
-        return (uint8_t)(3 + (seq_length * 8) + 2 + code_bits);
-    } else {
+    if (code_class > 3) {
         fprintf(stderr, "Invalid code_class %d Exiting (get_header_overhead)!\n", code_class);
         exit(EXIT_FAILURE);
         return 0;
     }
+    if (code_class == 3) {        
+        /* RLE is handled outside the codebook; no index bits here. */
+        return 0; 
+    }
+    uint8_t code_bits = get_code_class_size(code_class, class2_bits);
+    return (uint8_t)(3 + (seq_length * 8) + 2 + code_bits);
 }
+
 
 /*
  * calculate_class2_bits:
@@ -46,34 +49,40 @@ uint8_t calculate_class2_bits(uint16_t class2_codes) {
 }
 
 /* Return the number of bits used for the index portion (excluding the 2-bit class prefix) */
+// code_classes.c
+
 uint8_t get_code_class_size(uint8_t code_class, uint8_t class2_bits) {
     switch (code_class) {
-        case 0: return 4;              /* fixed */
-        case 1: return 5;              /* fixed */
-        case 2: return class2_bits;    /* dynamic */
+        case 0: return 4;           /* fixed */
+        case 1: return 5;           /* fixed */
+        case 2: return class2_bits; /* dynamic */
+        case 3: return 0;           /* RLE pseudo-class: no index bits */
         default:
             fprintf(stderr, "Invalid code_class %d Exiting (get_code_class_size)!\n", code_class);
             exit(EXIT_FAILURE);
-            return 0;
     }
 }
 
+
+
+
 /* Return threshold (capacity) for given class as uint16_t. For class2 uses class2_bits. */
 uint16_t get_code_class_threshold(uint8_t code_class, uint8_t class2_bits) {
-    uint8_t bits;
-    if (code_class == 2) {
-        bits = class2_bits;
-    } else {
-        bits = get_code_class_size(code_class, 0); /* class2_bits unused for non-class2 */
+    switch (code_class) {
+        case 0: return (uint16_t)(1u << 4);
+        case 1: return (uint16_t)(1u << 5);
+        case 2: {
+            if (class2_bits >= 16) {
+                fprintf(stderr, "Requested threshold bits too large: %u\n", class2_bits);
+                exit(EXIT_FAILURE);
+            }
+            return (uint16_t)(1u << class2_bits);
+        }
+        case 3: return 0; /* RLE: there are no codebook entries */
+        default:
+            fprintf(stderr, "Invalid code_class %d Exiting (get_code_class_threshold)!\n", code_class);
+            exit(EXIT_FAILURE);
     }
-
-    if (bits >= 16) {
-        /* uint16_t return can't represent >2^15 safely here. If you expect >65535
-           entries for a class2, change return type to uint32_t. */
-        fprintf(stderr, "Requested threshold bits too large: %u\n", bits);
-        exit(EXIT_FAILURE);
-    }
-    return (uint16_t)(1u << bits);
 }
 
 /* Returns overhead of a code_class (kept same as before) */
