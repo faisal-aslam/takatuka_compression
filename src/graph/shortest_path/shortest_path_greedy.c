@@ -1,6 +1,9 @@
 // shortest_path_greedy.c
 
 #include "seq_freq_map.h"
+#include "graph.h"
+#include "constants.h"
+
 /**
  * Greedy Shortest Path Selection
  *
@@ -40,3 +43,12 @@ static inline void print_sequence(const uint8_t *seq, uint8_t len) {
         print_sequence(best_seq, best_len);
     } 
  }
+
+ typedef enum {
+    LEVEL_ACTIVE = 0,   // normal, nothing special
+    LEVEL_DELETED,      // scheduled for removal
+    LEVEL_DONE,         // processed/finished
+    // add more states if needed
+} LevelStatus;
+
+static LevelStatus level_status[MAX_LEVELS];
