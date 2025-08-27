@@ -119,5 +119,5 @@ void find_limited_bute_force_path(const uint8_t *block, uint32_t max_brute_force
 void find_best_saving_path(const uint8_t *block, uint16_t starting_level, Path *path_state) {
     (void)starting_level; // not used but kept for consistency.
 
-    find_limited_bute_force_path(block, 100, path_state);
+    find_limited_bute_force_path(block, 71, path_state);
 }

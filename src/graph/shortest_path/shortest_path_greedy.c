@@ -1,5 +1,6 @@
 // shortest_path_greedy.c
 
+#include "seq_freq_map.h"
 /**
  * Greedy Shortest Path Selection
  *
@@ -22,3 +23,20 @@
  * Step 6: Repeat from Step 1 while there are still levels 
  *         remaining that are not marked done, in the trimmed graph.
  */
+
+static inline void print_sequence(const uint8_t *seq, uint8_t len) {
+    for (int i = 0; i < len; i++) {
+        printf("%c", seq[i]);
+    }
+    printf("\n");
+}
+
+ static inline find_best_sequence() {
+    const uint8_t *best_seq;
+    uint8_t best_len;
+    uint32_t best_freq, best_node_id;
+
+    if (seq_freq_get_best(&best_seq, &best_len, &best_freq, &best_node_id)) {
+        print_sequence(best_seq, best_len);
+    } 
+ }
