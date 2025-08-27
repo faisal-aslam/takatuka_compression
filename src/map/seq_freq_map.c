@@ -1,48 +1,75 @@
 //seq_freq_map.c
 
 #include "seq_freq_map.h"
-#include "xxhash.h"
-#include "general_map.h"
+#include "xxhash.h"       /* defines XXH3_64bits_withSeed */
+#include "general_map.h"  /* for sequences_equal (must be provided elsewhere) */
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <stdint.h>
 
+/* Meta: upper 8 bits = length, lower 24 bits = frequency */
 #define META_ENCODE(freq, len)  (((uint32_t)(len) << 24) | ((freq) & 0xFFFFFF))
 #define META_GET_FREQ(meta)     ((meta) & 0xFFFFFF)
 #define META_GET_LEN(meta)      ((uint8_t)((meta) >> 24))
 
-/* Slot states for open addressing with tombstones */
+/* Slot states for open addressing */
 typedef enum {
-    SLOT_EMPTY = 0,     // never used
-    SLOT_OCCUPIED = 1,  // has a live key
-    SLOT_TOMBSTONE = 2  // was used, now deleted
+    SLOT_EMPTY = 0,
+    SLOT_OCCUPIED = 1,
+    SLOT_TOMBSTONE = 2
 } SlotState;
 
 typedef struct {
-    const uint8_t *sequence;  // external pointer (non-owning)
-    uint32_t meta;            // upper 8 bits = length, lower 24 bits = frequency
-    uint32_t node_id;         // associated node ID
-    uint64_t hash;            // cached 64-bit hash of (seq,len)
-    uint8_t  state;           // SlotState
+    const uint8_t *sequence;  /* external pointer — non-owning */
+    uint32_t meta;            /* encoded len/freq */
+    uint32_t node_id;
+    uint64_t hash;            /* cached hash for fast compares */
+    uint8_t state;            /* SlotState */
 } SeqFreqEntry;
 
-typedef struct SeqFreqMap {
+typedef struct {
     SeqFreqEntry entries[SEQ_MAP_CAPACITY];
 } SeqFreqMap;
 
 static SeqFreqMap seqMap;
 
-void init_seq_freq_map(void) {
-    memset(&seqMap, 0, sizeof(SeqFreqMap));
-    // state is zeroed to SLOT_EMPTY for all entries
+/* Best cache (lazy): index into seqMap.entries or UINT32_MAX when invalid */
+static uint32_t best_sequence_index;
+static uint32_t best_sequence_saving;
+
+/* Helpers */
+static inline uint32_t compute_saving_from_meta(uint32_t meta) {
+    uint32_t freq = META_GET_FREQ(meta);
+    uint8_t len = META_GET_LEN(meta);
+    uint64_t s = (uint64_t)freq * (uint64_t)len;
+    if (s > UINT32_MAX) s = UINT32_MAX;
+    return (uint32_t)s;
+}
+
+static inline void invalidate_best(void) {
+    best_sequence_index = UINT32_MAX;
+    best_sequence_saving = 0;
+}
+
+/* update best if entry idx is occupied and has strictly larger saving */
+static inline void update_best_for_index(uint32_t idx) {
+    if (idx >= SEQ_MAP_CAPACITY) return;
+    SeqFreqEntry *e = &seqMap.entries[idx];
+    if (e->state != SLOT_OCCUPIED) return;
+    uint32_t s = compute_saving_from_meta(e->meta);
+    if (s > best_sequence_saving) {
+        best_sequence_saving = s;
+        best_sequence_index = idx;
+    }
 }
 
 /*
  * find_slot:
- *   - If key is found: *found=1 and returns index of the OCCUPIED entry.
- *   - If not found: *found=0 and returns index to INSERT:
- *       first TOMBSONE seen on probe (if any), otherwise the first EMPTY slot.
+ *   If found: *found = 1 and returns index of the occupied entry.
+ *   If not found: *found = 0 and returns index to insert (first tombstone or an empty).
  */
 static inline uint32_t find_slot(const uint8_t *seq, uint8_t len, uint64_t hash, int *found) {
     uint32_t idx = (uint32_t)(hash % SEQ_MAP_CAPACITY);
@@ -53,16 +80,13 @@ static inline uint32_t find_slot(const uint8_t *seq, uint8_t len, uint64_t hash,
         SeqFreqEntry *entry = &seqMap.entries[idx];
 
         if (entry->state == SLOT_EMPTY) {
-            // Empty stops the search: use a prior tombstone if seen, else this empty.
             *found = 0;
             return (first_tombstone != UINT32_MAX) ? first_tombstone : idx;
         }
 
         if (entry->state == SLOT_TOMBSTONE) {
-            // Remember the first tombstone so we can insert into it later.
             if (first_tombstone == UINT32_MAX) first_tombstone = idx;
-        } else { // OCCUPIED
-            // Fast checks first: hash -> len -> full compare
+        } else { /* OCCUPIED */
             if (entry->hash == hash &&
                 META_GET_LEN(entry->meta) == len &&
                 sequences_equal(entry->sequence, seq, len)) {
@@ -74,13 +98,12 @@ static inline uint32_t find_slot(const uint8_t *seq, uint8_t len, uint64_t hash,
         idx = (idx + 1) % SEQ_MAP_CAPACITY;
     } while (idx != start_idx);
 
-    // Table is full of OCCUPIED/TOMBSTONE; if we saw a tombstone, insert there.
     if (first_tombstone != UINT32_MAX) {
         *found = 0;
         return first_tombstone;
     }
 
-    fprintf(stderr, "No free slot in SeqFreqMap\n");
+    fprintf(stderr, "SeqFreqMap is full (no free slot)\n");
     abort();
 }
 
@@ -103,6 +126,13 @@ static inline void make_tombstone(SeqFreqEntry *entry) {
     entry->state    = SLOT_TOMBSTONE;
 }
 
+/* ---------------- Public API ---------------- */
+
+void init_seq_freq_map(void) {
+    memset(&seqMap, 0, sizeof(SeqFreqMap));
+    invalidate_best();
+}
+
 uint32_t seq_freq_increment(const uint8_t *seq, uint8_t len, uint32_t node_id) {
     uint64_t hash = XXH3_64bits_withSeed(seq, len, 0);
     int found;
@@ -111,19 +141,22 @@ uint32_t seq_freq_increment(const uint8_t *seq, uint8_t len, uint32_t node_id) {
 
     if (found) {
         uint32_t old_freq = META_GET_FREQ(entry->meta);
-        uint32_t new_freq = old_freq + 1; // optional: clamp to 24 bits if desired
+        uint32_t new_freq = old_freq + 1;
         entry->meta = META_ENCODE(new_freq, len);
-        // policy: keep existing node_id or update; keeping your original 'keep existing' policy here
+        /* update node_id policy: store newest */
+        entry->node_id = node_id;
+        update_best_for_index(idx); /* increment can only increase saving */
         return new_freq;
     } else {
         write_new_entry(entry, seq, len, 1, node_id, hash);
+        update_best_for_index(idx); /* new entry may become best */
         return 1;
     }
 }
 
 uint32_t seq_freq_set(const uint8_t *seq, uint8_t len, uint32_t freq, uint32_t node_id) {
     if (freq > 0xFFFFFF) {
-        fprintf(stderr, "Frequency exceeds 24-bit limit\n");
+        fprintf(stderr, "seq_freq_set: freq exceeds 24-bit limit\n");
         abort();
     }
 
@@ -132,7 +165,24 @@ uint32_t seq_freq_set(const uint8_t *seq, uint8_t len, uint32_t freq, uint32_t n
     uint32_t idx = find_slot(seq, len, hash, &found);
     SeqFreqEntry *entry = &seqMap.entries[idx];
 
-    write_new_entry(entry, seq, len, freq, node_id, hash);
+    if (found) {
+        uint32_t old_meta = entry->meta;
+        uint32_t old_saving = compute_saving_from_meta(old_meta);
+        entry->meta = META_ENCODE(freq, len);
+        entry->node_id = node_id;
+
+        uint32_t new_saving = compute_saving_from_meta(entry->meta);
+        if (new_saving > best_sequence_saving) {
+            best_sequence_saving = new_saving;
+            best_sequence_index = idx;
+        } else if (idx == best_sequence_index && new_saving < old_saving) {
+            /* lazy invalidation — do not scan here */
+            invalidate_best();
+        }
+    } else {
+        write_new_entry(entry, seq, len, freq, node_id, hash);
+        update_best_for_index(idx);
+    }
     return freq;
 }
 
@@ -142,7 +192,7 @@ uint32_t seq_freq_decrement(const uint8_t *seq, uint8_t len) {
     uint32_t idx = find_slot(seq, len, hash, &found);
 
     if (!found) {
-        fprintf(stderr, "Sequence not found for decrement\n");
+        fprintf(stderr, "seq_freq_decrement: sequence not found\n");
         abort();
     }
 
@@ -150,19 +200,22 @@ uint32_t seq_freq_decrement(const uint8_t *seq, uint8_t len) {
     uint32_t old_freq = META_GET_FREQ(entry->meta);
 
     if (old_freq == 0) {
-        fprintf(stderr, "Invalid decrement — frequency already 0\n");
+        fprintf(stderr, "seq_freq_decrement: frequency already 0\n");
         abort();
     }
 
-    uint32_t new_freq = old_freq - 1;
-
     if (old_freq == 1) {
-        make_tombstone(entry);  // mark as deleted without breaking probe chains
+        make_tombstone(entry);
+        if (idx == best_sequence_index) invalidate_best(); /* lazy invalidation */
         return 0;
     } else {
-        uint8_t len0 = META_GET_LEN(entry->meta);
-        entry->meta = META_ENCODE(new_freq, len0);
-        return new_freq;
+        uint8_t old_len = META_GET_LEN(entry->meta);
+        entry->meta = META_ENCODE(old_freq - 1, old_len);
+        if (idx == best_sequence_index) {
+            /* saving decreased for best — lazy invalidation (no O(capacity) work) */
+            invalidate_best();
+        }
+        return old_freq - 1;
     }
 }
 
@@ -172,22 +225,25 @@ bool seq_freq_get(const uint8_t *seq, uint8_t len, uint32_t *out_freq, uint32_t 
     uint32_t idx = find_slot(seq, len, hash, &found);
 
     if (found) {
-        *out_freq = META_GET_FREQ(seqMap.entries[idx].meta);
-        *out_node_id = seqMap.entries[idx].node_id;
+        if (out_freq) *out_freq = META_GET_FREQ(seqMap.entries[idx].meta);
+        if (out_node_id) *out_node_id = seqMap.entries[idx].node_id;
         return true;
     } else {
-        *out_freq = 0;
-        *out_node_id = UINT32_MAX; // Sentinel value
+        if (out_freq) *out_freq = 0;
+        if (out_node_id) *out_node_id = UINT32_MAX;
         return false;
     }
 }
 
 void seq_freq_filter_freqs_and_length(uint32_t freq_to_set, uint32_t freq_to_delete, uint8_t len_to_delete) {
     if (freq_to_set > 0xFFFFFF) {
-        fprintf(stderr, "Frequency exceeds 24-bit limit\n");
+        fprintf(stderr, "freq_to_set exceeds 24-bit limit\n");
         abort();
     }
 
+    /* This function already scans the table (that's its purpose). We will NOT
+     * run another full recompute inside it — we perform lazy invalidation instead.
+     */
     for (uint32_t i = 0; i < SEQ_MAP_CAPACITY; i++) {
         SeqFreqEntry *entry = &seqMap.entries[i];
         if (entry->state != SLOT_OCCUPIED) continue;
@@ -196,34 +252,34 @@ void seq_freq_filter_freqs_and_length(uint32_t freq_to_set, uint32_t freq_to_del
         uint8_t len = META_GET_LEN(entry->meta);
 
         if (old_freq <= freq_to_delete || len <= len_to_delete) {
-            // Mark as tombstone (do NOT set to empty)
             make_tombstone(entry);
         } else {
-            // Reset frequency to the given value, preserve length
             entry->meta = META_ENCODE(freq_to_set, len);
         }
     }
+
+    /* The table changed significantly — best cache is no longer guaranteed valid */
+    invalidate_best();
 }
 
 uint32_t seq_freq_get_with_index(const uint8_t *seq, uint8_t len, uint32_t *out_freq, uint32_t *out_node_id) {
     uint64_t hash = XXH3_64bits_withSeed(seq, len, 0);
     int found;
     uint32_t idx = find_slot(seq, len, hash, &found);
-
     if (found) {
-        *out_freq = META_GET_FREQ(seqMap.entries[idx].meta);
-        *out_node_id = seqMap.entries[idx].node_id;
-        return idx;  // success: return usable index
+        if (out_freq) *out_freq = META_GET_FREQ(seqMap.entries[idx].meta);
+        if (out_node_id) *out_node_id = seqMap.entries[idx].node_id;
+        return idx;
     } else {
-        *out_freq = 0;
-        *out_node_id = UINT32_MAX;
-        return UINT32_MAX;  // failed: not found
+        if (out_freq) *out_freq = 0;
+        if (out_node_id) *out_node_id = UINT32_MAX;
+        return UINT32_MAX;
     }
 }
 
 uint32_t seq_freq_increment_with_index(uint32_t idx, uint32_t node_id) {
     if (idx >= SEQ_MAP_CAPACITY || seqMap.entries[idx].state != SLOT_OCCUPIED) {
-        fprintf(stderr, "Invalid or empty index in seq_freq_increment_with_index\n");
+        fprintf(stderr, "seq_freq_increment_with_index: invalid index\n");
         abort();
     }
 
@@ -231,16 +287,16 @@ uint32_t seq_freq_increment_with_index(uint32_t idx, uint32_t node_id) {
     uint32_t old_freq = META_GET_FREQ(entry->meta);
     uint8_t len = META_GET_LEN(entry->meta);
     uint32_t new_freq = old_freq + 1;
-
     entry->meta = META_ENCODE(new_freq, len);
-    entry->node_id = node_id;  // Update node_id on increment
+    entry->node_id = node_id;
 
+    update_best_for_index(idx); /* increment can only improve saving */
     return new_freq;
 }
 
 uint32_t seq_freq_decrement_with_index(uint32_t idx) {
     if (idx >= SEQ_MAP_CAPACITY || seqMap.entries[idx].state != SLOT_OCCUPIED) {
-        fprintf(stderr, "Invalid or empty index in seq_freq_decrement_with_index\n");
+        fprintf(stderr, "seq_freq_decrement_with_index: invalid index\n");
         abort();
     }
 
@@ -248,37 +304,46 @@ uint32_t seq_freq_decrement_with_index(uint32_t idx) {
     uint32_t old_freq = META_GET_FREQ(entry->meta);
 
     if (old_freq == 0) {
-        fprintf(stderr, "Invalid decrement — frequency already 0\n");
+        fprintf(stderr, "seq_freq_decrement_with_index: frequency already 0\n");
         abort();
     }
 
-    uint8_t len = META_GET_LEN(entry->meta);
-    uint32_t new_freq = old_freq - 1;
-
     if (old_freq == 1) {
         make_tombstone(entry);
+        if (idx == best_sequence_index) invalidate_best();
         return 0;
     } else {
-        entry->meta = META_ENCODE(new_freq, len);
-        return new_freq;
+        uint8_t len = META_GET_LEN(entry->meta);
+        entry->meta = META_ENCODE(old_freq - 1, len);
+        if (idx == best_sequence_index) invalidate_best();
+        return old_freq - 1;
     }
 }
 
 uint32_t seq_freq_set_existing(uint32_t idx, uint32_t freq, uint32_t node_id) {
     if (idx >= SEQ_MAP_CAPACITY || seqMap.entries[idx].state != SLOT_OCCUPIED) {
-        fprintf(stderr, "Invalid or empty index in seq_freq_set_existing\n");
+        fprintf(stderr, "seq_freq_set_existing: invalid index\n");
         abort();
     }
     if (freq > 0xFFFFFF) {
-        fprintf(stderr, "Frequency exceeds 24-bit limit\n");
+        fprintf(stderr, "seq_freq_set_existing: freq exceeds 24-bit limit\n");
         abort();
     }
 
     SeqFreqEntry *entry = &seqMap.entries[idx];
+    uint32_t old_meta = entry->meta;
+    uint32_t old_saving = compute_saving_from_meta(old_meta);
     uint8_t len = META_GET_LEN(entry->meta);
-
     entry->meta = META_ENCODE(freq, len);
     entry->node_id = node_id;
+
+    uint32_t new_saving = compute_saving_from_meta(entry->meta);
+    if (new_saving > best_sequence_saving) {
+        best_sequence_saving = new_saving;
+        best_sequence_index = idx;
+    } else if (idx == best_sequence_index && new_saving < old_saving) {
+        invalidate_best();
+    }
 
     return freq;
 }
@@ -291,11 +356,55 @@ void seq_freq_map_print(void) {
             uint8_t len = META_GET_LEN(entry->meta);
             uint32_t freq = META_GET_FREQ(entry->meta);
             printf("[%04u] freq=%u, len=%u, node_id=%u, seq=", i, freq, len, entry->node_id);
-            for (uint8_t j = 0; j < len; j++) {
-                printf("%c", entry->sequence[j]);
-            }
-            printf("\n");
+            for (uint8_t j = 0; j < len; j++) putchar(entry->sequence[j]);
+            putchar('\n');
         }
     }
     printf("-----------------------------\n");
+}
+
+/* ---------------- Best-cache API ---------------- */
+
+/* Force a slow recompute (user must call explicitly). O(SEQ_MAP_CAPACITY). */
+void seq_freq_recompute_best(void) {
+    best_sequence_index = UINT32_MAX;
+    best_sequence_saving = 0;
+
+    for (uint32_t i = 0; i < SEQ_MAP_CAPACITY; i++) {
+        SeqFreqEntry *entry = &seqMap.entries[i];
+        if (entry->state != SLOT_OCCUPIED) continue;
+        uint32_t s = compute_saving_from_meta(entry->meta);
+        if (s > best_sequence_saving) {
+            best_sequence_saving = s;
+            best_sequence_index = i;
+        }
+    }
+}
+
+bool seq_freq_best_is_valid(void) {
+    return best_sequence_index != UINT32_MAX &&
+           best_sequence_index < SEQ_MAP_CAPACITY &&
+           seqMap.entries[best_sequence_index].state == SLOT_OCCUPIED;
+}
+
+uint32_t seq_freq_get_best_index(void) {
+    return best_sequence_index;
+}
+
+/* Fast getter: returns true if valid & fills outputs; otherwise returns false. */
+bool seq_freq_get_best(const uint8_t **out_seq, uint8_t *out_len, uint32_t *out_freq, uint32_t *out_node_id) {
+    if (!seq_freq_best_is_valid()) {
+        if (out_seq) *out_seq = NULL;
+        if (out_len) *out_len = 0;
+        if (out_freq) *out_freq = 0;
+        if (out_node_id) *out_node_id = UINT32_MAX;
+        return false;
+    }
+
+    SeqFreqEntry *e = &seqMap.entries[best_sequence_index];
+    if (out_seq) *out_seq = e->sequence;
+    if (out_len) *out_len = META_GET_LEN(e->meta);
+    if (out_freq) *out_freq = META_GET_FREQ(e->meta);
+    if (out_node_id) *out_node_id = e->node_id;
+    return true;
 }
