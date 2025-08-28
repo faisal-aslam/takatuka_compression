@@ -24,7 +24,7 @@ typedef struct {
 extern long total_input_size;
 
 // to find the path with maximum total savings from any leaf to the root node
-void find_best_saving_path(const uint8_t* block, uint16_t starting_level, Path *path_state);
+void find_best_saving_path(const uint8_t* block, Path *path_state);
 
 void free_path_state(Path *path_state);
 

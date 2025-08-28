@@ -76,7 +76,7 @@ static inline void set_RLE_data() {
 
 static inline void compute_best_path_and_write_in_file(const uint8_t *block) {
     Path path_state;
-    find_best_saving_path(block, get_last_level_index(), &path_state);
+    find_best_saving_path(block, &path_state);
     final_book_keeping(block, &path_state);
     printf("\n%lu: Computed the best possible path \n", get_elapsed_ms());
     // #ifdef DEBUG

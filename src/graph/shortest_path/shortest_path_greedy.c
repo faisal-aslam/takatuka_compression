@@ -3,6 +3,8 @@
 #include "seq_freq_map.h"
 #include "graph.h"
 #include "constants.h"
+#include "shortest_path.h"
+#include "timer.h"
 
 /**
  * Greedy Shortest Path Selection
@@ -34,21 +36,35 @@ static inline void print_sequence(const uint8_t *seq, uint8_t len) {
     printf("\n");
 }
 
- static inline find_best_sequence() {
+
+typedef enum {
+    LEVEL_DELETED = 0,   // default state
+    LEVEL_ACTIVE,        // normal, nothing special
+    LEVEL_DONE           // processed/finished
+} LevelStatus;
+
+static LevelStatus level_status[MAX_LEVELS]; // all initialized to LEVEL_DELETED by default
+
+void find_best_saving_path(const uint8_t *block, Path *path_state) {   
+
+    level_status[0] = LEVEL_ACTIVE; //root level is always active.
+    //step 1: Find best sequence.
     const uint8_t *best_seq;
     uint8_t best_len;
     uint32_t best_freq, best_node_id;
 
     if (seq_freq_get_best(&best_seq, &best_len, &best_freq, &best_node_id)) {
         print_sequence(best_seq, best_len);
+    } else {
+        fprintf(stderr, "best sequence does not exist\n");
+        abort();
+    }
+
+    //Step 2: Go through the graph level by leve. Each level that contains the best sequence is marked done, the perticualr
+    //node that contain that sequence is marked useful whereas rest of the nodes of that level are marked useless.
+    // Furthermore, all levels below first such level (done levels) are marked active.
+    for (uint16_t level=get_last_level_index(); level > 0; level--) {
+        //= get_level_start_id(level);
     } 
- }
 
- typedef enum {
-    LEVEL_ACTIVE = 0,   // normal, nothing special
-    LEVEL_DELETED,      // scheduled for removal
-    LEVEL_DONE,         // processed/finished
-    // add more states if needed
-} LevelStatus;
-
-static LevelStatus level_status[MAX_LEVELS];
+}
