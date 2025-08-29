@@ -1,11 +1,10 @@
 // shortest_path_greedy.c
 
-#include "shortest_path_brute_force.h"
 #include "general_map.h"
+#include "shortest_path_brute_force.h"
 #include "timer.h"
 #include <math.h>
 #include <stdbool.h>
-
 
 /**
  * Greedy Shortest Path Selection
@@ -42,7 +41,7 @@ inline static void mark_all_but_one_useless(uint32_t only_useful_node) {
     uint16_t level = node->node_level;
     uint32_t start_id = get_level_start_id(level);
     uint32_t end_id = get_level_end_id(level);
-    for (uint32_t level_id = start_id; level_id < end_id; level_id++) {        
+    for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
         GraphNode *current_node = get_graph_node(level_id);
         if (level_id == only_useful_node || current_node->is_RLE) continue;
         current_node->useless = 1; // mark it useless.
@@ -70,7 +69,7 @@ static inline uint8_t mark_all_but_done_level_deleted() {
 static inline void add_done_levels_to_process(uint8_t *level_to_process) {
     // skip root level 0
     for (uint16_t level = 1; level <= get_last_level_index(); level++) {
-        if (level_status[level] == LEVEL_DONE_NOW || level_status[level] == LEVEL_DONE_OLD) {
+        if (level_status[level] == LEVEL_DONE_NOW) {
             level_to_process[level] = 1;
         } else {
             level_to_process[level] = 0;
@@ -107,7 +106,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         uint32_t best_freq, best_node_id;
 
         if (seq_freq_get_best(&best_seq, &best_len, &best_freq, &best_node_id)) {
-            //print_sequence(best_seq, best_len);
+            print_sequence(best_seq, best_len);
         } else {
             fprintf(stderr, "best sequence does not exist\n");
             break;
@@ -115,9 +114,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
         // Step 2: Go through the graph level by leve. Each level that contains the best sequence is marked done, the
         // perticualr node that contain that sequence is marked useful whereas rest of the nodes of that level are
-        // marked useless. Step 3: Furthermore, all levels below first such level (done levels) are marked active.
-        uint8_t found_once = 0;
-        uint16_t last_done_level = UINT16_MAX;
+        // marked useless.
         for (uint16_t level = get_last_level_index(); level > 0; level--) {
             uint32_t start_id = get_level_start_id(level);
             uint32_t end_id = get_level_end_id(level);
@@ -126,15 +123,31 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
                 if (node->useless) continue;
                 if (best_len == node->sequence_length && sequences_equal(&block[node->offset], best_seq, best_len)) {
                     // found it.
-                    found_once = 1;
-                    level_status[node->node_level] = LEVEL_DONE_NOW;
+                    level_status[level] = LEVEL_DONE_NOW;
                     mark_all_but_one_useless(node->node_id);
-                    if (last_done_level == UINT16_MAX) last_done_level = level;
+                    for (int loop = 1; loop < best_len; loop++) {
+                        if (level - loop < level) level_status[level - loop] = LEVEL_DELETED;
+                    }
+                    level = get_parent_level(node);
                     break;
                 }
             }
-            if (!found_once && level_status[level] == LEVEL_DELETED)
-                level_status[level] = LEVEL_ACTIVE; // it is below any best sequence found.
+        }
+
+        // Step 3: All the nodes below a LEVEL_DONE_NOW cannot have parent passing it.
+        for (uint16_t level = get_last_level_index(); level > 0; level--) {
+            if (level_status[level] != LEVEL_DONE_NOW) continue;
+            uint16_t child_counter = 0;
+            for (uint16_t child_level = level + 1; child_level <= get_last_level_index(); child_level++) {
+                child_counter++;
+                if (level_status[child_level] == LEVEL_DONE_NOW) break;
+                uint32_t start_id = get_level_start_id(child_level);
+                uint32_t end_id = get_level_end_id(child_level);
+                for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
+                    GraphNode *node = get_graph_node(level_id);
+                    if (node->sequence_length > child_counter) node->useless = 1;
+                }
+            }
         }
 
         // Step 4: All levels which are reachable via last done (i.e. their ancestors) are marked active.
