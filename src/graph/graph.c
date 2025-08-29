@@ -16,11 +16,18 @@ Graph graph; // Actual single definition
 
 LevelStatus level_status[MAX_LEVELS]; // all initialized to LEVEL_DELETED by default
 
+static inline int level_is_deleted(uint16_t level) {
+    // Never treat the root as deleted.
+    if (level == 0) return 0;
+    return (level_status[level] == LEVEL_DELETED);
+}
+
 void rebuild_seq_freq_map(const uint8_t *block) {
     init_seq_freq_map(); // start fresh
 
     for (uint32_t i = 0; i < graph.size; i++) {
         GraphNode *node = &graph.nodes[i];
+        if (node->node_level == LEVEL_DONE) continue; //skip done levels.
         if (node->useless) continue;              // skip useless nodes
         if (node->sequence_length <= 1) continue; // skip trivial sequences
         if (node->is_RLE) continue;               // skip RLE nodes if not wanted
@@ -31,6 +38,7 @@ void rebuild_seq_freq_map(const uint8_t *block) {
 
 static void compact_levels_part_2(const uint8_t *block) {
     for (uint32_t l = 1; l < graph.total_levels; l++) {
+        if (level_is_deleted(l)) continue;
         const uint32_t start_level_id = get_level_start_id(l);
         const uint32_t end_level_id   = get_level_end_id(l);
 
@@ -78,6 +86,9 @@ static void compact_levels(const uint8_t *block) {
     if (graph.total_levels < 2) return;
 
     for (uint32_t l = 1; l + 1 < graph.total_levels; ++l) {
+        if (level_is_deleted(l) || level_is_deleted(l + 1)) {
+            continue; // ignore comparisons that involve a deleted level
+        }
         const uint32_t start_prev = get_level_start_id(l);
         const uint32_t end_prev = get_level_end_id(l); // exclusive
         const uint32_t start_next = get_level_start_id(l + 1);
@@ -119,12 +130,6 @@ static void compact_levels(const uint8_t *block) {
         }
     }
     compact_levels_part_2(block);
-}
-
-static inline int level_is_deleted(uint16_t level) {
-    // Never treat the root as deleted.
-    if (level == 0) return 0;
-    return (level_status[level] == LEVEL_DELETED);
 }
 
 void compact_graph(const uint8_t *block) {
