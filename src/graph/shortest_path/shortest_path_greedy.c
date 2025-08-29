@@ -153,8 +153,8 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
             }
         }
         // rebuild the map without done levels.
-        //compact_graph(block);
-        //visualize_graph(block);
+        compact_graph(block);
+        visualize_graph(block);
         rebuild_seq_freq_map(block);
 
         // break;
