@@ -6,11 +6,13 @@
 #include "graph_visualizer.h"
 #include "seq_freq_map.h"
 #include "shortest_path.h"
+#include "shortest_path_common.h"
 #include "timer.h"
 // #include "top_savings.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -76,14 +78,18 @@ static inline void set_RLE_data() {
 
 static inline void compute_best_path_and_write_in_file(const uint8_t *block) {
     Path path_state;
-    find_best_saving_path(block, &path_state);
-    final_book_keeping(block, &path_state);
+    find_best_saving_path(block, &path_state);    
     printf("\n%lu: Computed the best possible path \n", get_elapsed_ms());
+    if (path_state.path_size[PATH_BEST] <= 0) {
+        printf("No path found\n");
+        return; // no path exist
+    }
+    final_book_keeping(block, &path_state);
     // #ifdef DEBUG
     print_path(0, 1, block, &path_state);
     // #endif
     set_best_path_view(path_state.path_stack[PATH_BEST], path_state.path_freqs[PATH_BEST],
-                       path_state.path_size[PATH_BEST]);
+                       path_state.path_size[PATH_BEST]);                
     write_compressed_output(output_file, block);
     printf("\n%lu: Written the path in output file \n", get_elapsed_ms());
 }

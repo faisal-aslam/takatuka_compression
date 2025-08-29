@@ -14,6 +14,8 @@
 
 Graph graph; // Actual single definition
 
+LevelStatus level_status[MAX_LEVELS]; // all initialized to LEVEL_DELETED by default
+
 void rebuild_seq_freq_map(const uint8_t *block) {
     init_seq_freq_map(); // start fresh
 
@@ -119,58 +121,78 @@ static void compact_levels(const uint8_t *block) {
     compact_levels_part_2(block);
 }
 
+static inline int level_is_deleted(uint16_t level) {
+    // Never treat the root as deleted.
+    if (level == 0) return 0;
+    return (level_status[level] == LEVEL_DELETED);
+}
+
 void compact_graph(const uint8_t *block) {
-    (void)block; // Mark as intentionally unused
+    (void)block;
     if (graph.size == 0) return;
 
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
+
     compact_levels(block);
 
-    get_graph_node(0)->useless = 0; // make sure that root node is always useful.
+    // Root is always useful.
+    get_graph_node(0)->useless = 0;    
 
-    // Pre-process: mark all levels as invalid initially
+    // Mark all levels "unset" initially
     for (uint32_t l = 0; l < graph.total_levels; l++) {
         graph.first_node_of_level[l] = UINT32_MAX;
     }
 
-    // Process root node
+    // Root bookkeeping
     graph.first_node_of_level[0] = 0;
     write_idx = 1;
 
-    // Main compaction loop
+    // Main compaction
     for (uint32_t read_idx = 1; read_idx < graph.size; read_idx++) {
         GraphNode *node = &graph.nodes[read_idx];
-        uint32_t freq = 0, dummy_node_id;
-        if (node->node_id != 0) { // never skip root node.
-            // Fast path: skip useless nodes immediately
+
+        if (node->node_id != 0) { // never skip the root
+            // NEW: skip whole levels marked deleted
+            if (level_is_deleted(node->node_level)) {
+                // Do NOT advance current_level here; the next kept node will
+                // back-fill first_node_of_level[...] for all skipped levels.
+                continue;
+            }
+
+            // Existing fast skips
             if (node->useless) continue;
+
             if (node->sequence_length > 1 && !node->is_RLE) {
+                uint32_t freq = 0, dummy_node_id = 0;
                 seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_node_id);
-                if (freq <= 1) continue; // also the useless node.
+                if (freq <= 1) continue;
             }
         }
-        // Handle level transitions
+
+        // Handle level transitions (also stamps empty/deleted levels as empty)
         if (node->node_level > current_level) {
-            // Update all empty levels between current and node's level
             for (uint32_t l = current_level + 1; l <= node->node_level; l++) {
-                graph.first_node_of_level[l] = write_idx;
+                graph.first_node_of_level[l] = write_idx; // empty level(s) so far
             }
             current_level = node->node_level;
         }
 
-        // Copy node (use memmove if overlapping is possible)
+        // Copy node
         graph.nodes[write_idx] = *node;
         GraphNode *new_node = &graph.nodes[write_idx];
         new_node->node_id = write_idx;
+        // NOTE: we deliberately keep new_node->node_level unchanged
+        // so parent arithmetic using levels stays consistent.
 
         write_idx++;
     }
 
-    // Finalize graph metadata
-    printf("%lu: Done with graph compaction from %u to %u nodes\n", get_elapsed_ms(), graph.size, write_idx);
+    printf("%lu: Done with graph compaction from %u to %u nodes\n",
+           get_elapsed_ms(), graph.size, write_idx);
+
     graph.size = write_idx;
-    graph.total_levels = current_level + 1;
+    graph.total_levels = current_level + 1; // trailing deleted levels vanish
     rebuild_seq_freq_map(block);
 }
 

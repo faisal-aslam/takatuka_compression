@@ -19,6 +19,7 @@
 #define MAX_LEVELS (BLOCK_SIZE+1) //one extra for the root level.
 #define MAX_WEIGHTS SEQ_LENGTH_LIMIT
 
+
 typedef struct {
     uint32_t node_id;
     uint32_t offset;
@@ -38,7 +39,15 @@ typedef struct {
     uint16_t total_levels;
 } Graph;
 
+typedef enum {
+    LEVEL_ACTIVE = 0,        // normal, nothing special
+    LEVEL_DELETED,         // level is deleted
+    LEVEL_DONE           // processed/finished
+} LevelStatus;
+
 extern Graph graph; //always use graph.c definiton.
+
+extern LevelStatus level_status[MAX_LEVELS]; 
 
 void init_graph(void);
 static inline uint8_t get_parent_nodes_count(GraphNode* node);
