@@ -42,9 +42,9 @@ inline static void mark_all_but_one_useless(uint32_t only_useful_node) {
     uint16_t level = node->node_level;
     uint32_t start_id = get_level_start_id(level);
     uint32_t end_id = get_level_end_id(level);
-    for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
-        if (level_id == only_useful_node) continue;
+    for (uint32_t level_id = start_id; level_id < end_id; level_id++) {        
         GraphNode *current_node = get_graph_node(level_id);
+        if (level_id == only_useful_node || current_node->is_RLE) continue;
         current_node->useless = 1; // mark it useless.
     }
 }
@@ -70,7 +70,7 @@ static inline uint8_t mark_all_but_done_level_deleted() {
 static inline void add_done_levels_to_process(uint8_t *level_to_process) {
     // skip root level 0
     for (uint16_t level = 1; level <= get_last_level_index(); level++) {
-        if (level_status[level] == LEVEL_DONE_NOW /*|| level_status[level] == LEVEL_DONE_OLD*/) {
+        if (level_status[level] == LEVEL_DONE_NOW || level_status[level] == LEVEL_DONE_OLD) {
             level_to_process[level] = 1;
         } else {
             level_to_process[level] = 0;
@@ -160,8 +160,8 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         // break;
     }
     printf("\n\n Compacting and making graph\n");
-    //compact_graph(block);
-    //visualize_graph(block);
+    compact_graph(block);
+    visualize_graph(block);
     init_seq_freq_map(); // initialize the sequence map.
     find_best_saving_path_to_a_node(block, get_last_level_index(), 0, path_state);
 }
