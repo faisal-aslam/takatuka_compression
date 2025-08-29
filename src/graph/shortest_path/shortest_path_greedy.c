@@ -1,11 +1,11 @@
 // shortest_path_greedy.c
 
-#include "constants.h"
+#include "shortest_path_brute_force.h"
 #include "general_map.h"
-#include "graph.h"
-#include "seq_freq_map.h"
-#include "shortest_path.h"
 #include "timer.h"
+#include <math.h>
+#include <stdbool.h>
+
 
 /**
  * Greedy Shortest Path Selection
@@ -53,7 +53,8 @@ static inline uint8_t mark_all_but_done_level_deleted() {
     // skip root level 0
     uint8_t contain_not_done_levels = 0;
     for (uint16_t level = 1; level <= get_last_level_index(); level++) {
-        if (level_status[level] == LEVEL_ACTIVE && get_level_start_id(level) - get_level_end_id(level) > 1) {
+        uint8_t level_nodes = get_level_end_id(level) - get_level_start_id(level);
+        if (level_status[level] == LEVEL_ACTIVE && level_nodes > 1) {
 
             level_status[level] = LEVEL_DELETED;
             contain_not_done_levels = 1;
@@ -69,7 +70,7 @@ static inline uint8_t mark_all_but_done_level_deleted() {
 static inline void add_done_levels_to_process(uint8_t *level_to_process) {
     // skip root level 0
     for (uint16_t level = 1; level <= get_last_level_index(); level++) {
-        if (level_status[level] == LEVEL_DONE_NOW) {
+        if (level_status[level] == LEVEL_DONE_NOW /*|| level_status[level] == LEVEL_DONE_OLD*/) {
             level_to_process[level] = 1;
         } else {
             level_to_process[level] = 0;
@@ -106,7 +107,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         uint32_t best_freq, best_node_id;
 
         if (seq_freq_get_best(&best_seq, &best_len, &best_freq, &best_node_id)) {
-            print_sequence(best_seq, best_len);
+            //print_sequence(best_seq, best_len);
         } else {
             fprintf(stderr, "best sequence does not exist\n");
             break;
@@ -147,7 +148,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
             uint32_t end_id = get_level_end_id(level);
             for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
                 GraphNode *node = get_graph_node(level_id);
-                if (node->useless) continue;                
+                if (node->useless) continue;
                 level_to_process[get_parent_level(node)] = 1;
             }
         }
@@ -159,6 +160,8 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         // break;
     }
     printf("\n\n Compacting and making graph\n");
-    compact_graph(block);
-    visualize_graph(block);
+    //compact_graph(block);
+    //visualize_graph(block);
+    init_seq_freq_map(); // initialize the sequence map.
+    find_best_saving_path_to_a_node(block, get_last_level_index(), 0, path_state);
 }

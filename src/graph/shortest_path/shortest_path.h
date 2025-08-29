@@ -1,8 +1,17 @@
 #pragma once
+
 #include <stdint.h>
 #include "graph.h"
 #include <limits.h>
 #include <stdio.h>
+
+
+#define CHECK_INDEX(idx, label)                                                                                        \
+    if ((idx) < 0 || (idx) >= MAX_LEVELS) {                                                                            \
+        fprintf(stderr, "ERROR: Index %d out of bounds in %s (MAX_LEVELS = %d)\n", (idx), (label), MAX_LEVELS);        \
+        abort();                                                                                                       \
+    }
+
 
 #define PATH_CURRENT 0
 #define PATH_BEST 1
@@ -25,8 +34,6 @@ extern long total_input_size;
 
 // to find the path with maximum total savings from any leaf to the root node
 void find_best_saving_path(const uint8_t* block, Path *path_state);
-
-void free_path_state(Path *path_state);
 
 void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block, Path *path_state);
 

@@ -1,4 +1,6 @@
-// shortest_path.c
+// shortest_path_brute_force.h
+
+#pragma once
 
 #include "shortest_path_common.h"
 #include <math.h>
