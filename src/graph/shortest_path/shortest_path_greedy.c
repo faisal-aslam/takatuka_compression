@@ -58,18 +58,21 @@ static inline uint8_t mark_all_but_done_level_deleted() {
             level_status[level] = LEVEL_DELETED;
             contain_not_done_levels = 1;
         }
-        if (level_status[level] == LEVEL_DONE_NOW) { //move done now to done old so that latest done can be differentiated.
+        if (level_status[level] ==
+            LEVEL_DONE_NOW) { // move done now to done old so that latest done can be differentiated.
             level_status[level] = LEVEL_DONE_OLD;
         }
     }
     return contain_not_done_levels;
 }
 
-static inline void add_done_levels_to_process(uint16_t *level_to_process, uint16_t *size) {
+static inline void add_done_levels_to_process(uint8_t *level_to_process) {
     // skip root level 0
     for (uint16_t level = 1; level <= get_last_level_index(); level++) {
         if (level_status[level] == LEVEL_DONE_NOW) {
-            level_to_process[(*size)++] = level;
+            level_to_process[level] = 1;
+        } else {
+            level_to_process[level] = 0;
         }
     }
 }
@@ -79,10 +82,11 @@ static void rebuild_seq_freq_map(const uint8_t *block) {
 
     for (uint32_t i = 0; i < graph.size; i++) {
         GraphNode *node = &graph.nodes[i];
-        if (level_status[node->node_level] == LEVEL_DONE_NOW ||level_status[node->node_level] == LEVEL_DONE_OLD ) continue; // skip done levels.
-        if (node->useless) continue;                                // skip useless nodes
-        if (node->sequence_length <= 1) continue;                   // skip trivial sequences
-        if (node->is_RLE) continue;                                 // skip RLE nodes
+        if (level_status[node->node_level] == LEVEL_DONE_NOW || level_status[node->node_level] == LEVEL_DONE_OLD)
+            continue;                             // skip done levels.
+        if (node->useless) continue;              // skip useless nodes
+        if (node->sequence_length <= 1) continue; // skip trivial sequences
+        if (node->is_RLE) continue;               // skip RLE nodes
 
         seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
     }
@@ -105,7 +109,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
             print_sequence(best_seq, best_len);
         } else {
             fprintf(stderr, "best sequence does not exist\n");
-            abort();
+            break;
         }
 
         // Step 2: Go through the graph level by leve. Each level that contains the best sequence is marked done, the
@@ -133,28 +137,28 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         }
 
         // Step 4: All levels which are reachable via last done (i.e. their ancestors) are marked active.
-        uint16_t level_to_process[MAX_LEVELS];
-        uint16_t level_to_process_size = 0;
-        uint16_t level_to_process_current = 0;
-        add_done_levels_to_process(level_to_process, &level_to_process_size);
+        uint8_t level_to_process[MAX_LEVELS] = {0};
+        add_done_levels_to_process(level_to_process);
 
-        while (level_to_process_current < level_to_process_size) {
-            uint16_t level = level_to_process[level_to_process_current++];
-            if (level == 0) continue;
+        for (int level = get_last_level_index(); level > 0; level--) {
+            if (!level_to_process[level]) continue;
+            if (level_status[level] == LEVEL_DELETED) level_status[level] = LEVEL_ACTIVE;
             uint32_t start_id = get_level_start_id(level);
             uint32_t end_id = get_level_end_id(level);
             for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
                 GraphNode *node = get_graph_node(level_id);
-                if (node->useless) continue;
-                if (level_status[node->node_level] == LEVEL_DELETED) level_status[node->node_level] = LEVEL_ACTIVE;
-                level_to_process[level_to_process_size++] = get_parent_level(node);
+                if (node->useless) continue;                
+                level_to_process[get_parent_level(node)] = 1;
             }
         }
         // rebuild the map without done levels.
+        //compact_graph(block);
+        //visualize_graph(block);
         rebuild_seq_freq_map(block);
 
         // break;
     }
+    printf("\n\n Compacting and making graph\n");
     compact_graph(block);
     visualize_graph(block);
 }

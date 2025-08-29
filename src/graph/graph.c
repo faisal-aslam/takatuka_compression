@@ -135,7 +135,7 @@ static void compact_levels(const uint8_t *block) {
 void compact_graph(const uint8_t *block) {
     (void)block;
     if (graph.size == 0) return;
-
+    rebuild_seq_freq_map(block);
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
 
@@ -197,8 +197,8 @@ void compact_graph(const uint8_t *block) {
            get_elapsed_ms(), graph.size, write_idx);
 
     graph.size = write_idx;
-    graph.total_levels = current_level + 1; // trailing deleted levels vanish
-    rebuild_seq_freq_map(block);
+    graph.total_levels = current_level + 1; // trailing deleted levels vanish   
+    rebuild_seq_freq_map(block); 
 }
 
 void init_graph(void) {
