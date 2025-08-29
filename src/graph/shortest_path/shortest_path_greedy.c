@@ -53,21 +53,48 @@ static inline uint8_t mark_all_but_done_level_deleted() {
     // skip root level 0
     uint8_t contain_not_done_levels = 0;
     for (uint16_t level = 1; level <= get_last_level_index(); level++) {
-        if (level_status[level] != LEVEL_DONE && get_level_start_id(level)-get_level_end_id(level) > 1) {
-            
+        if (level_status[level] == LEVEL_ACTIVE && get_level_start_id(level) - get_level_end_id(level) > 1) {
+
             level_status[level] = LEVEL_DELETED;
             contain_not_done_levels = 1;
+        }
+        if (level_status[level] == LEVEL_DONE_NOW) { //move done now to done old so that latest done can be differentiated.
+            level_status[level] = LEVEL_DONE_OLD;
         }
     }
     return contain_not_done_levels;
 }
+
+static inline void add_done_levels_to_process(uint16_t *level_to_process, uint16_t *size) {
+    // skip root level 0
+    for (uint16_t level = 1; level <= get_last_level_index(); level++) {
+        if (level_status[level] == LEVEL_DONE_NOW) {
+            level_to_process[(*size)++] = level;
+        }
+    }
+}
+
+static void rebuild_seq_freq_map(const uint8_t *block) {
+    init_seq_freq_map(); // start fresh
+
+    for (uint32_t i = 0; i < graph.size; i++) {
+        GraphNode *node = &graph.nodes[i];
+        if (level_status[node->node_level] == LEVEL_DONE_NOW ||level_status[node->node_level] == LEVEL_DONE_OLD ) continue; // skip done levels.
+        if (node->useless) continue;                                // skip useless nodes
+        if (node->sequence_length <= 1) continue;                   // skip trivial sequences
+        if (node->is_RLE) continue;                                 // skip RLE nodes
+
+        seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
+    }
+}
+
 void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
     // start by setting all levels to deleted by default.
     while (mark_all_but_done_level_deleted()) {
 
         // root level is always active and should never be deleted.
-        level_status[0] = LEVEL_ACTIVE;
+        level_status[0] = LEVEL_DONE_OLD;
 
         // step 1: Find best sequence.
         const uint8_t *best_seq;
@@ -95,20 +122,22 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
                 if (best_len == node->sequence_length && sequences_equal(&block[node->offset], best_seq, best_len)) {
                     // found it.
                     found_once = 1;
-                    level_status[node->node_level] = LEVEL_DONE;
+                    level_status[node->node_level] = LEVEL_DONE_NOW;
                     mark_all_but_one_useless(node->node_id);
                     if (last_done_level == UINT16_MAX) last_done_level = level;
                     break;
                 }
             }
-            if (!found_once) level_status[level] = LEVEL_ACTIVE; // it is below any best sequence found.
+            if (!found_once && level_status[level] == LEVEL_DELETED)
+                level_status[level] = LEVEL_ACTIVE; // it is below any best sequence found.
         }
 
         // Step 4: All levels which are reachable via last done (i.e. their ancestors) are marked active.
         uint16_t level_to_process[MAX_LEVELS];
         uint16_t level_to_process_size = 0;
         uint16_t level_to_process_current = 0;
-        level_to_process[level_to_process_size++] = last_done_level;
+        add_done_levels_to_process(level_to_process, &level_to_process_size);
+
         while (level_to_process_current < level_to_process_size) {
             uint16_t level = level_to_process[level_to_process_current++];
             if (level == 0) continue;
@@ -121,8 +150,11 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
                 level_to_process[level_to_process_size++] = get_parent_level(node);
             }
         }
-        compact_graph(block);
-        visualize_graph(block);
-        //break;
+        // rebuild the map without done levels.
+        rebuild_seq_freq_map(block);
+
+        // break;
     }
+    compact_graph(block);
+    visualize_graph(block);
 }

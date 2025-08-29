@@ -27,7 +27,7 @@ void rebuild_seq_freq_map(const uint8_t *block) {
 
     for (uint32_t i = 0; i < graph.size; i++) {
         GraphNode *node = &graph.nodes[i];
-        if (node->node_level == LEVEL_DONE) continue; //skip done levels.
+//        if (level_status[node->node_level] == LEVEL_DONE) continue; //skip done levels.
         if (node->useless) continue;              // skip useless nodes
         if (node->sequence_length <= 1) continue; // skip trivial sequences
         if (node->is_RLE) continue;               // skip RLE nodes if not wanted

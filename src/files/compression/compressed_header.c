@@ -135,7 +135,7 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
     uint32_t max_class1 = get_code_class_threshold(1, 0);
 
     // Plan greedy fill counts (without writing yet)
-    uint32_t will_fill_class0 = (candidate_count <= (int)max_class0) ? candidate_count : max_class0;
+    uint32_t will_fill_class0 = (candidate_count <= (int)max_class0) ? (uint32_t)candidate_count : max_class0;
     uint32_t remaining_after_class0 = (uint32_t)candidate_count - will_fill_class0;
     uint32_t will_fill_class1 = (remaining_after_class0 <= max_class1) ? remaining_after_class0 : max_class1;
     uint32_t will_fill_class2 = (uint32_t)candidate_count - will_fill_class0 - will_fill_class1;
