@@ -148,6 +148,50 @@ static void print_levels_status(void) {
 #endif
 }
 
+uint8_t get_best_saving(const uint8_t *block,
+                        uint8_t *best_seq,
+                        uint8_t *best_len,
+                        uint32_t *best_freq) {
+    uint32_t best_node_id = 0;
+    uint8_t longest_RLE = 0;
+    uint16_t longest_RLE_level = 0;
+
+    // Step 1: scan levels for the longest RLE
+    for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
+        if (level_status[level] == LEVEL_DONE_NOW || level_status[level] == LEVEL_DONE_OLD)
+            continue;
+
+        uint32_t start_id = get_level_start_id(level);
+        uint32_t end_id = get_level_end_id(level);
+        if (start_id == end_id) continue; //empty level.
+        GraphNode *node = get_graph_node(start_id);
+
+        if (node->is_RLE && node->sequence_length > longest_RLE) {
+            longest_RLE = node->sequence_length;
+            longest_RLE_level = level;
+            best_node_id = start_id;
+        }
+    }
+
+    // Step 2: If we found an RLE candidate, return it
+    if (longest_RLE_level != 0) {
+        GraphNode *node = get_graph_node(best_node_id);
+        memcpy(best_seq, &block[node->offset], node->sequence_length);
+        *best_len = node->sequence_length;
+        *best_freq = 2; // TODO: real frequency
+        return 1;
+    }
+
+    // Step 3: Otherwise, fallback to normal best sequence
+    const uint8_t *seq_ptr = NULL;
+    uint8_t found = seq_freq_get_best(&seq_ptr, best_len, best_freq, &best_node_id);
+    if (found) {
+        memcpy(best_seq, seq_ptr, *best_len);  // copy into caller buffer
+    }
+    return found;
+}
+
+
 /**
  * Main greedy iteration loop:
  *  - Each iteration freezes at least one level (DONE_NOW → DONE_OLD).
@@ -155,13 +199,13 @@ static void print_levels_status(void) {
  */
 void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
-    const uint8_t *best_seq;
+    uint8_t best_seq[SEQ_LENGTH_LIMIT];
     uint8_t best_len;
-    uint32_t best_freq, best_node_id;
+    uint32_t best_freq;
 
     print_levels_status();
 
-    while (seq_freq_get_best(&best_seq, &best_len, &best_freq, &best_node_id) && best_freq > 1) {
+    while (get_best_saving(block, best_seq, &best_len, &best_freq) && best_freq > 1) {
         // Default everything (except root / done) to DELETED, rotate DONE_NOW → DONE_OLD
         (void)mark_all_but_done_level_deleted();
 
