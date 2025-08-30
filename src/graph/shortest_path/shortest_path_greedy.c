@@ -266,7 +266,9 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
         // Prepare next greedy iteration on the trimmed graph.
         compact_graph(block);
+#ifdef DEBUG        
         visualize_graph(block);
+#endif        
         rebuild_seq_freq_map(block, 1);
     }
 

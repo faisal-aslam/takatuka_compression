@@ -226,7 +226,7 @@ void compact_graph(const uint8_t *block) {
 
     graph.size = write_idx;
     graph.total_levels = current_level + 1; // trailing deleted levels vanish   
-    rebuild_seq_freq_map(block, 0); 
+    //rebuild_seq_freq_map(block, 0); do it outside of it.
 }
 
 void init_graph(void) {
