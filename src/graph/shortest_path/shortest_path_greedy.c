@@ -38,7 +38,7 @@ inline static void mark_all_but_one_useless(uint32_t only_useful_node) {
         GraphNode *current_node = get_graph_node(level_id);
         if (level_id == only_useful_node || current_node->is_RLE) {
             current_node->useless = 0; //only usefull
-        } else {
+        } else { //do not mark rle nodes uselss.
             current_node->useless = 1; //all other are useless.
         }
     }
@@ -221,7 +221,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
                 uint32_t end_id = get_level_end_id(child_level);
                 for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
                     GraphNode *node = get_graph_node(level_id);
-                    if (node->sequence_length > child_counter) {
+                    if (node->sequence_length > child_counter && !node->is_RLE) { //skip RLE nodes. They are darlings.
                         node->useless = 1;
                     }
                 }

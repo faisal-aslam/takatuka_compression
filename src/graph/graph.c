@@ -185,18 +185,18 @@ void compact_graph(const uint8_t *block) {
     for (uint32_t read_idx = 1; read_idx < graph.size; read_idx++) {
         GraphNode *node = &graph.nodes[read_idx];
 
-        if (node->node_id != 0) { // never skip the root
+        if (node->node_id != 0 && !node->is_RLE) { // never skip the root or RLE nodes.
             // NEW: skip whole levels marked deleted
-            if (level_is_deleted(node->node_level) && !node->is_RLE) {
+            if (level_is_deleted(node->node_level)) {
                 // Do NOT advance current_level here; the next kept node will
                 // back-fill first_node_of_level[...] for all skipped levels.
                 continue;
             }
 
             // Existing fast skips
-            if (node->useless && !node->is_RLE) continue;
+            if (node->useless) continue;
 
-            if (node->sequence_length > 1 && !node->is_RLE) {
+            if (node->sequence_length > 1) {
                 uint32_t freq = 0, dummy_node_id = 0;
                 seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_node_id);
                 if (freq <= 1) continue;
