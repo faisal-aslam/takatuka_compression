@@ -161,7 +161,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
     print_levels_status();
 
-    while (seq_freq_get_best(&best_seq, &best_len, &best_freq, &best_node_id)) {
+    while (seq_freq_get_best(&best_seq, &best_len, &best_freq, &best_node_id) && best_freq > 1) {
         // Default everything (except root / done) to DELETED, rotate DONE_NOW → DONE_OLD
         (void)mark_all_but_done_level_deleted();
 
@@ -182,6 +182,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
                 if (node->useless) continue;
 
                 if (best_len == node->sequence_length && sequences_equal(&block[node->offset], best_seq, best_len)) {
+
                     // Freeze this level now.
                     update_level_status(level, LEVEL_DONE_NOW);
                     mark_all_but_one_useless(node->node_id);
@@ -200,7 +201,6 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
                 }
             }
         }
-
         print_levels_status();
 
         // Step 3: Prevent bypass of DONE_NOW by pruning children that would jump past it.
@@ -270,14 +270,13 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 #ifdef DEBUG
         visualize_graph(block);
 #endif        
-        rebuild_seq_freq_map(block, 1);
-        
+        rebuild_seq_freq_map(block, 1);        
     }
-#ifdef DEBUG
-    printf("\n\n Compacting and making graph\n");
+//#ifdef DEBUG
+   // printf("\n\n Compacting and making graph\n");
     compact_graph(block);
     visualize_graph(block);
-#endif    
+//#endif    
     init_seq_freq_map();
     find_best_saving_path_to_a_node(block, get_last_level_index(), 0, path_state);
 }
