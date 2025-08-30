@@ -19,7 +19,8 @@ extern CodeMap code_map; // filled by populate_header()
 
 void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_write, BitWriter *writer) {
 #ifdef DEBUG
-    printf("[DEBUG] Starting body population with path size: %d\n", best_path.path_size);
+    printf("\n\n\n******************************* \n\n[DEBUG] Starting body population with path size: %d\n",
+           best_path.path_size);
     printf("[DEBUG] Initial BitWriter state:\n\n\n");
     bitwriter_print_state(writer);
 #endif
