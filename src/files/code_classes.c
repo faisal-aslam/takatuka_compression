@@ -69,8 +69,8 @@ uint8_t get_code_class_size(uint8_t code_class, uint8_t class2_bits) {
 /* Return threshold (capacity) for given class as uint16_t. For class2 uses class2_bits. */
 uint16_t get_code_class_threshold(uint8_t code_class, uint8_t class2_bits) {
     switch (code_class) {
-        case 0: return (uint16_t)(1u << 4);
-        case 1: return (uint16_t)(1u << 5);
+        case 0: return (uint16_t)(1u << get_code_class_size(0, class2_bits));
+        case 1: return (uint16_t)(1u << get_code_class_size(1, class2_bits));
         case 2: {
             if (class2_bits >= 16) {
                 fprintf(stderr, "Requested threshold bits too large: %u\n", class2_bits);
