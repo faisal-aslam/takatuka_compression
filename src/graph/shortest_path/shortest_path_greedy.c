@@ -263,18 +263,20 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         }
 
         print_levels_status();
-
+        
         // Prepare next greedy iteration on the trimmed graph.
         compact_graph(block);
-#ifdef DEBUG        
+        if(graph.size <=24350) break;
+#ifdef DEBUG
         visualize_graph(block);
 #endif        
         rebuild_seq_freq_map(block, 1);
     }
-
+#ifdef DEBUG
     printf("\n\n Compacting and making graph\n");
     compact_graph(block);
     visualize_graph(block);
+#endif    
     init_seq_freq_map();
     find_best_saving_path_to_a_node(block, get_last_level_index(), 0, path_state);
 }

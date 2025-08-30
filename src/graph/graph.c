@@ -187,14 +187,14 @@ void compact_graph(const uint8_t *block) {
 
         if (node->node_id != 0) { // never skip the root
             // NEW: skip whole levels marked deleted
-            if (level_is_deleted(node->node_level)) {
+            if (level_is_deleted(node->node_level) && !node->is_RLE) {
                 // Do NOT advance current_level here; the next kept node will
                 // back-fill first_node_of_level[...] for all skipped levels.
                 continue;
             }
 
             // Existing fast skips
-            if (node->useless) continue;
+            if (node->useless && !node->is_RLE) continue;
 
             if (node->sequence_length > 1 && !node->is_RLE) {
                 uint32_t freq = 0, dummy_node_id = 0;
