@@ -41,8 +41,8 @@ void read_compressed_file(const char* input_file_name, const char* output_file_n
         perror("Failed to open input file");
         return;
     }
-
-    BitReader reader;
+    
+    BitReader reader = {0};   // zero-initialize everything
     bitreader_attach_file(&reader, file, HEADER_BUFFER_SIZE);
 
     // Initialize global variables to clean state

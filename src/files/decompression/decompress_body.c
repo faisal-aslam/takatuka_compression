@@ -4,7 +4,7 @@
 #include "bit_reader.h"
 #include "code_classes.h"
 #include "decoder_map.h"
-#include "decompress_header.h" 
+#include "decompress_header.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,14 +43,13 @@ void read_body_using_decoder_map(BitReader *reader, const char *decompress_file_
             // Uncompressed single byte
             uint32_t byte;
             if (!bitreader_read(reader, &byte, 8)) {
-                if (reader->bit_pos == 0 && reader->byte_pos >= reader->buffer_size) {
-                    // Graceful EOF: don't throw error
+                // Accept EOF if the reader has no more data
+                if (reader->overflow) {
                     break;
                 }
                 fprintf(stderr, "Unexpected EOF while reading uncompressed byte\n");
                 exit(EXIT_FAILURE);
             }
-
             fputc((uint8_t)byte, output_file);
             total_bytes_written++;
         } else {
@@ -68,7 +67,7 @@ void read_body_using_decoder_map(BitReader *reader, const char *decompress_file_
 
             if (code_class == 3) { // RLE
                 uint32_t rle_count;
-                
+
                 // Use dynamic RLE bits instead of fixed 8 bits
                 if (global_rle_bits > 0) {
                     if (!bitreader_read(reader, &rle_count, global_rle_bits)) {
@@ -92,16 +91,16 @@ void read_body_using_decoder_map(BitReader *reader, const char *decompress_file_
 
                 // For single-byte RLE pattern (current implementation)
                 uint8_t output_byte = (uint8_t)pattern_byte;
-                
+
                 // Write the repeated byte
                 for (uint32_t rep = 0; rep < rle_count; ++rep) {
                     fputc(output_byte, output_file);
                 }
                 total_bytes_written += rle_count;
-                
+
 #ifdef DEBUG
-                printf("[RLE] Count=%u (using %u bits), Pattern=%02X, Total bytes=%zu\n", 
-                       rle_count, global_rle_bits, output_byte, total_bytes_written);
+                printf("[RLE] Count=%u (using %u bits), Pattern=%02X, Total bytes=%zu\n", rle_count, global_rle_bits,
+                       output_byte, total_bytes_written);
 #endif
             } else if (code_class == 0 || code_class == 1 || code_class == 2) {
                 // Regular compressed case (class 0,1 or 2)
