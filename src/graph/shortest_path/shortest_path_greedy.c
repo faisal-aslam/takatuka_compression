@@ -271,6 +271,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         visualize_graph(block);
 #endif        
         rebuild_seq_freq_map(block, 1);
+        
     }
 #ifdef DEBUG
     printf("\n\n Compacting and making graph\n");
