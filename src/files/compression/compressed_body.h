@@ -4,6 +4,7 @@
 
 #include "best_path_view.h"
 #include "bit_writer.h"
+#include "compressed_header.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -41,7 +42,7 @@
     } while (0)
 #endif
 
-
+extern uint8_t global_rle_bits;  // Declare external variable from compressed_header.h
 
 /**
  * @brief Processes BestPathView and writes compressed data to output file

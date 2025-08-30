@@ -9,6 +9,9 @@
 #include <stdint.h>
 #include <string.h>
 
+//rle count length. It is computed dynamically.
+extern uint8_t global_rle_bits;  
+
 extern CodeMap code_map;
 /*
  * Exposed symbol so compressed_body.c can use same class2 bit-width

@@ -22,15 +22,16 @@
 #include "seq_freq_map.h"
 
 #include <assert.h>
+#include <limits.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <limits.h>
-#include <stdint.h>
 
 #define HEADER_BUFFER_SIZE 4096
 
 /* exported globals declared in compressed_header.h */
+uint8_t global_rle_bits;
 uint8_t global_class2_bits = 0;
 CodeMap code_map;
 
@@ -66,8 +67,21 @@ static uint8_t ceil_log2_u32(uint32_t x) {
     if (x <= 1) return 0;
     uint8_t n = 0;
     uint32_t v = 1u;
-    while (v < x) { v <<= 1; n++; }
+    while (v < x) {
+        v <<= 1;
+        n++;
+    }
     return n;
+}
+
+static inline uint8_t calculate_bit_length(uint16_t value) {
+    if (value == 0) return 1; // At least 1 bit needed to represent 0
+    uint8_t bits = 0;
+    while (value > 0) {
+        bits++;
+        value >>= 1;
+    }
+    return bits;
 }
 
 void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to_write, BitWriter *writer) {
@@ -95,10 +109,14 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
         exit(EXIT_FAILURE);
     }
     int candidate_count = 0;
-
+    uint16_t max_rle_count = 0;
     for (int32_t i = best_path.path_size - 1; i >= 0; --i) {
         GraphNode *node = get_graph_node(best_path.nodes[i]);
         if (!node) continue;
+        // Track maximum RLE count
+        if (node->is_RLE && node->length_of_RLE > max_rle_count) {
+            max_rle_count = node->length_of_RLE;
+        }
         uint32_t freq = best_path.freqs[i];
         uint8_t len = node->sequence_length;
         if (should_skip_node(node, freq)) continue;
@@ -107,6 +125,16 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
         const uint8_t *sequence = &block[offset];
         candidates[candidate_count++] = (CodeCandidate){.savings = (uint64_t)freq, .sequence = sequence, .length = len};
     }
+    // Calculate RLE bits using the helper function
+    if (max_rle_count > 0) {
+        global_rle_bits = calculate_bit_length(max_rle_count);
+        // Cap at 8 bits since RLE count is uint8_t
+        if (global_rle_bits > 8) global_rle_bits = 8;
+    } else {
+        global_rle_bits = 0; // No RLE sequences
+    }
+
+    printf("Maximum RLE count: %u, using %u bits for RLE encoding\n", max_rle_count, global_rle_bits);
 
     if (candidate_count == 0) {
 #ifdef DEBUG
@@ -141,7 +169,8 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
     uint32_t will_fill_class2 = (uint32_t)candidate_count - will_fill_class0 - will_fill_class1;
 
 #ifdef DEBUG
-    printf("[DEBUG] planned fill: class0=%u, class1=%u, class2=%u\n", will_fill_class0, will_fill_class1, will_fill_class2);
+    printf("[DEBUG] planned fill: class0=%u, class1=%u, class2=%u\n", will_fill_class0, will_fill_class1,
+           will_fill_class2);
 #endif
 
     // Determine class2 bits and capacities
@@ -157,7 +186,7 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
     // Simulate assignment to determine per-class ordering and index-within-class
     uint8_t *assigned_class = malloc((size_t)candidate_count);
     uint16_t *index_within_class = malloc(sizeof(uint16_t) * (size_t)candidate_count);
-    uint16_t assigned_count[3] = {0,0,0};
+    uint16_t assigned_count[3] = {0, 0, 0};
     uint32_t max_per_class[3] = {max_class0, max_class1, max_class2};
 
     if (!assigned_class || !index_within_class) {
@@ -168,7 +197,10 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
     for (int i = 0; i < candidate_count; ++i) {
         int cls = -1;
         for (int c = 0; c <= 2; ++c) {
-            if (assigned_count[c] < max_per_class[c]) { cls = c; break; }
+            if (assigned_count[c] < max_per_class[c]) {
+                cls = c;
+                break;
+            }
         }
         if (cls == -1) {
             fprintf(stderr, "Error: All code classes full during simulation at i=%d\n", i);
@@ -181,7 +213,7 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
     }
 
     // Compute maximum length per class
-    uint32_t max_len[3] = {0,0,0};
+    uint32_t max_len[3] = {0, 0, 0};
     for (int i = 0; i < candidate_count; ++i) {
         int cls = assigned_class[i];
         if (candidates[i].length > max_len[cls]) max_len[cls] = candidates[i].length;
@@ -205,6 +237,10 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
     SAFE_BITWRITE(writer, len_bits[1], 8, file_to_write, "len_bits1");
     SAFE_BITWRITE(writer, len_bits[2], 8, file_to_write, "len_bits2");
 
+    // === ADD THIS RIGHT HERE ===
+    SAFE_BITWRITE(writer, global_rle_bits, 3, file_to_write, "rle_bits");
+    // ===========================
+
 #ifdef DEBUG
     printf("[DEBUG] Wrote class2_bits and len_bits header fields\n");
     bitwriter_print_state(writer);
@@ -215,8 +251,12 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
     for (int c = 0; c < 3; ++c) {
         if (assigned_count[c] > 0) {
             per_class_offsets[c] = malloc(sizeof(uint16_t) * assigned_count[c]);
-            if (!per_class_offsets[c]) { fprintf(stderr, "OOM allocating per_class_offsets\n"); exit(EXIT_FAILURE); }
-            for (uint16_t k = 0; k < assigned_count[c]; ++k) per_class_offsets[c][k] = UINT16_MAX;
+            if (!per_class_offsets[c]) {
+                fprintf(stderr, "OOM allocating per_class_offsets\n");
+                exit(EXIT_FAILURE);
+            }
+            for (uint16_t k = 0; k < assigned_count[c]; ++k)
+                per_class_offsets[c][k] = UINT16_MAX;
         }
     }
 
@@ -274,5 +314,6 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
     free(candidates);
     free(assigned_class);
     free(index_within_class);
-    for (int c = 0; c < 3; ++c) if (per_class_offsets[c]) free(per_class_offsets[c]);
+    for (int c = 0; c < 3; ++c)
+        if (per_class_offsets[c]) free(per_class_offsets[c]);
 }

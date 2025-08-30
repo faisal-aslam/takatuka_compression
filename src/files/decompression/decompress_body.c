@@ -1,4 +1,4 @@
-//decompress_body.c
+// decompress_body.c
 
 #include "decompress_body.h"
 #include "bit_reader.h"
@@ -10,6 +10,10 @@
 #include <stdlib.h>
 
 #define BODY_BUFFER_SIZE 4096
+
+// Add external declarations
+extern uint8_t global_class2_bits;
+extern uint8_t global_rle_bits;
 
 void read_body_using_decoder_map(BitReader *reader, const char *decompress_file_name) {
     FILE *output_file = fopen(decompress_file_name, "wb");
@@ -25,6 +29,7 @@ void read_body_using_decoder_map(BitReader *reader, const char *decompress_file_
 #ifdef DEBUG
     printf("\n=== STARTING BODY DECOMPRESSION ===\n");
     printf("Output file: %s\n", decompress_file_name);
+    printf("RLE bits: %u\n", global_rle_bits);
     bitreader_print_state(reader);
 #endif
 
@@ -62,34 +67,44 @@ void read_body_using_decoder_map(BitReader *reader, const char *decompress_file_
 #endif
 
             if (code_class == 3) { // RLE
-                uint32_t rle_len = 1;
-                /*if (!bitreader_read(reader, &rle_len, 3)) {
-                    fprintf(stderr, "Failed to read RLE length\n");
-                    exit(EXIT_FAILURE);
-                }*/
-
                 uint32_t rle_count;
-                if (!bitreader_read(reader, &rle_count, 8)) {
-                    fprintf(stderr, "Failed to read RLE count\n");
-                    exit(EXIT_FAILURE);
-                }
-
-                for (uint32_t i = 0; i < rle_len; ++i) {
-                    uint32_t temp;
-                    if (!bitreader_read(reader, &temp, 8)) {
-                        fprintf(stderr, "Failed to read RLE sequence byte\n");
+                
+                // Use dynamic RLE bits instead of fixed 8 bits
+                if (global_rle_bits > 0) {
+                    if (!bitreader_read(reader, &rle_count, global_rle_bits)) {
+                        fprintf(stderr, "Failed to read RLE count (%u bits)\n", global_rle_bits);
                         exit(EXIT_FAILURE);
                     }
-                    output[i] = (uint8_t)temp;
+                } else {
+                    // Fallback: should only happen if there are no RLE sequences
+                    if (!bitreader_read(reader, &rle_count, 8)) {
+                        fprintf(stderr, "Failed to read RLE count (8 bits fallback)\n");
+                        exit(EXIT_FAILURE);
+                    }
                 }
 
-                for (uint32_t rep = 0; rep < rle_count; ++rep) {
-                    fwrite(output, 1, rle_len, output_file);
+                // Read the RLE pattern byte (always 8 bits)
+                uint32_t pattern_byte;
+                if (!bitreader_read(reader, &pattern_byte, 8)) {
+                    fprintf(stderr, "Failed to read RLE pattern byte\n");
+                    exit(EXIT_FAILURE);
                 }
-                total_bytes_written += rle_len * rle_count;
-            } else {
+
+                // For single-byte RLE pattern (current implementation)
+                uint8_t output_byte = (uint8_t)pattern_byte;
+                
+                // Write the repeated byte
+                for (uint32_t rep = 0; rep < rle_count; ++rep) {
+                    fputc(output_byte, output_file);
+                }
+                total_bytes_written += rle_count;
+                
+#ifdef DEBUG
+                printf("[RLE] Count=%u (using %u bits), Pattern=%02X, Total bytes=%zu\n", 
+                       rle_count, global_rle_bits, output_byte, total_bytes_written);
+#endif
+            } else if (code_class == 0 || code_class == 1 || code_class == 2) {
                 // Regular compressed case (class 0,1 or 2)
-                /* Use the dynamic class2 bit-width read from header */
                 uint8_t bits = get_code_class_size((uint8_t)code_class, global_class2_bits);
 
                 uint32_t code;
@@ -107,6 +122,9 @@ void read_body_using_decoder_map(BitReader *reader, const char *decompress_file_
 
                 fwrite(seq, 1, length, output_file);
                 total_bytes_written += length;
+            } else {
+                fprintf(stderr, "Invalid code class: %u\n", code_class);
+                exit(EXIT_FAILURE);
             }
         }
 

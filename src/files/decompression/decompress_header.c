@@ -23,39 +23,54 @@
 
 #include "decompress_header.h"
 #include "bit_reader.h"
-#include "decoder_map.h"
 #include "code_classes.h"
+#include "decoder_map.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdint.h>
 #include <assert.h>
 #include <limits.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 /* Global decoder map and the class2 bit-width for this file */
 DecoderMap decoder_map;
 uint8_t global_class2_bits = 0;
+uint8_t global_rle_bits = 0;
 
 /* ---- Single contiguous pool for all codebook sequence bytes ---- */
 
-static uint8_t *g_codebook_pool      = NULL;
-static size_t   g_codebook_pool_cap  = 0;
-static size_t   g_codebook_pool_used = 0;
+static uint8_t *g_codebook_pool = NULL;
+static size_t g_codebook_pool_cap = 0;
+static size_t g_codebook_pool_used = 0;
+
 
 static void codebook_pool_init(size_t cap) {
-    g_codebook_pool = (uint8_t*)malloc(cap ? cap : 1);
+    // Free any existing pool first to avoid memory leaks
+    if (g_codebook_pool != NULL) {
+        free(g_codebook_pool);
+        g_codebook_pool = NULL;
+    }
+    
+    if (cap == 0) {
+        g_codebook_pool = NULL;
+        g_codebook_pool_cap = 0;
+        g_codebook_pool_used = 0;
+        return;
+    }
+    
+    g_codebook_pool = (uint8_t *)malloc(cap);
     if (!g_codebook_pool) {
         fprintf(stderr, "OOM allocating codebook pool of %zu bytes\n", cap);
         exit(EXIT_FAILURE);
     }
-    g_codebook_pool_cap  = cap;
+    g_codebook_pool_cap = cap;
     g_codebook_pool_used = 0;
 }
 
-static uint8_t* codebook_pool_alloc(size_t n) {
+static uint8_t *codebook_pool_alloc(size_t n) {
     if (g_codebook_pool_used + n > g_codebook_pool_cap) {
-        fprintf(stderr, "Header error: codebook_pool overflow (need %zu, have %zu)\n",
-                g_codebook_pool_used + n, g_codebook_pool_cap);
+        fprintf(stderr, "Header error: codebook_pool overflow (need %zu, have %zu)\n", g_codebook_pool_used + n,
+                g_codebook_pool_cap);
         exit(EXIT_FAILURE);
     }
     uint8_t *p = g_codebook_pool + g_codebook_pool_used;
@@ -72,29 +87,26 @@ void free_decoder_codebook_pool(void) {
 
 /* ---- Bitreader helper ---- */
 
-#define SAFE_BITREAD(reader_ptr, out_var, bits)                                         \
-    do {                                                                                \
-        if (!bitreader_read((reader_ptr), (out_var), (bits))) {                         \
-            if (!bitreader_fill_next_chunk((reader_ptr))) {                             \
-                fprintf(stderr, "Failed to read %u bits (EOF/overflow)\n",              \
-                        (unsigned)(bits));                                              \
-                exit(EXIT_FAILURE);                                                     \
-            }                                                                           \
-            if (!bitreader_read((reader_ptr), (out_var), (bits))) {                     \
-                fprintf(stderr, "bitreader_read failed after refill for %u bits\n",     \
-                        (unsigned)(bits));                                              \
-                exit(EXIT_FAILURE);                                                     \
-            }                                                                           \
-        }                                                                               \
+#define SAFE_BITREAD(reader_ptr, out_var, bits)                                                                        \
+    do {                                                                                                               \
+        if (!bitreader_read((reader_ptr), (out_var), (bits))) {                                                        \
+            if (!bitreader_fill_next_chunk((reader_ptr))) {                                                            \
+                fprintf(stderr, "Failed to read %u bits (EOF/overflow)\n", (unsigned)(bits));                          \
+                exit(EXIT_FAILURE);                                                                                    \
+            }                                                                                                          \
+            if (!bitreader_read((reader_ptr), (out_var), (bits))) {                                                    \
+                fprintf(stderr, "bitreader_read failed after refill for %u bits\n", (unsigned)(bits));                 \
+                exit(EXIT_FAILURE);                                                                                    \
+            }                                                                                                          \
+        }                                                                                                              \
     } while (0)
 
 /* Derive per-class counts from total N */
-static void derive_class_counts(uint16_t N, uint16_t cap0, uint16_t cap1, uint16_t cap2,
-                                uint16_t out_counts[3]) {
-    uint16_t n0  = (N < cap0) ? N : cap0;
+static void derive_class_counts(uint16_t N, uint16_t cap0, uint16_t cap1, uint16_t cap2, uint16_t out_counts[3]) {
+    uint16_t n0 = (N < cap0) ? N : cap0;
     uint16_t rem = (N > n0) ? (N - n0) : 0;
-    uint16_t n1  = (rem < cap1) ? rem : cap1;
-    uint16_t n2  = (N > (n0 + n1)) ? (N - n0 - n1) : 0;
+    uint16_t n1 = (rem < cap1) ? rem : cap1;
+    uint16_t n2 = (N > (n0 + n1)) ? (N - n0 - n1) : 0;
     out_counts[0] = n0;
     out_counts[1] = n1;
     out_counts[2] = n2;
@@ -116,7 +128,7 @@ static size_t compute_pool_upper_bound(const uint16_t counts[3], const uint8_t l
 }
 
 /* Main header reader */
-void read_header_and_create_decoder_map(BitReader* reader) {
+void read_header_and_create_decoder_map(BitReader *reader) {
     if (!reader) {
         fprintf(stderr, "read_header_and_create_decoder_map: reader == NULL\n");
         exit(EXIT_FAILURE);
@@ -138,8 +150,13 @@ void read_header_and_create_decoder_map(BitReader* reader) {
     /* Initialize decoder map with capacity for num_codes */
     init_decoder_map(&decoder_map, num_codes);
 
+    // In read_header_and_create_decoder_map function:
     if (num_codes == 0) {
         global_class2_bits = 0;
+        global_rle_bits = 0;
+        // Free any existing decoder map to avoid leaks
+        free_decoder_map(&decoder_map);
+        init_decoder_map(&decoder_map, 0); // Reinitialize with capacity 0
         bitreader_move_byte_boundary(reader);
         return;
     }
@@ -155,15 +172,19 @@ void read_header_and_create_decoder_map(BitReader* reader) {
     SAFE_BITREAD(reader, &lb1, 8);
     SAFE_BITREAD(reader, &lb2, 8);
 
+    // Read RLE bits (3 bits)
+    uint32_t rle_bits_val = 0;
+    SAFE_BITREAD(reader, &rle_bits_val, 3);
+    global_rle_bits = (uint8_t)rle_bits_val;
+
     uint8_t len_bits[3];
     len_bits[0] = (uint8_t)lb0;
     len_bits[1] = (uint8_t)lb1;
     len_bits[2] = (uint8_t)lb2;
 
 #ifdef DEBUG
-    printf("[DEBUG] class2_bits=%u len_bits=[%u,%u,%u]\n",
-           (unsigned)global_class2_bits,
-           (unsigned)len_bits[0], (unsigned)len_bits[1], (unsigned)len_bits[2]);
+    printf("[DEBUG] class2_bits=%u len_bits=[%u,%u,%u] rle_bits=%u\n", (unsigned)global_class2_bits,
+           (unsigned)len_bits[0], (unsigned)len_bits[1], (unsigned)len_bits[2], (unsigned)global_rle_bits);
 #endif
 
     /* Derive capacities and counts */
@@ -185,15 +206,14 @@ void read_header_and_create_decoder_map(BitReader* reader) {
     codebook_pool_init(pool_cap);
 
 #ifdef DEBUG
-    printf("[DEBUG] Derived class counts: n0=%u, n1=%u, n2=%u (caps: %u,%u,%u), pool_cap=%zu\n",
-           (unsigned)counts[0], (unsigned)counts[1], (unsigned)counts[2],
-           (unsigned)cap0, (unsigned)cap1, (unsigned)cap2, pool_cap);
+    printf("[DEBUG] Derived class counts: n0=%u, n1=%u, n2=%u (caps: %u,%u,%u), pool_cap=%zu\n", (unsigned)counts[0],
+           (unsigned)counts[1], (unsigned)counts[2], (unsigned)cap0, (unsigned)cap1, (unsigned)cap2, pool_cap);
 #endif
 
     /* Read entries in class order (0,1,2) */
     for (int cls = 0; cls <= 2; ++cls) {
         uint16_t n_here = counts[cls];
-        uint8_t  lb     = len_bits[cls];
+        uint8_t lb = len_bits[cls];
 
         for (uint16_t idx = 0; idx < n_here; ++idx) {
             uint32_t length = 0;
@@ -207,8 +227,8 @@ void read_header_and_create_decoder_map(BitReader* reader) {
             }
 
             if (length == 0 || length > 255u) {
-                fprintf(stderr, "Header error: decoded invalid length=%u for class %d index %u\n",
-                        (unsigned)length, cls, (unsigned)idx);
+                fprintf(stderr, "Header error: decoded invalid length=%u for class %d index %u\n", (unsigned)length,
+                        cls, (unsigned)idx);
                 exit(EXIT_FAILURE);
             }
 
@@ -223,18 +243,17 @@ void read_header_and_create_decoder_map(BitReader* reader) {
             }
 
             /* Store mapping: index-within-class = idx, class = cls */
-            if (!decoder_map_set(&decoder_map, (uint16_t)idx, (uint8_t)cls,
-                                 (const uint8_t*)seq_dst, (uint8_t)length)) {
-                fprintf(stderr, "decoder_map_set failed for class=%u idx=%u\n",
-                        (unsigned)cls, (unsigned)idx);
+            if (!decoder_map_set(&decoder_map, (uint16_t)idx, (uint8_t)cls, (const uint8_t *)seq_dst,
+                                 (uint8_t)length)) {
+                fprintf(stderr, "decoder_map_set failed for class=%u idx=%u\n", (unsigned)cls, (unsigned)idx);
                 exit(EXIT_FAILURE);
             }
         }
     }
 
 #ifdef DEBUG
-    printf("[DEBUG] Completed DecoderMap reconstruction (num_codes=%u, pool_used=%zu)\n",
-           (unsigned)num_codes, g_codebook_pool_used);
+    printf("[DEBUG] Completed DecoderMap reconstruction (num_codes=%u, pool_used=%zu)\n", (unsigned)num_codes,
+           g_codebook_pool_used);
     print_decoder_map(&decoder_map);
 #endif
 

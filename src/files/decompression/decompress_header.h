@@ -6,8 +6,10 @@
 #include "decoder_map.h"
 #include <stdint.h>
 
+
 /* decoder map reconstructed from header */
 extern DecoderMap decoder_map;
+extern uint8_t global_rle_bits;
 
 /*
  * Number of bits used for class-2 indices in this file.
