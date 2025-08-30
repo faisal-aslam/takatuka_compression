@@ -266,7 +266,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         
         // Prepare next greedy iteration on the trimmed graph.
         compact_graph(block);
-        if(graph.size <=24350) break;
+        
 #ifdef DEBUG
         visualize_graph(block);
 #endif        
