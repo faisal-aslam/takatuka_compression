@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <stdint.h>
+#include <math.h>
 
 /* Meta: upper 8 bits = length, lower 24 bits = frequency */
 #define META_ENCODE(freq, len)  (((uint32_t)(len) << 24) | ((freq) & 0xFFFFFF))
@@ -44,7 +45,7 @@ static uint32_t best_sequence_saving;
 static inline uint32_t compute_saving_from_meta(uint32_t meta) {
     uint32_t freq = META_GET_FREQ(meta);
     uint8_t len = META_GET_LEN(meta);
-    uint64_t s = (uint64_t)(freq-1) * (uint64_t)len;
+    uint64_t s = (uint64_t)(freq-1) * (uint64_t)len * (uint64_t)sqrt(len);
     if (s > UINT32_MAX) s = UINT32_MAX;
     return (uint32_t)s;
 }
