@@ -29,12 +29,9 @@ process_files() {
 
 # List actual files or folders correctly relative to src/
 
-process_files "/home/noman/takatuka/takatuka_compression/src/map/binseq_hashmap.c" 
-process_files "/home/noman/takatuka/takatuka_compression/src/map/binseq_hashmap.h"
-process_files "/home/noman/takatuka/takatuka_compression/src/map/node_map_pool.c"
-process_files "/home/noman/takatuka/takatuka_compression/src/map/node_map_pool.h"
-process_files "/home/noman/takatuka/takatuka_compression/src/map/sequence_repository.h"
-process_files "/home/noman/takatuka/takatuka_compression/src/map/sequence_repository.c"
+process_files "/home/noman/takatuka/takatuka_compression/src/files/code_classes.h" 
+process_files "/home/noman/takatuka/takatuka_compression/src/files/code_classes.c" 
+process_files "/home/noman/takatuka/takatuka_compression/src/files/decompression" 
 
 echo "Combined all .h and .c files into $output_file"
 

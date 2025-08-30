@@ -213,6 +213,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         seq_freq_map_print();
 #endif
         print_sequence(best_seq, best_len);
+        uint16_t found_count = 0;
         print_levels_status();
 
         // Step 2: Freeze levels that contain the best sequence, keeping only that node useful.
@@ -226,7 +227,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
                 if (node->useless) continue;
 
                 if (best_len == node->sequence_length && sequences_equal(&block[node->offset], best_seq, best_len)) {
-
+                    found_count++;
                     // Freeze this level now.
                     update_level_status(level, LEVEL_DONE_NOW);
                     mark_all_but_one_useless(node->node_id);
@@ -245,6 +246,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
                 }
             }
         }
+        printf("best_freq=%u, best_len=%u, found_count=%u\n", best_freq, best_len, found_count);
         print_levels_status();
 
         // Step 3: Prevent bypass of DONE_NOW by pruning children that would jump past it.
@@ -314,7 +316,8 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 #ifdef DEBUG
         visualize_graph(block);
 #endif        
-        rebuild_seq_freq_map(block, 1);        
+        rebuild_seq_freq_map(block, 1);
+        if (graph.size <= 1230) break;
     }
 //#ifdef DEBUG
    // printf("\n\n Compacting and making graph\n");
