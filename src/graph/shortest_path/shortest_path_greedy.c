@@ -33,11 +33,14 @@ inline static void mark_all_but_one_useless(uint32_t only_useful_node) {
     GraphNode *node = get_graph_node(only_useful_node);
     uint16_t level = node->node_level;
     uint32_t start_id = get_level_start_id(level);
-    uint32_t end_id   = get_level_end_id(level);
+    uint32_t end_id = get_level_end_id(level);
     for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
         GraphNode *current_node = get_graph_node(level_id);
-        if (level_id == only_useful_node || current_node->is_RLE) continue;
-        current_node->useless = 1;
+        if (level_id == only_useful_node || current_node->is_RLE) {
+            current_node->useless = 0; //only usefull
+        } else {
+            current_node->useless = 1; //all other are useless.
+        }
     }
 }
 
@@ -51,24 +54,23 @@ static inline void update_level_status(uint16_t level, LevelStatus new_status) {
     LevelStatus old_status = level_status[level];
 
     switch (old_status) {
-        case LEVEL_DONE_OLD:
-            return; // frozen
+    case LEVEL_DONE_OLD:
+        return; // frozen
 
-        case LEVEL_DONE_NOW:
-            if (new_status == LEVEL_DONE_OLD) {
-                level_status[level] = LEVEL_DONE_OLD;
-            }
-            return;
+    case LEVEL_DONE_NOW:
+        if (new_status == LEVEL_DONE_OLD) {
+            level_status[level] = LEVEL_DONE_OLD;
+        }
+        return;
 
-        case LEVEL_ACTIVE:
-        case LEVEL_DELETED:
-            level_status[level] = new_status;
-            return;
+    case LEVEL_ACTIVE:
+    case LEVEL_DELETED:
+        level_status[level] = new_status;
+        return;
 
-        default:
-            fprintf(stderr, "update_level_status: invalid old_status=%d for level=%u\n",
-                    old_status, level);
-            return;
+    default:
+        fprintf(stderr, "update_level_status: invalid old_status=%d for level=%u\n", old_status, level);
+        return;
     }
 }
 
@@ -117,28 +119,6 @@ static inline void add_done_levels_to_process(uint8_t *level_to_process) {
     }
 }
 
-/**
- * Rebuild the frequency map excluding completed levels and junk nodes.
- */
-static void rebuild_seq_freq_map(const uint8_t *block) {
-    init_seq_freq_map();
-
-    for (uint32_t i = 0; i < graph.size; i++) {
-        GraphNode *node = &graph.nodes[i];
-
-        // Skip frozen levels
-        LevelStatus s = level_status[node->node_level];
-        if (s == LEVEL_DONE_NOW || s == LEVEL_DONE_OLD) continue;
-
-        // Skip useless / trivial / RLE nodes
-        if (node->useless) continue;
-        if (node->sequence_length <= 1) continue;
-        if (node->is_RLE) continue;
-
-        seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
-    }
-}
-
 static void print_levels_status(void) {
 #ifdef DEBUG
     uint16_t last_level = get_last_level_index();
@@ -147,11 +127,21 @@ static void print_levels_status(void) {
         const char *status_str = NULL;
 
         switch (level_status[level]) {
-            case LEVEL_ACTIVE:   status_str = "ACTIVE";   break;
-            case LEVEL_DELETED:  status_str = "DELETED";  break;
-            case LEVEL_DONE_NOW: status_str = "DONE_NOW"; break;
-            case LEVEL_DONE_OLD: status_str = "DONE_OLD"; break;
-            default:             status_str = "UNKNOWN";  break;
+        case LEVEL_ACTIVE:
+            status_str = "ACTIVE";
+            break;
+        case LEVEL_DELETED:
+            status_str = "DELETED";
+            break;
+        case LEVEL_DONE_NOW:
+            status_str = "DONE_NOW";
+            break;
+        case LEVEL_DONE_OLD:
+            status_str = "DONE_OLD";
+            break;
+        default:
+            status_str = "UNKNOWN";
+            break;
         }
         printf("level %u = %s\n", level, status_str);
     }
@@ -166,7 +156,7 @@ static void print_levels_status(void) {
 void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
     const uint8_t *best_seq;
-    uint8_t  best_len;
+    uint8_t best_len;
     uint32_t best_freq, best_node_id;
 
     print_levels_status();
@@ -175,6 +165,9 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         // Default everything (except root / done) to DELETED, rotate DONE_NOW → DONE_OLD
         (void)mark_all_but_done_level_deleted();
 
+#ifdef DEBUG
+        seq_freq_map_print();
+#endif
         print_sequence(best_seq, best_len);
         print_levels_status();
 
@@ -182,15 +175,13 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         // Also delete intermediate levels between a frozen level and its parent (no bypass).
         for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
             uint32_t start_id = get_level_start_id(level);
-            uint32_t end_id   = get_level_end_id(level);
+            uint32_t end_id = get_level_end_id(level);
 
             for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
                 GraphNode *node = get_graph_node(level_id);
                 if (node->useless) continue;
 
-                if (best_len == node->sequence_length &&
-                    sequences_equal(&block[node->offset], best_seq, best_len))
-                {
+                if (best_len == node->sequence_length && sequences_equal(&block[node->offset], best_seq, best_len)) {
                     // Freeze this level now.
                     update_level_status(level, LEVEL_DONE_NOW);
                     mark_all_but_one_useless(node->node_id);
@@ -216,7 +207,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         // If a child at 'child_level' needs > child_counter symbols to reach the parent,
         // it would skip the frozen level; mark such nodes useless.
         uint16_t last_done_level = UINT16_MAX;
-        for (uint16_t level = get_last_level_index(); level > 0; level--) {
+        for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
             if (level_status[level] != LEVEL_DONE_NOW) continue;
 
             if (last_done_level == UINT16_MAX) last_done_level = level;
@@ -227,7 +218,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
                 if (level_status[child_level] == LEVEL_DONE_NOW) break;
 
                 uint32_t start_id = get_level_start_id(child_level);
-                uint32_t end_id   = get_level_end_id(child_level);
+                uint32_t end_id = get_level_end_id(child_level);
                 for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
                     GraphNode *node = get_graph_node(level_id);
                     if (node->sequence_length > child_counter) {
@@ -245,7 +236,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         uint8_t level_to_process[MAX_LEVELS] = {0};
         add_done_levels_to_process(level_to_process);
 
-        for (int level = (int)get_last_level_index(); level > 0; level--) {
+        for (int level = (int)get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
             if (!level_to_process[level]) continue;
 
             if (level_status[level] == LEVEL_DELETED) {
@@ -253,7 +244,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
             }
 
             uint32_t start_id = get_level_start_id((uint16_t)level);
-            uint32_t end_id   = get_level_end_id((uint16_t)level);
+            uint32_t end_id = get_level_end_id((uint16_t)level);
             for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
                 GraphNode *node = get_graph_node(level_id);
                 if (node->useless) continue;
@@ -276,7 +267,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         // Prepare next greedy iteration on the trimmed graph.
         compact_graph(block);
         visualize_graph(block);
-        rebuild_seq_freq_map(block);
+        rebuild_seq_freq_map(block, 1);
     }
 
     printf("\n\n Compacting and making graph\n");

@@ -22,19 +22,47 @@ static inline int level_is_deleted(uint16_t level) {
     return (level_status[level] == LEVEL_DELETED);
 }
 
-void rebuild_seq_freq_map(const uint8_t *block) {
-    init_seq_freq_map(); // start fresh
+/**
+ * Rebuild the frequency map excluding completed levels and junk nodes.
+ * Also avoids inflating counts for self-overlapping sequences.
+ */
+void rebuild_seq_freq_map(const uint8_t *block, uint8_t avoid_done_levels) {
+    //clean the old map.
+    init_seq_freq_map();
 
     for (uint32_t i = 0; i < graph.size; i++) {
         GraphNode *node = &graph.nodes[i];
-//        if (level_status[node->node_level] == LEVEL_DONE) continue; //skip done levels.
-        if (node->useless) continue;              // skip useless nodes
-        if (node->sequence_length <= 1) continue; // skip trivial sequences
-        if (node->is_RLE) continue;               // skip RLE nodes if not wanted
 
-        seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
+        // Skip nodes from frozen levels
+        LevelStatus s = level_status[node->node_level];
+        if (avoid_done_levels == 1 && (s == LEVEL_DONE_NOW || s == LEVEL_DONE_OLD)) {
+            continue;
+        }
+
+        // Skip useless, trivial, or RLE nodes
+        if (node->useless) continue;
+        if (node->sequence_length <= 1) continue;
+        if (node->is_RLE) continue;
+
+        uint32_t freq, old_node_id;
+        uint32_t index = seq_freq_get_with_index(&block[node->offset], node->sequence_length, &freq, &old_node_id);
+
+        if (index != UINT32_MAX) {
+            // Sequence already exists in the map
+            GraphNode *old_node = get_graph_node(old_node_id);
+
+            // Only increment frequency if not overlapping with itself
+            // (old_node must be at or above the parent level of this node)
+            if (old_node->node_level <= get_parent_level(node)) {
+                seq_freq_increment_with_index(index, node->node_id);
+            }
+        } else {
+            // Sequence not found → add it into the map
+            seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
+        }
     }
 }
+
 
 static void compact_levels_part_2(const uint8_t *block) {
     for (uint32_t l = 1; l < graph.total_levels; l++) {
@@ -135,7 +163,7 @@ static void compact_levels(const uint8_t *block) {
 void compact_graph(const uint8_t *block) {
     (void)block;
     if (graph.size == 0) return;
-    rebuild_seq_freq_map(block);
+    rebuild_seq_freq_map(block, 0);
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
 
@@ -198,7 +226,7 @@ void compact_graph(const uint8_t *block) {
 
     graph.size = write_idx;
     graph.total_levels = current_level + 1; // trailing deleted levels vanish   
-    rebuild_seq_freq_map(block); 
+    rebuild_seq_freq_map(block, 0); 
 }
 
 void init_graph(void) {

@@ -69,6 +69,7 @@ void print_node_sequence(GraphNode *node, const uint8_t* block);
 void print_all_nodes(const uint8_t* block);
 void mass_increment_levels(int add_levels);
 void compact_graph(const uint8_t* block);
+void rebuild_seq_freq_map(const uint8_t *block, uint8_t avoid_done_levels);
 
 /**
  * @brief Detects Run-Length Encodable (RLE) sequences within a data block
