@@ -13,7 +13,6 @@
  *  - Iteratively choose the sequence with the best saving (freq * length).
  *  - Freeze any levels that contain that sequence (one useful node kept).
  *  - Prevent bypass of frozen levels by pruning longer jumps.
- *  - Keep the graph connected by activating ancestors and certain children.
  *  - Compact and rebuild frequency map between iterations.
  */
 
@@ -196,11 +195,8 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
                     // Mark intermediate levels (between this level and its parent) as DELETED.
                     uint16_t parent_level = get_parent_level(node);
-                    for (uint16_t loop = level - 1; loop > parent_level; loop--) {
-                        if (get_level_start_id(loop) == get_level_end_id(loop)) continue; // empty level.
-                        if (level_status[loop] == LEVEL_ACTIVE) {
-                            update_level_status(loop, LEVEL_DELETED);
-                        }
+                    for (uint16_t loop = level - 1; loop > parent_level; loop--) {                        
+                            update_level_status(loop, LEVEL_DELETED);                        
                     }
 
                     // Jump to parent level for the next outer-iteration step.
@@ -229,8 +225,6 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
                 uint32_t end_id = get_level_end_id(child_level);
                 for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
                     GraphNode *node = get_graph_node(level_id);
-                    // check false positive and skip RLE nodes. They are darlings.
-                    if (node->node_level != level) continue;
                     if (get_parent_level(node) < level) { // the parent is bypassing done node which is not allowed.
                         node->useless = 1;
                     }
