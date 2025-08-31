@@ -228,6 +228,10 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
                 if (best_len == node->sequence_length && sequences_equal(&block[node->offset], best_seq, best_len)) {
                     found_count++;
+                    if (found_count > best_freq) {
+                        print_sequence(&block[node->offset], node->sequence_length);
+                        print_sequence(best_seq, best_len);
+                    }
                     // Freeze this level now.
                     update_level_status(level, LEVEL_DONE_NOW);
                     mark_all_but_one_useless(node->node_id);
