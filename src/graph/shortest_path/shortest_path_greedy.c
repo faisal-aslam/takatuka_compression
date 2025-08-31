@@ -36,6 +36,7 @@ inline static void mark_all_but_one_useless(uint32_t only_useful_node) {
     uint32_t end_id = get_level_end_id(level);
     for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
         GraphNode *current_node = get_graph_node(level_id);
+        if (current_node->node_level != level) continue;
         if (level_id == only_useful_node || current_node->is_RLE) {
             current_node->useless = 0; //only usefull
         } else { //do not mark rle nodes uselss.
@@ -46,76 +47,41 @@ inline static void mark_all_but_one_useless(uint32_t only_useful_node) {
 
 /**
  * Centralized status updater with allowed transitions:
- *  - LEVEL_DONE_OLD: immutable, no further changes.
- *  - LEVEL_DONE_NOW: may transition only to LEVEL_DONE_OLD.
- *  - LEVEL_ACTIVE / LEVEL_DELETED: may transition to any of the four states.
+ *  - LEVEL_DONE: immutable, no further changes.
+ *  - LEVEL_ACTIVE: May become either LEVEL_DELETED or LEVEL_DONE.
+ *  - LEVEL_DELETED: immutable, no further changes.
+ *  - The function must abort and give errors if incorrect updates are tried.
  */
 static inline void update_level_status(uint16_t level, LevelStatus new_status) {
     LevelStatus old_status = level_status[level];
 
     switch (old_status) {
-    case LEVEL_DONE_OLD:
-        return; // frozen
-
-    case LEVEL_DONE_NOW:
-        if (new_status == LEVEL_DONE_OLD) {
-            level_status[level] = LEVEL_DONE_OLD;
+    case LEVEL_DONE:
+    case LEVEL_DELETED:
+        // Immutable states, cannot be changed
+        if (new_status != old_status) {
+            fprintf(stderr,
+                    "update_level_status: invalid transition from %d to %d at level=%u\n",
+                    old_status, new_status, level);
+            abort();
         }
         return;
 
     case LEVEL_ACTIVE:
-    case LEVEL_DELETED:
-        level_status[level] = new_status;
-        return;
+        if (new_status == LEVEL_DELETED || new_status == LEVEL_DONE) {
+            level_status[level] = new_status;
+            return;
+        }
+        fprintf(stderr,
+                "update_level_status: invalid transition from ACTIVE(%d) to %d at level=%u\n",
+                old_status, new_status, level);
+        abort();
 
     default:
-        fprintf(stderr, "update_level_status: invalid old_status=%d for level=%u\n", old_status, level);
-        return;
-    }
-}
-
-/**
- * Marks all levels as deleted by default at the start of an iteration,
- * except:
- *  - root (forced to DONE_OLD)
- *  - levels already DONE_OLD remain so (immutable)
- *  - levels DONE_NOW are rotated to DONE_OLD (freezing them)
- *
- * Returns 1 if at least one non-done level existed (i.e., work remains),
- * otherwise 0.
- */
-static uint8_t mark_all_but_done_level_deleted(void) {
-    uint8_t contain_not_done_levels = 0;
-
-    // Root is never deleted; treat as permanently frozen.
-    update_level_status(0, LEVEL_DONE_OLD);
-
-    for (uint16_t level = 1; level <= get_last_level_index(); level++) {
-        LevelStatus s = level_status[level];
-
-        // ACTIVE → DELETED is permitted by the rules
-        if (s == LEVEL_ACTIVE) {
-            update_level_status(level, LEVEL_DELETED);
-            contain_not_done_levels = 1;
-        } else if (s == LEVEL_DELETED) {
-            contain_not_done_levels = 1;
-        } else if (s == LEVEL_DONE_NOW) {
-            // DONE_NOW → DONE_OLD (freeze)
-            update_level_status(level, LEVEL_DONE_OLD);
-        }
-        // DONE_OLD stays as-is (immutable)
-    }
-    return contain_not_done_levels;
-}
-
-/**
- * Seed a per-level bit vector with the set of levels that are DONE_NOW.
- * The caller uses this to BFS ancestors upward.
- */
-static inline void add_done_levels_to_process(uint8_t *level_to_process) {
-    // skip root
-    for (uint16_t level = 1; level <= get_last_level_index(); level++) {
-        level_to_process[level] = (level_status[level] == LEVEL_DONE_NOW) ? 1u : 0u;
+        fprintf(stderr,
+                "update_level_status: invalid old_status=%d at level=%u\n",
+                old_status, level);
+        abort();
     }
 }
 
@@ -133,11 +99,8 @@ static void print_levels_status(void) {
         case LEVEL_DELETED:
             status_str = "DELETED";
             break;
-        case LEVEL_DONE_NOW:
-            status_str = "DONE_NOW";
-            break;
-        case LEVEL_DONE_OLD:
-            status_str = "DONE_OLD";
+        case LEVEL_DONE:
+            status_str = "DONE";
             break;
         default:
             status_str = "UNKNOWN";
@@ -158,7 +121,7 @@ uint8_t get_best_saving(const uint8_t *block,
 
     // Step 1: scan levels for the longest RLE
     for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
-        if (level_status[level] == LEVEL_DONE_NOW || level_status[level] == LEVEL_DONE_OLD)
+        if (level_status[level] != LEVEL_ACTIVE) //only in active levels.
             continue;
 
         uint32_t start_id = get_level_start_id(level);
@@ -207,7 +170,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
     while (get_best_saving(block, best_seq, &best_len, &best_freq) && best_freq > 1) {
         // Default everything (except root / done) to DELETED, rotate DONE_NOW → DONE_OLD
-        (void)mark_all_but_done_level_deleted();
+        
 
 #ifdef DEBUG
         seq_freq_map_print();
@@ -219,6 +182,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         // Step 2: Freeze levels that contain the best sequence, keeping only that node useful.
         // Also delete intermediate levels between a frozen level and its parent (no bypass).
         for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
+            if (level_status[level]!= LEVEL_ACTIVE) continue; //only use active levels.
             uint32_t start_id = get_level_start_id(level);
             uint32_t end_id = get_level_end_id(level);
 
@@ -228,24 +192,23 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
                 if (best_len == node->sequence_length && sequences_equal(&block[node->offset], best_seq, best_len)) {
                     found_count++;
-                    if (found_count > best_freq) {
+                    if (found_count > best_freq && !node->is_RLE) {
+                        //we should not be here unless node is RLE.
                         print_sequence(&block[node->offset], node->sequence_length);
                         print_sequence(best_seq, best_len);
                     }
                     // Freeze this level now.
-                    update_level_status(level, LEVEL_DONE_NOW);
+                    update_level_status(level, LEVEL_DONE);
                     mark_all_but_one_useless(node->node_id);
 
                     // Mark intermediate levels (between this level and its parent) as DELETED.
-                    for (uint8_t loop = 1; loop < best_len; loop++) {
-                        // avoid underflow; never touch root
-                        if (level >= loop && (level - loop) > 0) {
-                            update_level_status((uint16_t)(level - loop), LEVEL_DELETED);
-                        }
+                    uint16_t parent_level = get_parent_level(node);
+                    for (uint16_t loop = level-1; loop > parent_level; loop--) {
+                            update_level_status(loop, LEVEL_DELETED);
                     }
 
                     // Jump to parent level for the next outer-iteration step.
-                    level = get_parent_level(node);
+                    level = parent_level;
                     break;
                 }
             }
@@ -258,70 +221,37 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         // it would skip the frozen level; mark such nodes useless.
         uint16_t last_done_level = UINT16_MAX;
         for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
-            if (level_status[level] != LEVEL_DONE_NOW) continue;
+            if (level_status[level] != LEVEL_DONE) continue;
 
             if (last_done_level == UINT16_MAX) last_done_level = level;
 
-            uint16_t child_counter = 0;
+            
             for (uint16_t child_level = level + 1; child_level <= get_last_level_index(); child_level++) {
-                child_counter++;
-                if (level_status[child_level] == LEVEL_DONE_NOW) break;
+                
+                if (level_status[child_level] == LEVEL_DONE) break;
 
                 uint32_t start_id = get_level_start_id(child_level);
                 uint32_t end_id = get_level_end_id(child_level);
                 for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
                     GraphNode *node = get_graph_node(level_id);
-                    if (node->sequence_length > child_counter && !node->is_RLE) { //skip RLE nodes. They are darlings.
+                    //check false positive and skip RLE nodes. They are darlings.
+                    if (node->node_level != level || node->is_RLE) continue; 
+                    if (get_parent_level(node) < level) { //the parent is bypassing done node which is not allowed.
                         node->useless = 1;
                     }
                 }
             }
         }
-
-        print_levels_status();
-
-        // Step 4: Keep graph connected upward:
-        // - Start from DONE_NOW levels and mark their ancestors ACTIVE (if currently DELETED).
-        // - Use a level-mark array to avoid repeated enqueue.
-        uint8_t level_to_process[MAX_LEVELS] = {0};
-        add_done_levels_to_process(level_to_process);
-
-        for (int level = (int)get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
-            if (!level_to_process[level]) continue;
-
-            if (level_status[level] == LEVEL_DELETED) {
-                update_level_status((uint16_t)level, LEVEL_ACTIVE);
-            }
-
-            uint32_t start_id = get_level_start_id((uint16_t)level);
-            uint32_t end_id = get_level_end_id((uint16_t)level);
-            for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
-                GraphNode *node = get_graph_node(level_id);
-                if (node->useless) continue;
-                level_to_process[get_parent_level(node)] = 1;
-            }
-        }
-
-        print_levels_status();
-
-        // Step 5: Also mark all children of the last frozen level ACTIVE
-        // so the remaining graph stays connected below.
-        if (last_done_level != UINT16_MAX) {
-            for (int level = (int)get_last_level_index(); level > (int)last_done_level; level--) {
-                update_level_status((uint16_t)level, LEVEL_ACTIVE);
-            }
-        }
-
         print_levels_status();
         
         // Prepare next greedy iteration on the trimmed graph.
-        compact_graph(block);
+        //compact_graph(block);
         
 #ifdef DEBUG
         visualize_graph(block);
 #endif        
         rebuild_seq_freq_map(block, 1);
-        if (graph.size <= 1230) break;
+        
     }
 //#ifdef DEBUG
    // printf("\n\n Compacting and making graph\n");

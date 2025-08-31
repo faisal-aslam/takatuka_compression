@@ -35,7 +35,7 @@ void rebuild_seq_freq_map(const uint8_t *block, uint8_t avoid_done_levels) {
 
         // Skip nodes from frozen levels
         LevelStatus s = level_status[node->node_level];
-        if (avoid_done_levels == 1 && (s == LEVEL_DONE_NOW || s == LEVEL_DONE_OLD)) {
+        if (avoid_done_levels == 1 && (s != LEVEL_ACTIVE)) {
             continue;
         }
 

@@ -42,8 +42,7 @@ typedef struct {
 typedef enum {
     LEVEL_ACTIVE = 0,        // normal, nothing special
     LEVEL_DELETED,         // level is deleted
-    LEVEL_DONE_OLD,           // processed/finished
-    LEVEL_DONE_NOW
+    LEVEL_DONE,           // processed/finished
 } LevelStatus;
 
 extern Graph graph; //always use graph.c definiton.
