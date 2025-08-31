@@ -38,9 +38,9 @@ inline static void mark_all_but_one_useless(uint32_t only_useful_node) {
         GraphNode *current_node = get_graph_node(level_id);
         if (current_node->node_level != level) continue;
         if (level_id == only_useful_node || current_node->is_RLE) {
-            current_node->useless = 0; //only usefull
-        } else { //do not mark rle nodes uselss.
-            current_node->useless = 1; //all other are useless.
+            current_node->useless = 0; // only usefull
+        } else {                       // do not mark rle nodes uselss.
+            current_node->useless = 1; // all other are useless.
         }
     }
 }
@@ -60,9 +60,8 @@ static inline void update_level_status(uint16_t level, LevelStatus new_status) {
     case LEVEL_DELETED:
         // Immutable states, cannot be changed
         if (new_status != old_status) {
-            fprintf(stderr,
-                    "update_level_status: invalid transition from %d to %d at level=%u\n",
-                    old_status, new_status, level);
+            fprintf(stderr, "update_level_status: invalid transition from %d to %d at level=%u\n", old_status,
+                    new_status, level);
             abort();
         }
         return;
@@ -72,15 +71,12 @@ static inline void update_level_status(uint16_t level, LevelStatus new_status) {
             level_status[level] = new_status;
             return;
         }
-        fprintf(stderr,
-                "update_level_status: invalid transition from ACTIVE(%d) to %d at level=%u\n",
-                old_status, new_status, level);
+        fprintf(stderr, "update_level_status: invalid transition from ACTIVE(%d) to %d at level=%u\n", old_status,
+                new_status, level);
         abort();
 
     default:
-        fprintf(stderr,
-                "update_level_status: invalid old_status=%d at level=%u\n",
-                old_status, level);
+        fprintf(stderr, "update_level_status: invalid old_status=%d at level=%u\n", old_status, level);
         abort();
     }
 }
@@ -111,22 +107,19 @@ static void print_levels_status(void) {
 #endif
 }
 
-uint8_t get_best_saving(const uint8_t *block,
-                        uint8_t *best_seq,
-                        uint8_t *best_len,
-                        uint32_t *best_freq) {
+uint8_t get_best_saving(const uint8_t *block, uint8_t *best_seq, uint8_t *best_len, uint32_t *best_freq) {
     uint32_t best_node_id = 0;
     uint8_t longest_RLE = 0;
     uint16_t longest_RLE_level = 0;
 
     // Step 1: scan levels for the longest RLE
     for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
-        if (level_status[level] != LEVEL_ACTIVE) //only in active levels.
+        if (level_status[level] != LEVEL_ACTIVE) // only in active levels.
             continue;
 
         uint32_t start_id = get_level_start_id(level);
         uint32_t end_id = get_level_end_id(level);
-        if (start_id == end_id) continue; //empty level.
+        if (start_id == end_id) continue; // empty level.
         GraphNode *node = get_graph_node(start_id);
 
         if (node->is_RLE && node->sequence_length > longest_RLE) {
@@ -147,13 +140,14 @@ uint8_t get_best_saving(const uint8_t *block,
 
     // Step 3: Otherwise, fallback to normal best sequence
     const uint8_t *seq_ptr = NULL;
+    // map is recreated only using active levels.
+    rebuild_seq_freq_map(block, 1);
     uint8_t found = seq_freq_get_best(&seq_ptr, best_len, best_freq, &best_node_id);
     if (found) {
-        memcpy(best_seq, seq_ptr, *best_len);  // copy into caller buffer
+        memcpy(best_seq, seq_ptr, *best_len); // copy into caller buffer
     }
     return found;
 }
-
 
 /**
  * Main greedy iteration loop:
@@ -170,7 +164,6 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
     while (get_best_saving(block, best_seq, &best_len, &best_freq) && best_freq > 1) {
         // Default everything (except root / done) to DELETED, rotate DONE_NOW → DONE_OLD
-        
 
 #ifdef DEBUG
         seq_freq_map_print();
@@ -182,7 +175,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         // Step 2: Freeze levels that contain the best sequence, keeping only that node useful.
         // Also delete intermediate levels between a frozen level and its parent (no bypass).
         for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
-            if (level_status[level]!= LEVEL_ACTIVE) continue; //only use active levels.
+            if (level_status[level] != LEVEL_ACTIVE) continue; // only use active levels.
             uint32_t start_id = get_level_start_id(level);
             uint32_t end_id = get_level_end_id(level);
 
@@ -193,7 +186,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
                 if (best_len == node->sequence_length && sequences_equal(&block[node->offset], best_seq, best_len)) {
                     found_count++;
                     if (found_count > best_freq && !node->is_RLE) {
-                        //we should not be here unless node is RLE.
+                        // we should not be here unless node is RLE.
                         print_sequence(&block[node->offset], node->sequence_length);
                         print_sequence(best_seq, best_len);
                     }
@@ -203,8 +196,11 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
                     // Mark intermediate levels (between this level and its parent) as DELETED.
                     uint16_t parent_level = get_parent_level(node);
-                    for (uint16_t loop = level-1; loop > parent_level; loop--) {
+                    for (uint16_t loop = level - 1; loop > parent_level; loop--) {
+                        if (get_level_start_id(loop) == get_level_end_id(loop)) continue; // empty level.
+                        if (level_status[loop] == LEVEL_ACTIVE) {
                             update_level_status(loop, LEVEL_DELETED);
+                        }
                     }
 
                     // Jump to parent level for the next outer-iteration step.
@@ -225,39 +221,36 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
             if (last_done_level == UINT16_MAX) last_done_level = level;
 
-            
             for (uint16_t child_level = level + 1; child_level <= get_last_level_index(); child_level++) {
-                
+
                 if (level_status[child_level] == LEVEL_DONE) break;
 
                 uint32_t start_id = get_level_start_id(child_level);
                 uint32_t end_id = get_level_end_id(child_level);
                 for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
                     GraphNode *node = get_graph_node(level_id);
-                    //check false positive and skip RLE nodes. They are darlings.
-                    if (node->node_level != level || node->is_RLE) continue; 
-                    if (get_parent_level(node) < level) { //the parent is bypassing done node which is not allowed.
+                    // check false positive and skip RLE nodes. They are darlings.
+                    if (node->node_level != level) continue;
+                    if (get_parent_level(node) < level) { // the parent is bypassing done node which is not allowed.
                         node->useless = 1;
                     }
                 }
             }
         }
         print_levels_status();
-        
+
         // Prepare next greedy iteration on the trimmed graph.
-        //compact_graph(block);
-        
+        compact_graph(block);
+
 #ifdef DEBUG
         visualize_graph(block);
-#endif        
-        rebuild_seq_freq_map(block, 1);
-        
+#endif
     }
-//#ifdef DEBUG
-   // printf("\n\n Compacting and making graph\n");
+    // #ifdef DEBUG
+    //  printf("\n\n Compacting and making graph\n");
     compact_graph(block);
     visualize_graph(block);
-//#endif    
+    // #endif
     init_seq_freq_map();
     find_best_saving_path_to_a_node(block, get_last_level_index(), 0, path_state);
 }
