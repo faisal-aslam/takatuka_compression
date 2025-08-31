@@ -148,6 +148,22 @@ uint8_t get_best_saving(const uint8_t *block, uint8_t *best_seq, uint8_t *best_l
     return found;
 }
 
+// Prevent bypass of DONE_NOW by pruning children that would jump past it.
+// If a child at 'child_level' needs > child_counter symbols to reach the parent,
+// it would skip the frozen level; mark such nodes useless.
+static void avoid_done_level_skipping(uint16_t level) {
+    for (uint16_t child_level = level + 1; child_level <= get_last_level_index(); child_level++) {
+        uint32_t start_id = get_level_start_id(child_level);
+        uint32_t end_id = get_level_end_id(child_level);
+        for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
+            GraphNode *node = get_graph_node(level_id);
+            if (get_parent_level(node) < level) { // the parent is bypassing done node which is not allowed.
+                node->useless = 1;
+            }
+        }
+    }
+}
+
 /**
  * Main greedy iteration loop:
  *  - Each iteration freezes at least one level (DONE_NOW → DONE_OLD).
@@ -171,8 +187,9 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         uint16_t found_count = 0;
         print_levels_status();
 
-        // Step 2: Freeze levels that contain the best sequence, keeping only that node useful.
-        // Also delete intermediate levels between a frozen level and its parent (no bypass).
+        //1. Freeze levels that contain the best sequence, keeping only that node useful.
+        //2.  Also delete intermediate levels between a frozen level and its parent.
+        //3. Do not allow to bypass the frozen level by one of its children
         for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
             if (level_status[level] != LEVEL_ACTIVE) continue; // only use active levels.
             uint32_t start_id = get_level_start_id(level);
@@ -195,10 +212,10 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
                     // Mark intermediate levels (between this level and its parent) as DELETED.
                     uint16_t parent_level = get_parent_level(node);
-                    for (uint16_t loop = level - 1; loop > parent_level; loop--) {                        
-                            update_level_status(loop, LEVEL_DELETED);                        
+                    for (uint16_t loop = level - 1; loop > parent_level; loop--) {
+                        update_level_status(loop, LEVEL_DELETED);
                     }
-
+                    avoid_done_level_skipping(level);
                     // Jump to parent level for the next outer-iteration step.
                     level = parent_level;
                     break;
@@ -206,31 +223,6 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
             }
         }
         printf("best_freq=%u, best_len=%u, found_count=%u\n", best_freq, best_len, found_count);
-        print_levels_status();
-
-        // Step 3: Prevent bypass of DONE_NOW by pruning children that would jump past it.
-        // If a child at 'child_level' needs > child_counter symbols to reach the parent,
-        // it would skip the frozen level; mark such nodes useless.
-        uint16_t last_done_level = UINT16_MAX;
-        for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
-            if (level_status[level] != LEVEL_DONE) continue;
-
-            if (last_done_level == UINT16_MAX) last_done_level = level;
-
-            for (uint16_t child_level = level + 1; child_level <= get_last_level_index(); child_level++) {
-
-                if (level_status[child_level] == LEVEL_DONE) break;
-
-                uint32_t start_id = get_level_start_id(child_level);
-                uint32_t end_id = get_level_end_id(child_level);
-                for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
-                    GraphNode *node = get_graph_node(level_id);
-                    if (get_parent_level(node) < level) { // the parent is bypassing done node which is not allowed.
-                        node->useless = 1;
-                    }
-                }
-            }
-        }
         print_levels_status();
 
         // Prepare next greedy iteration on the trimmed graph.
