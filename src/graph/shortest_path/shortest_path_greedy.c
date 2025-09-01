@@ -17,7 +17,6 @@
  */
 
 static inline void print_sequence(const uint8_t *seq, uint8_t len) {
-    printf("\nlen=%u\n", len);
     for (uint8_t i = 0; i < len; i++) {
         printf("%c", seq[i]);
     }
@@ -182,14 +181,15 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
 #ifdef DEBUG
         seq_freq_map_print();
-#endif
         print_sequence(best_seq, best_len);
+#endif
+        
         uint16_t found_count = 0;
         print_levels_status();
 
-        //1. Freeze levels that contain the best sequence, keeping only that node useful.
-        //2.  Also delete intermediate levels between a frozen level and its parent.
-        //3. Do not allow to bypass the frozen level by one of its children
+        // 1. Freeze levels that contain the best sequence, keeping only that node useful.
+        // 2.  Also delete intermediate levels between a frozen level and its parent.
+        // 3. Do not allow to bypass the frozen level by one of its children
         for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
             if (level_status[level] != LEVEL_ACTIVE) continue; // only use active levels.
             uint32_t start_id = get_level_start_id(level);
@@ -222,7 +222,10 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
                 }
             }
         }
+
+#ifdef DEBUG
         printf("best_freq=%u, best_len=%u, found_count=%u\n", best_freq, best_len, found_count);
+#endif
         print_levels_status();
 
         // Prepare next greedy iteration on the trimmed graph.
