@@ -1,3 +1,5 @@
+//graph_visualizer.c
+
 #include "graph_visualizer.h"
 #include "graph.h"
 #include "seq_freq_map.h"
@@ -11,6 +13,25 @@ static const char *LEVEL_COLORS[] = {"#CBA6F7", "#FFCDD2", "#F8BBD0", "#E1BEE7",
                                      "#C5CAE9", "#BBDEFB", "#B2EBF2", "#B2DFDB", "#C8E6C9",
                                      "#DCEDC8", "#FFF9C4", "#FFE0B2", "#FFCCBC", "#D7CCC8"};
 
+// Helper function to escape special characters for DOT format
+static void print_escaped_char(FILE *output, char c) {
+    switch (c) {
+        case '"':  fprintf(output, "\\\""); break;
+        case '\\': fprintf(output, "\\\\"); break;
+        case '\n': fprintf(output, "\\n"); break;
+        case '\r': fprintf(output, "\\r"); break;
+        case '\t': fprintf(output, "\\t"); break;
+        default:
+            // Print printable ASCII characters directly, others as escaped
+            if (c >= 32 && c <= 126) {
+                fprintf(output, "%c", c);
+            } else {
+                fprintf(output, "\\x%02x", (unsigned char)c);
+            }
+            break;
+    }
+}
+
 static void print_node_content(FILE *output, const GraphNode *node, const uint8_t *block) {
     if (node->sequence_length == 0) {
         fprintf(output, "Root");
@@ -18,9 +39,7 @@ static void print_node_content(FILE *output, const GraphNode *node, const uint8_
     }
 
     for (uint8_t i = 0; i < node->sequence_length; i++) {
-
-        // if (i > 0) fprintf(output, ",");
-        fprintf(output, "%c", block[node->offset + i]);
+        print_escaped_char(output, block[node->offset + i]);
     }
 }
 
@@ -34,16 +53,33 @@ static void print_node(FILE *output, const GraphNode *node, const uint8_t *block
     const char *fillcolor = get_node_color(node->node_level);
     const char *fontcolor = (node->node_id == 0) ? "white" : "black";
 
-    fprintf(output, "    %d [label=\"%d\\n", node->node_id, node->node_id);
-    print_node_content(output, node, block);
+    // Begin node and open label
+    fprintf(output, "    %d [label=\"%d", node->node_id, node->node_id);
+
+    // Print sequence content
+    if (node->sequence_length == 0) {
+        fprintf(output, "\\nRoot");
+    } else {
+        fprintf(output, "\\n");
+        for (uint8_t i = 0; i < node->sequence_length; i++) {
+            print_escaped_char(output, block[node->offset + i]);
+        }
+    }
+
+    // Get frequency and node_id
     uint32_t freq, node_id;
     seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
+
+    // Append level/freq info (always with \\n for DOT newlines)
     if (!node->is_RLE) {
-        fprintf(output, "\n l=%u, f=%u", node->node_level, freq);
+        fprintf(output, "\\nl=%u, f=%u", node->node_level, freq);
     } else {
-        fprintf(output, "\n l=%u, f=%u, \nRLE", node->node_level, freq);
+        fprintf(output, "\\nl=%u, f=%u\\nRLE", node->node_level, freq);
     }
-    fprintf(output, "\", shape=box, style=filled, fillcolor=\"%s\", fontcolor=\"%s\"];\n", fillcolor, fontcolor);
+
+    // Close label + styling
+    fprintf(output, "\", shape=box, style=filled, fillcolor=\"%s\", fontcolor=\"%s\"];\n",
+            fillcolor, fontcolor);
 }
 
 static void print_links(FILE *output, const GraphNode *node) {
@@ -77,7 +113,6 @@ void visualize_graph(const uint8_t *block) {
     for (uint32_t i = 0; i < get_graph_size(); i++) {
         GraphNode *node = get_graph_node(i);
         if (node && !node->useless) {
-
             print_node(output, node, block);
         }
     }
