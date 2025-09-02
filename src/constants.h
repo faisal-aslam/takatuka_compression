@@ -21,6 +21,8 @@
 #define SEQ_LENGTH_LIMIT 128 //a.k.a k
 #define BLOCK_SIZE 64000
 
+extern double WEIGHT_FREQ;
+extern double WEIGHT_LEN;
 
 _Static_assert(SEQ_LENGTH_LIMIT <= 254, "SEQ_LENGTH_LIMIT must be ≤ 254");
 _Static_assert(BLOCK_SIZE <= 65535, "BLOCK_SIZE must be ≤ 65,535");

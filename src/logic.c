@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+double WEIGHT_FREQ = 0.5;
+double WEIGHT_LEN  = 0.5;
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -71,6 +73,57 @@ static inline void set_RLE_data() {
     } else {
         fprintf(stderr, "Illegal set_RLE_data\n");
         abort();
+    }
+}
+
+static inline void compute_best_path_and_write_in_file_with_alpha_beta(const uint8_t *block) {
+    double best_wf = 0.0, best_wl = 0.0;
+    long best_size = LONG_MAX;
+
+    // sweep WEIGHT_FREQ from 0.1 to 0.9, WEIGHT_LEN = 1 - WEIGHT_FREQ
+    for (int i = 1; i <= 9; i++) {
+        WEIGHT_FREQ = i / 10.0;
+        WEIGHT_LEN  = 1.0 - WEIGHT_FREQ;
+
+        Path path_state;
+        find_best_saving_path(block, &path_state);    
+        if (path_state.path_size[PATH_BEST] <= 0) {
+            continue; // skip invalid
+        }
+
+        final_book_keeping(block, &path_state);
+        set_best_path_view(path_state.path_stack[PATH_BEST],
+                           path_state.path_freqs[PATH_BEST],
+                           path_state.path_size[PATH_BEST]);
+
+        long size_of_compressed_file = write_compressed_output(output_file, block);
+
+        printf("WF=%.2f WL=%.2f -> size=%ld\n", WEIGHT_FREQ, WEIGHT_LEN, size_of_compressed_file);
+
+        if (size_of_compressed_file < best_size) {
+            best_size = size_of_compressed_file;
+            best_wf = WEIGHT_FREQ;
+            best_wl = WEIGHT_LEN;
+        }
+    }
+
+    printf("\nBest weights: WF=%.2f WL=%.2f -> size=%ld\n", best_wf, best_wl, best_size);
+
+    // rerun with best weights so output_file has final best result
+    WEIGHT_FREQ = best_wf;
+    WEIGHT_LEN  = best_wl;
+
+    Path path_state;
+    find_best_saving_path(block, &path_state);
+    if (path_state.path_size[PATH_BEST] > 0) {
+        final_book_keeping(block, &path_state);
+        set_best_path_view(path_state.path_stack[PATH_BEST],
+                           path_state.path_freqs[PATH_BEST],
+                           path_state.path_size[PATH_BEST]);
+        long size_of_compressed_file = write_compressed_output(output_file, block);
+        printf("Written best result to output file, size=%ld\n", size_of_compressed_file);
+    } else {
+        printf("No valid path found for best weights!\n");
     }
 }
 
@@ -158,5 +211,6 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #ifdef DEBUG
     visualize_graph(block);
 #endif
-    compute_best_path_and_write_in_file(block);
+    //compute_best_path_and_write_in_file(block);
+    compute_best_path_and_write_in_file_with_alpha_beta(block);
 }

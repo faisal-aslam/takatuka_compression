@@ -45,36 +45,33 @@ static uint32_t best_sequence_saving;
 // branchless min
 #define U32_MIN(a,b) ((a) < (b) ? (a) : (b))
 
+extern double WEIGHT_FREQ;
+extern double WEIGHT_LEN;
+
 static inline __attribute__((always_inline))
 uint32_t compute_saving_from_meta(uint32_t meta) {
     uint32_t freq = META_GET_FREQ(meta);
     uint32_t len  = META_GET_LEN(meta);
 
-    // guard against 0 (would underflow when subtracting)
-    if (freq == 0 || len == 0) {
-        return 0;
-    }
+    if (freq == 0 || len == 0) return 0;
 
-    // effective values
     uint32_t f = freq - 1;
     uint32_t l = len  - 1;
 
-    // clamp frequency to max 10
+    // clamp frequency
     uint32_t f_eff = U32_MIN(f, 10);
 
-    // scale length as len * sqrt(len), then clamp at 20
+    // scale length
     double l_scaled = (double)l * sqrt((double)l);
-    uint32_t l_eff = (uint32_t)U32_MIN((uint64_t)l_scaled, 20ULL);
+    uint32_t l_eff  = (uint32_t)U32_MIN((uint64_t)l_scaled, 20ULL);
 
-    // compute saving
-    uint64_t s = (uint64_t)f_eff * (uint64_t)l_eff;
+    // weighted product: f_eff^WEIGHT_FREQ * l_eff^WEIGHT_LEN
+    double score = pow((double)f_eff, WEIGHT_FREQ) *
+                   pow((double)l_eff, WEIGHT_LEN);
 
-    if (s > UINT32_MAX) {
-        return UINT32_MAX;
-    }
-    return (uint32_t)s;
+    if (score > UINT32_MAX) return UINT32_MAX;
+    return (uint32_t)score;
 }
-
 
 static inline void invalidate_best(void) {
     best_sequence_index = UINT32_MAX;
