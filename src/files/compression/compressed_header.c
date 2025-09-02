@@ -84,7 +84,7 @@ static inline uint8_t calculate_bit_length(uint16_t value) {
     return bits;
 }
 
-void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to_write, BitWriter *writer) {
+long populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to_write, BitWriter *writer) {
     init_seq_freq_map();
 
 #ifdef DEBUG
@@ -147,7 +147,7 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
         bitwriter_reset(writer);
         free(candidates);
         global_class2_bits = 0; // nothing to do in body
-        return;
+        return 0;
     }
 
     // Sort and init code_map
@@ -314,6 +314,9 @@ void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
     free(candidates);
     free(assigned_class);
     free(index_within_class);
-    for (int c = 0; c < 3; ++c)
+    for (int c = 0; c < 3; ++c) {
         if (per_class_offsets[c]) free(per_class_offsets[c]);
+    }
+
+    return header_end - header_start;
 }

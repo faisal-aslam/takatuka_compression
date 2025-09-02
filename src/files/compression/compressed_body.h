@@ -106,4 +106,4 @@ Important Notes:
  * @param file_to_write Output file handle
  * @param writer BitWriter instance to use
  */
-void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_write, BitWriter *writer);
+long populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_write, BitWriter *writer);

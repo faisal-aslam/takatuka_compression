@@ -17,7 +17,7 @@ extern CodeMap code_map; // filled by populate_header()
 extern uint8_t global_class2_bits; // from compressed_header.h  
 extern uint8_t global_rle_bits;    // from compressed_header.h
 
-void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_write, BitWriter *writer) {
+long populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_write, BitWriter *writer) {
 #ifdef DEBUG
     printf("\n\n\n******************************* \n\n[DEBUG] Starting body population with path size: %d\n",
            best_path.path_size);
@@ -148,4 +148,6 @@ void populate_body(BestPathView best_path, const uint8_t *block, FILE *file_to_w
     printf("[DEBUG] Body written successfully\n");
     bitwriter_print_state(writer);
 #endif
+
+    return body_end - body_start;
 }

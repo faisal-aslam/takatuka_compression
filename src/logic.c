@@ -88,8 +88,8 @@ static inline void compute_best_path_and_write_in_file(const uint8_t *block) {
     // #endif
     set_best_path_view(path_state.path_stack[PATH_BEST], path_state.path_freqs[PATH_BEST],
                        path_state.path_size[PATH_BEST]);                
-    write_compressed_output(output_file, block);
-    printf("\n%lu: Written the path in output file \n", get_elapsed_ms());
+    long size_of_compressed_file = write_compressed_output(output_file, block);
+    printf("\n%lu: Written the path in output file sized=%ld \n", get_elapsed_ms(), size_of_compressed_file);
 }
 
 void process_block(const uint8_t *block, uint32_t block_size) {

@@ -26,5 +26,5 @@ extern CodeMap code_map;
 extern uint8_t global_class2_bits;
 
 // Function to populate header
-void populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to_write, BitWriter *writer);
+long populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to_write, BitWriter *writer);
 

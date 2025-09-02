@@ -25,16 +25,16 @@
   * @param best_node TreeNode with best compression path
   * @param block Pointer to raw data block
   */
-void write_compressed_output(const char* filename, const uint8_t* block) {
+long write_compressed_output(const char* filename, const uint8_t* block) {
     if (!filename || !block) {
         fprintf(stderr, "Error: Invalid inputs in writeCompressedOutput\n");
-        return;
+        return 0;
     }
 
     FILE *file = fopen(filename, "wb");
     if (!file) {
         perror("Failed to open output file");
-        return;
+        return 0;
     }
 
  #ifdef DEBUG
@@ -50,7 +50,7 @@ void write_compressed_output(const char* filename, const uint8_t* block) {
     if (!buffer) {
         fprintf(stderr, "Failed to allocate buffer\n");
         fclose(file);
-        return;
+        return 0;
     }
 
     BitWriter writer;
@@ -61,7 +61,7 @@ void write_compressed_output(const char* filename, const uint8_t* block) {
 #endif
 
     // Write header
-    populate_header(view, block, file, &writer);
+    long header_size = populate_header(view, block, file, &writer);
 
 #ifdef DEBUG
     printf("[DEBUG] After header writing:\n");
@@ -71,7 +71,7 @@ void write_compressed_output(const char* filename, const uint8_t* block) {
 #endif
 
     // Write body
-    populate_body(view, block, file, &writer);
+    long body_size = populate_body(view, block, file, &writer);
 
 #ifdef DEBUG
     printf("[DEBUG] BitWriter state after body:\n");
@@ -84,4 +84,5 @@ void write_compressed_output(const char* filename, const uint8_t* block) {
     if (fclose(file) != 0) {
         perror("Warning: Error closing output file");
     }
+    return body_size+header_size;
 }
