@@ -127,26 +127,27 @@ static inline void compute_best_path_and_write_in_file_with_alpha_beta(const uin
     }
 }
 
-static inline void compute_best_path_and_write_in_file(const uint8_t *block) {
+static inline long compute_best_path_and_write_in_file(const uint8_t *block) {
     Path path_state;
     find_best_saving_path(block, &path_state);    
     printf("\n%lu: Computed the best possible path \n", get_elapsed_ms());
     if (path_state.path_size[PATH_BEST] <= 0) {
         printf("No path found\n");
-        return; // no path exist
+        return 0; // no path exist
     }
     final_book_keeping(block, &path_state);
-    // #ifdef DEBUG
+    #ifdef DEBUG
     print_path(0, 1, block, &path_state);
-    // #endif
+    #endif
     set_best_path_view(path_state.path_stack[PATH_BEST], path_state.path_freqs[PATH_BEST],
                        path_state.path_size[PATH_BEST]);                
     long size_of_compressed_file = write_compressed_output(output_file, block);
     printf("\n%lu: Written the path in output file sized=%ld \n", get_elapsed_ms(), size_of_compressed_file);
+    return size_of_compressed_file;
 }
 
-void process_block(const uint8_t *block, uint32_t block_size) {
-    // init_top_savings();
+long process_block(const uint8_t *block, uint32_t block_size) {
+
     init_graph();
     init_seq_freq_map();
     create_root();
@@ -211,6 +212,6 @@ void process_block(const uint8_t *block, uint32_t block_size) {
 #ifdef DEBUG
     visualize_graph(block);
 #endif
-    //compute_best_path_and_write_in_file(block);
-    compute_best_path_and_write_in_file_with_alpha_beta(block);
+    return compute_best_path_and_write_in_file(block);
+    //compute_best_path_and_write_in_file_with_alpha_beta(block);
 }

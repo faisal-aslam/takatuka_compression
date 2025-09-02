@@ -220,10 +220,10 @@ void compact_graph(const uint8_t *block) {
 
         write_idx++;
     }
-
+//#ifdef DEBUG
     printf("%lu: Done with graph compaction from %u to %u nodes\n",
            get_elapsed_ms(), graph.size, write_idx);
-
+//#endif
     graph.size = write_idx;
     graph.total_levels = current_level + 1; // trailing deleted levels vanish   
     //rebuild_seq_freq_map(block, 0); do it outside of it.

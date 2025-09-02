@@ -7,6 +7,16 @@
 #include <stdbool.h>
 
 uint8_t done_with_RLE_nodes;
+
+// ensure LEVEL_ACTIVE stays 0
+_Static_assert(LEVEL_ACTIVE == 0, "LEVEL_ACTIVE must be zero for memset to work");
+
+// call this before building the graph each run
+static inline void reset_level_status(void) {
+    memset(level_status, 0, MAX_LEVELS * sizeof(level_status[0]));
+}
+
+
 /**
  * Greedy Shortest Path Selection
  *
@@ -109,7 +119,7 @@ static void print_levels_status(void) {
 uint8_t get_best_saving(const uint8_t *block, uint8_t *best_seq, uint8_t *best_len, uint32_t *best_freq) {
     uint32_t best_node_id = 0;
     uint8_t longest_RLE = 0;
-    uint16_t longest_RLE_level = 0;
+    uint16_t longest_RLE_level = 0;    
     if (!done_with_RLE_nodes) {
         // Step 1: scan levels for the longest RLE
         for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
@@ -178,6 +188,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
     uint8_t best_len;
     uint32_t best_freq;
     done_with_RLE_nodes = 0;
+    reset_level_status(); //reset level status.
     print_levels_status();
 
     while (get_best_saving(block, best_seq, &best_len, &best_freq) && best_freq > 1) {
@@ -227,9 +238,10 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
             }
         }
 
-#ifdef DEBUG
+//#ifdef DEBUG
         printf("best_freq=%u, best_len=%u, found_count=%u\n", best_freq, best_len, found_count);
-#endif
+        if (found_count == 1) break;
+//#endif
         print_levels_status();
 
         // Prepare next greedy iteration on the trimmed graph.
