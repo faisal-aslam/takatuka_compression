@@ -232,15 +232,14 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
                     }
                     avoid_done_level_skipping(level);
                     // Jump to parent level for the next outer-iteration step.
-                    level = parent_level;
+                    level = parent_level+1; //as there will be -- at the end of loop so compensate it here.
                     break;
                 }
             }
         }
 
 //#ifdef DEBUG
-        printf("best_freq=%u, best_len=%u, found_count=%u\n", best_freq, best_len, found_count);
-        if (found_count == 1) break;
+        printf("best_freq=%u, best_len=%u, found_count=%u\n", best_freq, best_len, found_count);        
 //#endif
         print_levels_status();
 

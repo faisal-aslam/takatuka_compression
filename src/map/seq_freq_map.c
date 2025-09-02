@@ -59,11 +59,11 @@ uint32_t compute_saving_from_meta(uint32_t meta) {
     uint32_t l = len  - 1;
 
     // clamp frequency
-    uint32_t f_eff = U32_MIN(f, f);
+    uint32_t f_eff = U32_MIN(f, 10);
 
     // scale length
     double l_scaled = (double)l;
-    uint32_t l_eff  = (uint32_t)U32_MIN((uint64_t)l_scaled, l_scaled);
+    uint32_t l_eff  = (uint32_t)U32_MIN((uint64_t)l_scaled, 31ULL);
 
     // weighted product: f_eff^WEIGHT_FREQ * l_eff^WEIGHT_LEN
     double score = pow((double)f_eff, WEIGHT_FREQ) *

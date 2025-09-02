@@ -13,11 +13,11 @@ long total_input_size;
 char output_file[500];
 
 // assume: extern double alpha, beta;
-static int ab_step = 2;
+static int ab_step = 3;
 
 int next_alpha_beta(void) {
     // try alpha from 0.1 → 0.9 (beta = 1 - alpha)
-    if (ab_step >= 3) return 0; // no more
+    if (ab_step >= 4) return 0; // no more
     WEIGHT_FREQ = (ab_step + 1) / 10.0;
     WEIGHT_LEN = 1.0 - WEIGHT_FREQ;
     ab_step++;
