@@ -63,7 +63,7 @@ uint32_t compute_saving_from_meta(uint32_t meta) {
 
     // scale length
     double l_scaled = (double)l;
-    uint32_t l_eff  = (uint32_t)U32_MIN((uint64_t)l_scaled, 31ULL);
+    uint32_t l_eff  = (uint32_t)U32_MIN((uint64_t)l_scaled, 20ULL);
 
     // weighted product: f_eff^WEIGHT_FREQ * l_eff^WEIGHT_LEN
     double score = pow((double)f_eff, WEIGHT_FREQ) *
