@@ -6,6 +6,7 @@
 #include <math.h>
 #include <stdbool.h>
 
+uint8_t done_with_RLE_nodes;
 /**
  * Greedy Shortest Path Selection
  *
@@ -109,33 +110,36 @@ uint8_t get_best_saving(const uint8_t *block, uint8_t *best_seq, uint8_t *best_l
     uint32_t best_node_id = 0;
     uint8_t longest_RLE = 0;
     uint16_t longest_RLE_level = 0;
+    if (!done_with_RLE_nodes) {
+        // Step 1: scan levels for the longest RLE
+        for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
+            if (level_status[level] != LEVEL_ACTIVE) // only in active levels.
+                continue;
 
-    // Step 1: scan levels for the longest RLE
-    for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
-        if (level_status[level] != LEVEL_ACTIVE) // only in active levels.
-            continue;
+            uint32_t start_id = get_level_start_id(level);
+            uint32_t end_id = get_level_end_id(level);
+            if (start_id == end_id) continue; // empty level.
+            GraphNode *node = get_graph_node(start_id);
 
-        uint32_t start_id = get_level_start_id(level);
-        uint32_t end_id = get_level_end_id(level);
-        if (start_id == end_id) continue; // empty level.
-        GraphNode *node = get_graph_node(start_id);
+            if (node->is_RLE && node->sequence_length > longest_RLE) {
+                longest_RLE = node->sequence_length;
+                longest_RLE_level = level;
+                best_node_id = start_id;
+            }
+        }
 
-        if (node->is_RLE && node->sequence_length > longest_RLE) {
-            longest_RLE = node->sequence_length;
-            longest_RLE_level = level;
-            best_node_id = start_id;
+        // Step 2: If we found an RLE candidate, return it
+        if (longest_RLE_level != 0) {
+            GraphNode *node = get_graph_node(best_node_id);
+            memcpy(best_seq, &block[node->offset], node->sequence_length);
+            *best_len = node->sequence_length;
+            *best_freq = 2; // TODO: real frequency
+            return 1;
+        } else {
+            done_with_RLE_nodes = 1;
         }
     }
-
-    // Step 2: If we found an RLE candidate, return it
-    if (longest_RLE_level != 0) {
-        GraphNode *node = get_graph_node(best_node_id);
-        memcpy(best_seq, &block[node->offset], node->sequence_length);
-        *best_len = node->sequence_length;
-        *best_freq = 2; // TODO: real frequency
-        return 1;
-    }
-
+    
     // Step 3: Otherwise, fallback to normal best sequence
     const uint8_t *seq_ptr = NULL;
     // map is recreated only using active levels.
@@ -173,7 +177,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
     uint8_t best_seq[SEQ_LENGTH_LIMIT];
     uint8_t best_len;
     uint32_t best_freq;
-
+    done_with_RLE_nodes = 0;
     print_levels_status();
 
     while (get_best_saving(block, best_seq, &best_len, &best_freq) && best_freq > 1) {
@@ -183,7 +187,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         seq_freq_map_print();
         print_sequence(best_seq, best_len);
 #endif
-        
+
         uint16_t found_count = 0;
         print_levels_status();
 

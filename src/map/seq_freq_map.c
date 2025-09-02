@@ -38,14 +38,43 @@ static uint32_t best_sequence_index;
 static uint32_t best_sequence_saving;
 
 /* Helpers */
-static inline uint32_t compute_saving_from_meta(uint32_t meta) {
+#include <stdint.h>
+#include <math.h>
+#include <limits.h>
+
+// branchless min
+#define U32_MIN(a,b) ((a) < (b) ? (a) : (b))
+
+static inline __attribute__((always_inline))
+uint32_t compute_saving_from_meta(uint32_t meta) {
     uint32_t freq = META_GET_FREQ(meta);
-    uint8_t len = META_GET_LEN(meta);
-    if (freq >= 1) freq = freq - 1;
-    uint64_t s = (uint64_t)MIN(freq, 10) * (uint64_t)MIN(len * (uint64_t)sqrt(len), 20);
-    if (s > UINT32_MAX) s = UINT32_MAX;
+    uint32_t len  = META_GET_LEN(meta);
+
+    // guard against 0 (would underflow when subtracting)
+    if (freq == 0 || len == 0) {
+        return 0;
+    }
+
+    // effective values
+    uint32_t f = freq - 1;
+    uint32_t l = len  - 1;
+
+    // clamp frequency to max 10
+    uint32_t f_eff = U32_MIN(f, 10);
+
+    // scale length as len * sqrt(len), then clamp at 20
+    double l_scaled = (double)l * sqrt((double)l);
+    uint32_t l_eff = (uint32_t)U32_MIN((uint64_t)l_scaled, 20ULL);
+
+    // compute saving
+    uint64_t s = (uint64_t)f_eff * (uint64_t)l_eff;
+
+    if (s > UINT32_MAX) {
+        return UINT32_MAX;
+    }
     return (uint32_t)s;
 }
+
 
 static inline void invalidate_best(void) {
     best_sequence_index = UINT32_MAX;
