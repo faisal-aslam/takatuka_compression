@@ -136,9 +136,9 @@ static inline long compute_best_path_and_write_in_file(const uint8_t *block) {
         return 0; // no path exist
     }
     final_book_keeping(block, &path_state);
-    #ifdef DEBUG
+//#ifdef DEBUG
     print_path(0, 1, block, &path_state);
-    #endif
+//#endif
     set_best_path_view(path_state.path_stack[PATH_BEST], path_state.path_freqs[PATH_BEST],
                        path_state.path_size[PATH_BEST]);                
     long size_of_compressed_file = write_compressed_output(output_file, block);

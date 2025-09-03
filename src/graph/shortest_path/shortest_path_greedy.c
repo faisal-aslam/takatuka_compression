@@ -28,10 +28,11 @@ static inline void reset_level_status(void) {
  */
 
 static inline void print_sequence(const uint8_t *seq, uint8_t len) {
+    printf("len=%u, [",len);
     for (uint8_t i = 0; i < len; i++) {
         printf("%c", seq[i]);
     }
-    printf("\n");
+    printf("]\n");
 }
 
 /**
@@ -196,6 +197,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
 #ifdef DEBUG
         seq_freq_map_print();
+        printf("freq=%u", best_freq);
         print_sequence(best_seq, best_len);
 #endif
 
@@ -216,11 +218,6 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
                 if (best_len == node->sequence_length && sequences_equal(&block[node->offset], best_seq, best_len)) {
                     found_count++;
-                    if (found_count > best_freq && !node->is_RLE) {
-                        // we should not be here unless node is RLE.
-                        print_sequence(&block[node->offset], node->sequence_length);
-                        print_sequence(best_seq, best_len);
-                    }
                     // Freeze this level now.
                     update_level_status(level, LEVEL_DONE);
                     mark_all_but_one_useless(node->node_id);
