@@ -51,8 +51,8 @@ uint8_t calculate_class2_bits(uint16_t class2_codes) {
 /* Return the number of bits used for the index portion (excluding the 2-bit class prefix) */
 uint8_t get_code_class_size(uint8_t code_class, uint8_t class2_bits) {
     switch (code_class) {
-        case 0: return 4;           /* fixed */
-        case 1: return 5;           /* fixed */
+        case 0: return 5;           /* fixed */
+        case 1: return 7;           /* fixed */
         case 2: return class2_bits; /* dynamic */
         case 3: return 0;           /* RLE: no index bits - ADD THIS LINE */
         default:
