@@ -53,7 +53,7 @@ double compute_saving_from_meta(uint32_t meta) {
     uint32_t freq = META_GET_FREQ(meta);
     uint32_t len  = META_GET_LEN(meta);
 
-    if (freq == 0 || len == 0) return 255; /* treat invalid as very large */
+    if (freq <= 1 || len <= 1) return 255; /* treat invalid as very large */
 
     /* do arithmetic in signed 64-bit to avoid unsigned wrap */
     int64_t f = (int64_t)MIN(freq, 11); //we bound freq to have longer sequences.
