@@ -32,17 +32,6 @@ static void print_escaped_char(FILE *output, char c) {
     }
 }
 
-static void print_node_content(FILE *output, const GraphNode *node, const uint8_t *block) {
-    if (node->sequence_length == 0) {
-        fprintf(output, "Root");
-        return;
-    }
-
-    for (uint8_t i = 0; i < node->sequence_length; i++) {
-        print_escaped_char(output, block[node->offset + i]);
-    }
-}
-
 static const char *get_node_color(uint16_t level) {
     if (level == 0) return "#000000"; // Black for root
     size_t num_colors = sizeof(LEVEL_COLORS) / sizeof(LEVEL_COLORS[0]);

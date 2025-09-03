@@ -56,7 +56,7 @@ double compute_saving_from_meta(uint32_t meta) {
     if (freq <= 1 || len <= 1) return 255; /* treat invalid as very large */
 
     /* do arithmetic in signed 64-bit to avoid unsigned wrap */
-    int64_t f = (int64_t)MIN(freq, 11); //we bound freq to have longer sequences.
+    int64_t f = (int64_t)MIN(freq, 7); //we bound freq to have longer sequences.
     int64_t l = (int64_t)MIN(len, 23); //we bound length to avoid having sequences with little frequency.
     /*
     Overhead: In the header we save l and a one byte (at least) code is used with each freq times. Thus f+l is overhead.
@@ -369,7 +369,8 @@ void seq_freq_map_print(void) {
         if (entry->state == SLOT_OCCUPIED) {
             uint8_t len = META_GET_LEN(entry->meta);
             uint32_t freq = META_GET_FREQ(entry->meta);
-            printf("[%04u] freq=%u, len=%u, node_id=%u, seq=", i, freq, len, entry->node_id);
+            double s =compute_saving_from_meta(entry->meta);
+            printf("[%04u] freq=%u, len=%u, node_id=%u, savings= %.2lf seq=", i, freq, len, entry->node_id, s);
             for (uint8_t j = 0; j < len; j++)
                 putchar(entry->sequence[j]);
             putchar('\n');

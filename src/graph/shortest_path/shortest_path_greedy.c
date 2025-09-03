@@ -12,10 +12,7 @@ uint8_t done_with_RLE_nodes;
 _Static_assert(LEVEL_ACTIVE == 0, "LEVEL_ACTIVE must be zero for memset to work");
 
 // call this before building the graph each run
-static inline void reset_level_status(void) {
-    memset(level_status, 0, MAX_LEVELS * sizeof(level_status[0]));
-}
-
+static inline void reset_level_status(void) { memset(level_status, 0, MAX_LEVELS * sizeof(level_status[0])); }
 
 /**
  * Greedy Shortest Path Selection
@@ -28,7 +25,7 @@ static inline void reset_level_status(void) {
  */
 
 static inline void print_sequence(const uint8_t *seq, uint8_t len) {
-    printf("len=%u, [",len);
+    printf("len=%u, [", len);
     for (uint8_t i = 0; i < len; i++) {
         printf("%c", seq[i]);
     }
@@ -120,7 +117,7 @@ static void print_levels_status(void) {
 uint8_t get_best_saving(const uint8_t *block, uint8_t *best_seq, uint8_t *best_len, uint32_t *best_freq) {
     uint32_t best_node_id = 0;
     uint8_t longest_RLE = 0;
-    uint16_t longest_RLE_level = 0;    
+    uint16_t longest_RLE_level = 0;
     if (!done_with_RLE_nodes) {
         // Step 1: scan levels for the longest RLE
         for (uint16_t level = get_last_level_index(); level > 0 && level <= get_last_level_index(); level--) {
@@ -150,7 +147,7 @@ uint8_t get_best_saving(const uint8_t *block, uint8_t *best_seq, uint8_t *best_l
             done_with_RLE_nodes = 1;
         }
     }
-    
+
     // Step 3: Otherwise, fallback to normal best sequence
     const uint8_t *seq_ptr = NULL;
     // map is recreated only using active levels.
@@ -178,6 +175,7 @@ static void avoid_done_level_skipping(uint16_t level) {
     }
 }
 
+
 /**
  * Main greedy iteration loop:
  *  - Each iteration freezes at least one level (DONE_NOW → DONE_OLD).
@@ -189,7 +187,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
     uint8_t best_len;
     uint32_t best_freq;
     done_with_RLE_nodes = 0;
-    reset_level_status(); //reset level status.
+    reset_level_status(); // reset level status.
     print_levels_status();
 
     while (get_best_saving(block, best_seq, &best_len, &best_freq) && best_freq > 1) {
@@ -197,8 +195,9 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
 
 #ifdef DEBUG
         seq_freq_map_print();
-        printf("freq=%u", best_freq);
+        printf("freq=%u, ", best_freq);
         print_sequence(best_seq, best_len);
+        fflush(stdout);
 #endif
 
         uint16_t found_count = 0;
@@ -229,19 +228,19 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
                     }
                     avoid_done_level_skipping(level);
                     // Jump to parent level for the next outer-iteration step.
-                    level = parent_level+1; //as there will be -- at the end of loop so compensate it here.
+                    level = parent_level + 1; // as there will be -- at the end of loop so compensate it here.
                     break;
                 }
             }
         }
 
-//#ifdef DEBUG
-        printf("best_freq=%u, best_len=%u, found_count=%u\n", best_freq, best_len, found_count);        
-//#endif
+        // #ifdef DEBUG
+        printf("best_freq=%u, best_len=%u, found_count=%u\n", best_freq, best_len, found_count);
+        // #endif
         print_levels_status();
 
         // Prepare next greedy iteration on the trimmed graph.
-        compact_graph(block);
+        //compact_graph(block);
 
 #ifdef DEBUG
         visualize_graph(block);
@@ -249,6 +248,7 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
     }
     // #ifdef DEBUG
     //  printf("\n\n Compacting and making graph\n");
+    mark_single_freq_nodes_useless(block);
     compact_graph(block);
     visualize_graph(block);
     // #endif

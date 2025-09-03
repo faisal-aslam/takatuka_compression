@@ -203,11 +203,12 @@ long process_block(const uint8_t *block, uint32_t block_size) {
                 }
             }
 #ifdef DEBUG
-            print_graph_node(current_node); // print the newly create node.
+            //print_graph_node(current_node); // print the newly create node.
 #endif
         }
     }
     printf("\n%lu: Done creating %u nodes\n", get_elapsed_ms(), graph.size);
+    mark_single_freq_nodes_useless(block);
     compact_graph(block);
 #ifdef DEBUG
     visualize_graph(block);
