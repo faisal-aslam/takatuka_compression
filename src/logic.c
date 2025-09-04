@@ -68,7 +68,7 @@ static inline void set_RLE_data() {
         current_node->length_of_RLE = rle_info.length_of_RLE;
 
 #ifdef DEBUG
-        print_graph_node(current_node); // print the RLE node.
+        //print_graph_node(current_node); // print the RLE node.
 #endif
     } else {
         fprintf(stderr, "Illegal set_RLE_data\n");

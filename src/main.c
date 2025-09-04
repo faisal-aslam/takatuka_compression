@@ -85,10 +85,10 @@ int main(int argc, char *argv[]) {
     if (compressed_size == 0) {
         printf("Error: No data processed.\n");
     } else {
-        double ratio = (double)compressed_size / (double)total_input_size;
+        double total_saving = 1-((double)compressed_size / (double)total_input_size);
         printf("Original size:   %ld bytes\n", total_input_size);
         printf("Compressed size: %ld bytes\n", compressed_size);
-        printf("Compression ratio: %.2f%%\n", ratio * 100.0);
+        printf("Space saving %.2f%%\n", total_saving*100);
     }
 
     free(block);

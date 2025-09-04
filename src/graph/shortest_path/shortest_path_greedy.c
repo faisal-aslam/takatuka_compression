@@ -89,6 +89,7 @@ static inline void update_level_status(uint16_t level, LevelStatus new_status) {
 }
 
 static void print_levels_status(void) {
+    if (1) return;
 #ifdef DEBUG
     uint16_t last_level = get_last_level_index();
     printf("\n\n");
@@ -175,6 +176,29 @@ static void avoid_done_level_skipping(uint16_t level) {
     }
 }
 
+static inline void path_init_best(Path *path_state) {
+    path_state->path_size[PATH_BEST] = -1;
+    path_state->path_total_saving[PATH_BEST] = 0;
+    path_state->path_total_freq[PATH_BEST] = 0;
+    path_state->path_total_cost[PATH_BEST] = 0;
+}
+
+void add_best_path(const uint8_t *block, Path *path_state) {
+    uint16_t level = get_last_level_index();
+    while (1) {        
+        GraphNode *node = get_graph_node(get_level_start_id(level));
+        if (get_level_end_id(level) - get_level_start_id(level) != 1) {
+            fprintf(stderr, "illegal path\n");
+            abort();
+        }
+        //printf("level =%u, seq=", level);
+        //print_node_sequence(node, block);
+        //printf("\n");
+        path_state->path_stack[PATH_BEST][++path_state->path_size[PATH_BEST]] = node->node_id;        
+        if (node->node_id == 0) break; //we are done.
+        level = get_parent_level(node);
+    }
+}
 
 /**
  * Main greedy iteration loop:
@@ -239,19 +263,13 @@ void find_best_saving_path(const uint8_t *block, Path *path_state) {
         // #endif
         print_levels_status();
 
-        // Prepare next greedy iteration on the trimmed graph.
-        //compact_graph(block);
-
 #ifdef DEBUG
         visualize_graph(block);
 #endif
     }
-    // #ifdef DEBUG
-    //  printf("\n\n Compacting and making graph\n");
     mark_single_freq_nodes_useless(block);
     compact_graph(block);
     visualize_graph(block);
-    // #endif
     init_seq_freq_map();
-    find_best_saving_path_to_a_node(block, get_last_level_index(), 0, path_state);
+    add_best_path(block, path_state);
 }
