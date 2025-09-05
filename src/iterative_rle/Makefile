@@ -1,6 +1,3 @@
-# Local Makefile for iterative_rle
-# This can be called standalone or from the parent Makefile
-
 # Compiler and flags
 CC := gcc
 CFLAGS := -Wall -Wextra -O2
@@ -25,11 +22,15 @@ SRCS := main.c
 include rle_sources.mk
 SRCS += $(RLE_EXTRA_SRCS)
 
-# Objects
-OBJS := $(SRCS:.c=.o)
+# Build directories
+BUILD_DIR := ../../build
+OBJ_DIR := $(BUILD_DIR)/obj
+
+# Objects (mirror src paths under obj/)
+OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(SRCS))
 
 # Output binary
-OUT := ../../build/iterative_rle
+OUT := $(BUILD_DIR)/iterative_rle
 
 .PHONY: all clean
 
@@ -38,8 +39,10 @@ all: $(OUT)
 $(OUT): $(OBJS)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $(OBJS)
 
-%.o: %.c
+# Pattern rule: compile .c into obj dir
+$(OBJ_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) $(OUT)
+	rm -rf $(OBJ_DIR) $(OUT)
