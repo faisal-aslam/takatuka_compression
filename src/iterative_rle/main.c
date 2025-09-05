@@ -1,7 +1,10 @@
+//src/interative_rel/main.c
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../map/seq_freq_map.h"
 
 /// Apply circular shift of array `data` by `shift` positions.
 /// Positive shift = move right, Negative shift = move left.
@@ -84,10 +87,21 @@ size_t rle_decompress(const uint8_t *input, size_t n, uint8_t *output) {
     return out_pos;
 }
 
+void calculate_frequences(const uint8_t* block, uint32_t size_of_data) {
+    init_seq_freq_map();// initialized it.
+    for (uint8_t i=0; i < size_of_data; i++) {
+        seq_freq_increment(&block[i], 1, 0);
+    }
+    seq_freq_map_print();
+}
 int main() {
     // Example input
     uint8_t data[] = "AAAHELLOOOOOOOOOOOOOBBBBYE";
     size_t n = strlen((char*)data);
+
+    //step 1: Add each byte of data in map and count frequencies of each byte.
+    calculate_frequences(data, n);
+    abort();
 
     // Try circular shift
     circular_shift(data, n, 5);
