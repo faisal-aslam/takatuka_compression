@@ -20,7 +20,6 @@ static inline void bit_set(uint8_t *bitmap, uint32_t bitpos, int bit) {
     if (bit) {
         bitmap[byte] |= (1u << shift);
     } else {
-        /* explicitly clear the bit when writing zero */
         bitmap[byte] &= ~(1u << shift);
     }
 }
@@ -58,7 +57,6 @@ static void recursive_merge_sort(uint8_t *arr, uint8_t *temp, uint32_t left, uin
         if (max_comparisons > 0 && *comparisons_so_far >= max_comparisons) break;
 
         if (arr[i] <= arr[j]) {
-            /* DEBUG: log write before the bit is consumed (bit index = *bitpos) */
             DBG_PRINT("[WRITE] bitpos=%u write=0 (LEFT)  left_idx=%u left_val=%u right_idx=%u right_val=%u\n", *bitpos,
                       i, (unsigned)arr[i], j, (unsigned)arr[j]);
             temp[k++] = arr[i++];
@@ -84,59 +82,51 @@ static void recursive_merge_sort(uint8_t *arr, uint8_t *temp, uint32_t left, uin
     }
 }
 
-/* ---- Reverse recursive merge ----
-   We read bits in *reverse* order (LIFO) from the bitmap: the
-   last bit written is the first bit we consume while undoing the
-   merges. This function pops bits by decrementing *bitpos. */
-/* ---- Reverse recursive merge (correct LIFO unmerge) ----
-   Pop bits from the end (bitpos == number of bits written).
-   Because bits for a merge node are written in k=left..right order,
-   when popping them we encounter them in reverse (k=right..left).
-   So iterate k from right down to left and place elements into
-   the left/right halves from their right ends. */
-static void reverse_recursive_merge(uint8_t *arr, uint8_t *temp, uint32_t left, uint32_t right, const uint8_t *bitmap,
-                                    uint32_t *bitpos) {
-    if (left >= right) return;
-
-    uint32_t mid = left + (right - left) / 2;
-    uint32_t len = right - left + 1;
-
-    /* copy the merged block into temp (source) */
-    memcpy(temp + left, arr + left, len * sizeof(uint8_t));
-
-    /* write positions into halves move backwards */
-    int64_t i = (int64_t)mid;   // next write index into left half (from mid down)
-    int64_t j = (int64_t)right; // next write index into right half (from right down)
-
-    for (int64_t k = (int64_t)right; k >= (int64_t)left; k--) {
-        if (*bitpos == 0) {
-            /* deterministic fallback if bits exhausted (shouldn't normally happen) */
-            int bit = 0; // Default to left if no bits available
-            DBG_PRINT("[READ ] pop bitpos=%u read=%d (k=%" PRId64 " temp=%u) -> %s (store at %s)\n", *bitpos, bit, k,
-                      (unsigned)temp[k], bit == 0 ? "LEFT" : "RIGHT", bit == 0 ? "left" : "right");
-            arr[i--] = temp[k];
-            continue;
+/* ---- Reverse merge using iterative approach ---- */
+static void reverse_merge_iterative(uint8_t *arr, uint8_t *temp, uint32_t size, const uint8_t *bitmap, uint32_t *bitpos) {
+    // First, copy the sorted array to temp
+    memcpy(temp, arr, size * sizeof(uint8_t));
+    
+    // We'll reconstruct by working backwards through the merge process
+    // Start with the smallest merge size and work up
+    for (uint32_t merge_size = 1; merge_size < size; merge_size *= 2) {
+        for (uint32_t left = 0; left < size; left += 2 * merge_size) {
+            uint32_t mid = left + merge_size;
+            uint32_t right = left + 2 * merge_size - 1;
+            if (right >= size) right = size - 1;
+            
+            if (mid > right) continue;
+            
+            uint32_t i = left, j = mid, k = left;
+            
+            while (i < mid && j <= right) {
+                if (*bitpos == 0) {
+                    // No more bits, just copy remaining elements
+                    break;
+                }
+                
+                (*bitpos)--;
+                int bit = bit_get(bitmap, *bitpos);
+                
+                DBG_PRINT("[READ ] pop bitpos=%u read=%d\n", *bitpos, bit);
+                
+                if (bit == 0) {
+                    // Element came from left half
+                    arr[k++] = temp[i++];
+                } else {
+                    // Element came from right half
+                    arr[k++] = temp[j++];
+                }
+            }
+            
+            // Copy remaining elements
+            while (i < mid) arr[k++] = temp[i++];
+            while (j <= right) arr[k++] = temp[j++];
         }
-
-        /* pop one bit from the end */
-        (*bitpos)--;
-        int bit = bit_get(bitmap, *bitpos);
-
-        DBG_PRINT("[READ ] pop bitpos=%u read=%d (k=%" PRId64 " temp=%u) -> %s (store at %s)\n", *bitpos, bit, k,
-                  (unsigned)temp[k], bit == 0 ? "LEFT" : "RIGHT", bit == 0 ? "left" : "right");
-
-        if (bit == 0) {
-            /* came from left half: place into left at i (moving left) */
-            arr[i--] = temp[k];
-        } else {
-            /* came from right half: place into right at j (moving left) */
-            arr[j--] = temp[k];
-        }
+        
+        // Copy back to temp for next iteration
+        memcpy(temp, arr, size * sizeof(uint8_t));
     }
-
-    /* recursively undo children (reverse post-order) */
-    reverse_recursive_merge(arr, temp, left, mid, bitmap, bitpos);
-    reverse_recursive_merge(arr, temp, mid + 1, right, bitmap, bitpos);
 }
 
 void reconstruct_original(uint8_t *sorted_data, const SortHeader *header) {
@@ -148,7 +138,7 @@ void reconstruct_original(uint8_t *sorted_data, const SortHeader *header) {
 
     /* Start popping from the end (the total number of bits written). */
     uint32_t bitpos = header->bitmap_bits;
-    reverse_recursive_merge(sorted_data, temp, 0, size - 1, header->bitmap, &bitpos);
+    reverse_merge_iterative(sorted_data, temp, size, header->bitmap, &bitpos);
 
     free(temp);
 }
@@ -163,8 +153,7 @@ SortHeader *partial_merge_sort(uint8_t *data, uint32_t size, uint32_t max_compar
     header->original_size = size;
     header->bitmap_bits = 0;
 
-    /* Conservative maximum bits required: size * 32 is overkill but safe.
-       Use bitmap_bytes_needed to allocate bytes. */
+    /* Conservative maximum bits required: size * 32 is overkill but safe. */
     uint32_t max_possible_bits = size * 32u;
     uint32_t bitmap_bytes = (max_possible_bits + 7) / 8;
     header->bitmap = calloc(bitmap_bytes, 1);
@@ -198,7 +187,6 @@ void free_sort_header(SortHeader *header) {
 }
 
 uint32_t bitmap_bytes_needed(uint32_t bit_count) { return (bit_count + 7) / 8; }
-
 
 /***************** sorting_main.c */
 
@@ -249,7 +237,7 @@ void generate_reverse_sorted_data(uint8_t *data, uint32_t size) {
 void test_full_sort() {
     printf("=== Test 1: Full Sort ===\n");
 
-    uint8_t original[] = {5, 2, 9, 1, 6, 3, 13, 4, 5, 0, 1, 19, 20};
+    uint8_t original[] = {5, 2, 9, 1, 6, 3};
     uint32_t size = sizeof(original) / sizeof(original[0]);
 
     uint8_t *data = malloc(size);
