@@ -17,6 +17,7 @@ typedef enum { MERGE_FORWARD = 0, MERGE_REVERSE = 1 } merge_mode_t;
 /* Forward declarations */
 static void merge(int arr[], int l, int m, int r);
 static void merge_reverse(int arr[], int l, int m, int r);
+static void print_int_array(const int *A, size_t size);
 
 /* Iterative bottom-up mergesort */
 void merge_sort(int arr[], int n) {
@@ -27,12 +28,14 @@ void merge_sort(int arr[], int n) {
             int right_end = min_int(left_start + 2 * curr_size - 1, n - 1);
 
             if (mid < right_end) { // Only merge if there's something to merge
-                printf("calling merge with l=%d, m=%d, r=%d, bitmap_used=%u, current_bitmap=%u\n", left_start, mid,
-                       right_end, bitmap_used, sort_info.bitmap[bitmap_used]);
+                printf("calling merge with l=%d, m=%d, r=%d, bitmap_used=%u\n", left_start, mid,
+                       right_end, bitmap_used);
                 merge(arr, left_start, mid, right_end);
             }
+            printf("***** After curr_size=%u\n", curr_size);
+            print_int_array(arr, n);
+            printf("******* \n\n");
         }
-        if (curr_size > 1) break;
     }
 }
 
@@ -62,9 +65,11 @@ static void merge(int arr[], int l, int m, int r) {
 
         if (L[i] <= R[j]) {
             sort_info.bitmap[sort_info.bitmap_size++] = 0;
+            printf(" current bitmap = %u\n", sort_info.bitmap[sort_info.bitmap_size-1]);
             arr[k++] = L[i++];
         } else {
             sort_info.bitmap[sort_info.bitmap_size++] = 1;
+            printf(" current bitmap = %u\n", sort_info.bitmap[sort_info.bitmap_size-1]);
             arr[k++] = R[j++];
         }
     }
@@ -80,22 +85,32 @@ static void merge(int arr[], int l, int m, int r) {
     free(R);
 }
 
-/* Iterative bottom-up mergesort */
+/* Iterative bottom-up mergesort - REVERSE */
 void merge_sort_reverse(int arr[], int n) {
-
-    for (int curr_size = n - 1; curr_size > 0; curr_size /= 2) {
+    // Start with largest subarray size and work backwards
+    int max_size = 1;
+    while (max_size < n) {
+        max_size *= 2;
+    }
+    max_size /= 2; // Largest power of 2 <= n
+    
+    for (int curr_size = max_size; curr_size >= 1; curr_size /= 2) {
         for (int left_start = 0; left_start < n - 1; left_start += 2 * curr_size) {
             int mid = min_int(left_start + curr_size - 1, n - 1);
             int right_end = min_int(left_start + 2 * curr_size - 1, n - 1);
-
-            if (mid < right_end) { // Only merge if there's something to merge
-                printf("calling merge with l=%d, m=%d, r=%d, bitmap_used=%u, current_bitmap=%u\n", left_start, mid,
-                       right_end, bitmap_used, sort_info.bitmap[bitmap_used]);
+            
+            if (mid < right_end) {
+                printf("calling merge with l=%d, m=%d, r=%d, bitmap_used=%u\n", left_start, mid,
+                       right_end, bitmap_used);
                 merge_reverse(arr, left_start, mid, right_end);
             }
         }
+        printf("***** After curr_size=%u\n", curr_size);
+        print_int_array(arr, n);
+        printf("******* \n\n");
     }
 }
+
 
 /* Merge function (records or replays bitmap decisions) */
 static void merge_reverse(int arr[], int l, int m, int r) {
@@ -116,20 +131,22 @@ static void merge_reverse(int arr[], int l, int m, int r) {
 
     int i = 0, j = 0, k = l;
     if (i == n1 || j == n2) {
-        sort_info.bitmap[sort_info.bitmap_size++] = 0;
+        //sort_info.bitmap[sort_info.bitmap_size++] = 0;
     }
 
     while (i < n1 && j < n2) {
-        if (bitmap_used >= sort_info.bitmap_size) {
-            fprintf(stderr, "Bitmap underflow\n");
+        if (bitmap_used == 0) {
+            fprintf(stderr, "Bitmap overflowflow\n");
             exit(1);
         }
-        uint8_t decision = sort_info.bitmap[bitmap_used++];
+        uint8_t decision = sort_info.bitmap[bitmap_used--];
+        printf(" current bitmap = %u\n", sort_info.bitmap[bitmap_used+1]);
         if (decision == 1) {
             arr[k++] = R[j++];
         } else {
             arr[k++] = L[i++];
         }
+        printf("\n arr[%d]=%d\n",k-1, arr[k-1]);
     }
 
     while (i < n1) {
@@ -171,8 +188,10 @@ int main(void) {
     printf("\nSorted array:\n");
     print_int_array(arr, n);
 
-    printf("\nBitmap decisions (%zu):\n", sort_info.bitmap_size);
+    printf("\n\n***************************\n\nBitmap decisions (%zu):\n", sort_info.bitmap_size);
     print_bitmap(sort_info.bitmap, sort_info.bitmap_size);
+
+    bitmap_used = sort_info.bitmap_size-1; // Reset bitmap pointer for reverse sort
 
     merge_sort_reverse(arr, n);
 
