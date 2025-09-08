@@ -1,103 +1,127 @@
 // src/iterative_rle/sort.c
 
+// src/iterative_rle/sort.c
+#include "sort.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-/* Function to merge the two haves arr[l..m] and arr[m+1..r] of array arr[] */
-void merge(int arr[], int l, int m, int r);
+SortInfo sort_info;
 
-// Utility function to find minimum of two integers
-int min(int x, int y) { return (x < y) ? x : y; }
+uint32_t bitmap_used = 0;
+/* Utility */
+static inline int min_int(int x, int y) { return (x < y) ? x : y; }
 
-/* Iterative mergesort function to sort arr[0...n-1] */
-void mergeSort(int arr[], int n) {
-    int curr_size;  // For current size of subarrays to be merged
-                    // curr_size varies from 1 to n/2
-    int left_start; // For picking starting index of left subarray
-                    // to be merged
+typedef enum { MERGE_FORWARD = 0, MERGE_REVERSE = 1 } merge_mode_t;
 
-    // Merge subarrays in bottom up manner.  First merge subarrays of
-    // size 1 to create sorted subarrays of size 2, then merge subarrays
-    // of size 2 to create sorted subarrays of size 4, and so on.
-    for (curr_size = 1; curr_size <= n - 1; curr_size = 2 * curr_size) {
-        // Pick starting point of different subarrays of current size
-        for (left_start = 0; left_start < n - 1; left_start += 2 * curr_size) {
-            // Find ending point of left subarray. mid+1 is starting
-            // point of right
-            int mid = left_start + curr_size - 1;
+/* Forward declarations */
+static void merge(int arr[], int l, int m, int r, merge_mode_t mode);
 
-            int right_end = min(left_start + 2 * curr_size - 1, n - 1);
+/* Iterative bottom-up mergesort */
+void merge_sort(int arr[], int n, merge_mode_t reverse) {
+    
 
-            // Merge Subarrays arr[left_start...mid] & arr[mid+1...right_end]
-            merge(arr, left_start, mid, right_end);
+    for (int curr_size = 1; curr_size < n; curr_size *= 2) {
+        for (int left_start = 0; left_start < n - 1; left_start += 2 * curr_size) {
+            int mid = min_int(left_start + curr_size - 1, n - 1);
+            int right_end = min_int(left_start + 2 * curr_size - 1, n - 1);
+
+            if (mid < right_end) { // Only merge if there's something to merge
+                printf("calling merge with l=%d, m=%d, r=%d, bitmap_used=%u, current_bitmap=%u\n", left_start, mid,
+                       right_end, bitmap_used, sort_info.bitmap[bitmap_used]);
+                merge(arr, left_start, mid, right_end, reverse);
+            }
         }
+        break;
     }
 }
 
-/* Function to merge the two haves arr[l..m] and arr[m+1..r] of array arr[] */
-void merge(int arr[], int l, int m, int r) {
-    int i, j, k;
+/* Merge function (records or replays bitmap decisions) */
+static void merge(int arr[], int l, int m, int r, merge_mode_t mode) {
     int n1 = m - l + 1;
     int n2 = r - m;
 
-    /* create temp arrays */
-    int L[n1], R[n2];
+    int *L = malloc(n1 * sizeof(int));
+    int *R = malloc(n2 * sizeof(int));
+    if (!L || !R) {
+        perror("malloc");
+        exit(1);
+    }
 
-    /* Copy data to temp arrays L[] and R[] */
-    for (i = 0; i < n1; i++)
+    for (int i = 0; i < n1; i++)
         L[i] = arr[l + i];
-    for (j = 0; j < n2; j++)
+    for (int j = 0; j < n2; j++)
         R[j] = arr[m + 1 + j];
 
-    /* Merge the temp arrays back into arr[l..r]*/
-    i = 0;
-    j = 0;
-    k = l;
+    int i = 0, j = 0, k = l;
+
     while (i < n1 && j < n2) {
-        if (L[i] <= R[j]) {
-            arr[k] = L[i];
-            i++;
-        } else {
-            arr[k] = R[j];
-            j++;
+        if (mode == MERGE_FORWARD) {
+            if (L[i] <= R[j]) {
+                sort_info.bitmap[sort_info.bitmap_size++] = 1;
+                arr[k++] = L[i++];
+            } else {
+                sort_info.bitmap[sort_info.bitmap_size++] = 0;
+                arr[k++] = R[j++];
+            }
+        } else { /* MERGE_REVERSE */
+            if (bitmap_used >= sort_info.bitmap_size) {
+                fprintf(stderr, "Bitmap underflow\n");
+                exit(1);
+            }
+            uint8_t decision = sort_info.bitmap[bitmap_used++];
+            if (decision == 1) {
+                arr[k++] = R[j++];
+            } else {
+                arr[k++] = L[i++];
+            }
         }
-        k++;
     }
 
-    /* Copy the remaining elements of L[], if there are any */
-    while (i < n1) {
-        arr[k] = L[i];
-        i++;
-        k++;
-    }
+    while (i < n1)
+        arr[k++] = L[i++];
+    while (j < n2)
+        arr[k++] = R[j++];
 
-    /* Copy the remaining elements of R[], if there are any */
-    while (j < n2) {
-        arr[k] = R[j];
-        j++;
-        k++;
-    }
+    free(L);
+    free(R);
 }
 
-/* Function to print an array */
-void printArray(int A[], int size) {
-    int i;
-    for (i = 0; i < size; i++)
+/* Print helpers */
+static void print_int_array(const int *A, size_t size) {
+    for (size_t i = 0; i < size; i++)
         printf("%d ", A[i]);
     printf("\n");
 }
+static void print_bitmap(const uint8_t *A, size_t size) {
+    for (size_t i = 0; i < size; i++)
+        printf("%u ", A[i]);
+    printf("\n");
+}
 
-/* Driver program to test above functions */
-int main() {
-    int arr[] = {12, 11, 13, 5, 6, 7};
-    int n = sizeof(arr) / sizeof(arr[0]);
+/* Driver */
+int main(void) {
+    int arr[] = {12, 11, 13, 5, 6, 7, 9};
+    size_t n = sizeof(arr) / sizeof(arr[0]);
 
-    printf("Given array is \n");
-    printArray(arr, n);
+    sort_info.original_size = n;
+    sort_info.bitmap_size = 0;
 
-    mergeSort(arr, n);
+    printf("Original array:\n");
+    print_int_array(arr, n);
 
-    printf("\nSorted array is \n");
-    printArray(arr, n);
+    merge_sort(arr, n, 0);
+
+    printf("\nSorted array:\n");
+    print_int_array(arr, n);
+
+    printf("\nBitmap decisions (%zu):\n", sort_info.bitmap_size);
+    print_bitmap(sort_info.bitmap, sort_info.bitmap_size);
+
+    merge_sort(arr, n, 1);
+
+    printf("\nReconstructed original array:\n");
+    print_int_array(arr, n);
+
     return 0;
 }

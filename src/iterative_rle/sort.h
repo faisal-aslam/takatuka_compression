@@ -1,24 +1,19 @@
-//itertive_rle/sort.h
+// iterative_rle/sort.h
 
 #pragma once
 
 #include <stdint.h>
-#include <stdlib.h>
+#include <stddef.h>  // for size_t
 
-/* ---- Minimal data structure ---- 
-* we must not store anything but bitmap as 
-* compression needs to store least amount of data for 
-* it to work.
-*/
+/*
+ * ---- Minimal data structure ----
+ * Only bitmap and essential size metadata are stored
+ * to keep memory overhead minimal for compression.
+ */
 typedef struct {
-    uint32_t original_size;
-    uint32_t bitmap_bits;
-    uint8_t *bitmap;
-} SortHeader;
+    size_t original_size;          // size of original array
+    size_t bitmap_size;            // number of valid entries in bitmap
+    uint8_t bitmap[65000];         // merge decisions (0=right, 1=left)
+} SortInfo;
 
-/* ---- Public API ---- */
-SortHeader* partial_merge_sort(uint8_t *data, uint32_t size, uint32_t max_comparisons);
-void reconstruct_original(uint8_t *sorted_data, const SortHeader *header);
-void free_sort_header(SortHeader *header);
-uint32_t bitmap_bytes_needed(uint32_t bit_count);
-
+extern SortInfo sort_info;         // global instance
