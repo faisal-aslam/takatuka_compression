@@ -15,11 +15,11 @@ static inline int min_int(int x, int y) { return (x < y) ? x : y; }
 typedef enum { MERGE_FORWARD = 0, MERGE_REVERSE = 1 } merge_mode_t;
 
 /* Forward declarations */
-static void merge(int arr[], int l, int m, int r, merge_mode_t mode);
+static void merge(int arr[], int l, int m, int r);
+static void merge_reverse(int arr[], int l, int m, int r);
 
 /* Iterative bottom-up mergesort */
-void merge_sort(int arr[], int n, merge_mode_t reverse) {
-    
+void merge_sort(int arr[], int n) {
 
     for (int curr_size = 1; curr_size < n; curr_size *= 2) {
         for (int left_start = 0; left_start < n - 1; left_start += 2 * curr_size) {
@@ -29,15 +29,15 @@ void merge_sort(int arr[], int n, merge_mode_t reverse) {
             if (mid < right_end) { // Only merge if there's something to merge
                 printf("calling merge with l=%d, m=%d, r=%d, bitmap_used=%u, current_bitmap=%u\n", left_start, mid,
                        right_end, bitmap_used, sort_info.bitmap[bitmap_used]);
-                merge(arr, left_start, mid, right_end, reverse);
+                merge(arr, left_start, mid, right_end);
             }
         }
-        break;
+        if (curr_size > 1) break;
     }
 }
 
 /* Merge function (records or replays bitmap decisions) */
-static void merge(int arr[], int l, int m, int r, merge_mode_t mode) {
+static void merge(int arr[], int l, int m, int r) {
     int n1 = m - l + 1;
     int n2 = r - m;
 
@@ -59,25 +59,13 @@ static void merge(int arr[], int l, int m, int r, merge_mode_t mode) {
     }
 
     while (i < n1 && j < n2) {
-        if (mode == MERGE_FORWARD) {
-            if (L[i] <= R[j]) {
-                sort_info.bitmap[sort_info.bitmap_size++] = 0;
-                arr[k++] = L[i++];
-            } else {                
-                sort_info.bitmap[sort_info.bitmap_size++] = 1;
-                arr[k++] = R[j++];
-            }
-        } else { /* MERGE_REVERSE */
-            if (bitmap_used >= sort_info.bitmap_size) {
-                fprintf(stderr, "Bitmap underflow\n");
-                exit(1);
-            }
-            uint8_t decision = sort_info.bitmap[bitmap_used++];
-            if (decision == 1) {
-                arr[k++] = R[j++];
-            } else {
-                arr[k++] = L[i++];
-            }
+
+        if (L[i] <= R[j]) {
+            sort_info.bitmap[sort_info.bitmap_size++] = 0;
+            arr[k++] = L[i++];
+        } else {
+            sort_info.bitmap[sort_info.bitmap_size++] = 1;
+            arr[k++] = R[j++];
         }
     }
 
@@ -85,7 +73,70 @@ static void merge(int arr[], int l, int m, int r, merge_mode_t mode) {
         arr[k++] = L[i++];
     }
     while (j < n2) {
-        arr[k++] = R[j++];       
+        arr[k++] = R[j++];
+    }
+
+    free(L);
+    free(R);
+}
+
+/* Iterative bottom-up mergesort */
+void merge_sort_reverse(int arr[], int n) {
+
+    for (int curr_size = n - 1; curr_size > 0; curr_size /= 2) {
+        for (int left_start = 0; left_start < n - 1; left_start += 2 * curr_size) {
+            int mid = min_int(left_start + curr_size - 1, n - 1);
+            int right_end = min_int(left_start + 2 * curr_size - 1, n - 1);
+
+            if (mid < right_end) { // Only merge if there's something to merge
+                printf("calling merge with l=%d, m=%d, r=%d, bitmap_used=%u, current_bitmap=%u\n", left_start, mid,
+                       right_end, bitmap_used, sort_info.bitmap[bitmap_used]);
+                merge_reverse(arr, left_start, mid, right_end);
+            }
+        }
+    }
+}
+
+/* Merge function (records or replays bitmap decisions) */
+static void merge_reverse(int arr[], int l, int m, int r) {
+    int n1 = m - l + 1;
+    int n2 = r - m;
+
+    int *L = malloc(n1 * sizeof(int));
+    int *R = malloc(n2 * sizeof(int));
+    if (!L || !R) {
+        perror("malloc");
+        exit(1);
+    }
+
+    for (int i = 0; i < n1; i++)
+        L[i] = arr[l + i];
+    for (int j = 0; j < n2; j++)
+        R[j] = arr[m + 1 + j];
+
+    int i = 0, j = 0, k = l;
+    if (i == n1 || j == n2) {
+        sort_info.bitmap[sort_info.bitmap_size++] = 0;
+    }
+
+    while (i < n1 && j < n2) {
+        if (bitmap_used >= sort_info.bitmap_size) {
+            fprintf(stderr, "Bitmap underflow\n");
+            exit(1);
+        }
+        uint8_t decision = sort_info.bitmap[bitmap_used++];
+        if (decision == 1) {
+            arr[k++] = R[j++];
+        } else {
+            arr[k++] = L[i++];
+        }
+    }
+
+    while (i < n1) {
+        arr[k++] = L[i++];
+    }
+    while (j < n2) {
+        arr[k++] = R[j++];
     }
 
     free(L);
@@ -115,7 +166,7 @@ int main(void) {
     printf("Original array:\n");
     print_int_array(arr, n);
 
-    merge_sort(arr, n, 0);
+    merge_sort(arr, n);
 
     printf("\nSorted array:\n");
     print_int_array(arr, n);
@@ -123,7 +174,7 @@ int main(void) {
     printf("\nBitmap decisions (%zu):\n", sort_info.bitmap_size);
     print_bitmap(sort_info.bitmap, sort_info.bitmap_size);
 
-    merge_sort(arr, n, 1);
+    merge_sort_reverse(arr, n);
 
     printf("\nReconstructed original array:\n");
     print_int_array(arr, n);
