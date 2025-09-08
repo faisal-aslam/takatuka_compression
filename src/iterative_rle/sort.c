@@ -54,14 +54,17 @@ static void merge(int arr[], int l, int m, int r, merge_mode_t mode) {
         R[j] = arr[m + 1 + j];
 
     int i = 0, j = 0, k = l;
+    if (i == n1 || j == n2) {
+        sort_info.bitmap[sort_info.bitmap_size++] = 0;
+    }
 
     while (i < n1 && j < n2) {
         if (mode == MERGE_FORWARD) {
             if (L[i] <= R[j]) {
-                sort_info.bitmap[sort_info.bitmap_size++] = 1;
-                arr[k++] = L[i++];
-            } else {
                 sort_info.bitmap[sort_info.bitmap_size++] = 0;
+                arr[k++] = L[i++];
+            } else {                
+                sort_info.bitmap[sort_info.bitmap_size++] = 1;
                 arr[k++] = R[j++];
             }
         } else { /* MERGE_REVERSE */
@@ -78,10 +81,12 @@ static void merge(int arr[], int l, int m, int r, merge_mode_t mode) {
         }
     }
 
-    while (i < n1)
+    while (i < n1) {
         arr[k++] = L[i++];
-    while (j < n2)
-        arr[k++] = R[j++];
+    }
+    while (j < n2) {
+        arr[k++] = R[j++];       
+    }
 
     free(L);
     free(R);
@@ -101,7 +106,7 @@ static void print_bitmap(const uint8_t *A, size_t size) {
 
 /* Driver */
 int main(void) {
-    int arr[] = {12, 11, 13, 5, 6, 7, 9};
+    int arr[] = {39, 27, 43, 3, 9, 82, 10};
     size_t n = sizeof(arr) / sizeof(arr[0]);
 
     sort_info.original_size = n;
