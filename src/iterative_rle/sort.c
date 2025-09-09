@@ -20,10 +20,11 @@ static void merge_reverse(int arr[], int l, int m, int r);
 static void print_int_array(const int *A, size_t size);
 
 /* Iterative bottom-up mergesort */
-void merge_sort(int arr[], int n) {
-
-    for (int curr_size = 1; curr_size < n; curr_size *= 2) {
-        for (int left_start = 0; left_start < n - 1; left_start += 2 * curr_size) {
+void merge_sort(int arr[], int n, int max_stages) {
+    int stages = -1;
+    for (int curr_size = 1; curr_size < n; curr_size *= 2) {        
+        if (stages++ >= max_stages) break;
+        for (int left_start = 0; left_start < n - 1; left_start += 2 * curr_size) {            
             int mid = min_int(left_start + curr_size - 1, n - 1);
             int right_end = min_int(left_start + 2 * curr_size - 1, n - 1);
 
@@ -94,7 +95,9 @@ void merge_sort_reverse(int arr[], int n) {
     max_size /= 2; // Largest power of 2 <= n
     
     for (int curr_size = max_size; curr_size >= 1; curr_size /= 2) {
+        if (sort_info.bitmap_size == 0) break; //we are done.
         for (int left_start = 0; left_start < n - 1; left_start += 2 * curr_size) {
+            if (sort_info.bitmap_size == 0) break; //we are done.
             int mid = min_int(left_start + curr_size - 1, n - 1);
             int right_end = min_int(left_start + 2 * curr_size - 1, n - 1);
             
@@ -181,7 +184,7 @@ int main(void) {
     printf("Original array:\n");
     print_int_array(arr, n);
 
-    merge_sort(arr, n);
+    merge_sort(arr, n, 1);
 
     printf("\nSorted array:\n");
     print_int_array(arr, n);
