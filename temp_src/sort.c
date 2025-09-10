@@ -8,7 +8,7 @@
 
 SortInfo sort_info;
 
-uint32_t bitmap_used = 0;
+
 /* Utility */
 static inline int min_int(int x, int y) { return (x < y) ? x : y; }
 
@@ -20,16 +20,16 @@ static void merge_reverse(int arr[], int l, int m, int r);
 static void print_int_array(const int *A, size_t size);
 
 /* Iterative bottom-up mergesort */
-void merge_sort(int arr[], int n) {
-
-    for (int curr_size = 1; curr_size < n; curr_size *= 2) {
-        for (int left_start = 0; left_start < n - 1; left_start += 2 * curr_size) {
+void merge_sort(int arr[], int n, int max_stages) {
+    int stages = -1;
+    for (int curr_size = 1; curr_size < n; curr_size *= 2) {        
+        if (stages++ >= max_stages) break;
+        for (int left_start = 0; left_start < n - 1; left_start += 2 * curr_size) {            
             int mid = min_int(left_start + curr_size - 1, n - 1);
             int right_end = min_int(left_start + 2 * curr_size - 1, n - 1);
 
             if (mid < right_end) { // Only merge if there's something to merge
-                printf("calling merge with l=%d, m=%d, r=%d, bitmap_used=%u\n", left_start, mid,
-                       right_end, bitmap_used);
+                printf("calling merge with l=%d, m=%d, r=%d\n", left_start, mid, right_end);
                 merge(arr, left_start, mid, right_end);
             }
             printf("***** After curr_size=%u\n", curr_size);
@@ -95,13 +95,14 @@ void merge_sort_reverse(int arr[], int n) {
     max_size /= 2; // Largest power of 2 <= n
     
     for (int curr_size = max_size; curr_size >= 1; curr_size /= 2) {
+        if (sort_info.bitmap_size == 0) break; //we are done.
         for (int left_start = 0; left_start < n - 1; left_start += 2 * curr_size) {
+            if (sort_info.bitmap_size == 0) break; //we are done.
             int mid = min_int(left_start + curr_size - 1, n - 1);
             int right_end = min_int(left_start + 2 * curr_size - 1, n - 1);
             
             if (mid < right_end) {
-                printf("calling merge with l=%d, m=%d, r=%d, bitmap_used=%u\n", left_start, mid,
-                       right_end, bitmap_used);
+                printf("calling merge with l=%d, m=%d, r=%d\n", left_start, mid, right_end);
                 merge_reverse(arr, left_start, mid, right_end);
             }
         }
@@ -127,22 +128,11 @@ static void merge_reverse(int arr[], int l, int m, int r) {
     //step 1. Find the bitmap starting position. 
     uint32_t total_bitmap = 2*min_int(n1, n2);
     uint32_t bit_map_start = sort_info.bitmap_size - total_bitmap;
-    /*
-    for (int i = 0; i < n1; i++)
-        L[i] = arr[l + i];
-    for (int j = 0; j < n2; j++)
-        R[j] = arr[m + 1 + j];
-    */
+
     int i = 0, j = 0, k = l;
-    if (i == n1 || j == n2) {
-        //sort_info.bitmap[sort_info.bitmap_size++] = 0;
-    }
 
     while (i < n1 && j < n2) {
-        if (bitmap_used == 0) {
-            fprintf(stderr, "Bitmap overflowflow\n");
-            exit(1);
-        }
+
         uint8_t decision = sort_info.bitmap[bit_map_start++];
         printf(" current bitmap[%u]=%u\n", bit_map_start-1, sort_info.bitmap[bit_map_start-1]);
         if (decision == 1) {
@@ -194,7 +184,7 @@ int main(void) {
     printf("Original array:\n");
     print_int_array(arr, n);
 
-    merge_sort(arr, n);
+    merge_sort(arr, n, 1);
 
     printf("\nSorted array:\n");
     print_int_array(arr, n);
@@ -203,7 +193,6 @@ int main(void) {
     print_bitmap(sort_info.bitmap, sort_info.bitmap_size);
 
     printf("\n\n*************************Reverse is started ************************************** \n");
-    bitmap_used = sort_info.bitmap_size-1; // Reset bitmap pointer for reverse sort
 
     merge_sort_reverse(arr, n);
 
