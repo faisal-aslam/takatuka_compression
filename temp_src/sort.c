@@ -206,7 +206,7 @@ static void fuzz_test(int max_n, int iterations) {
 
     for (int t = 0; t < iterations; t++) {
         int n = rand() % max_n + 1;
-        for (int i = 0; i < n; i++) orig[i] = rand() % 1000;
+        for (int i = 0; i < n; i++) orig[i] = rand() % 256;
 
         memcpy(arr, orig, n * sizeof(int));
         sort_info.bitmap_size = 0;
@@ -236,7 +236,7 @@ static void fuzz_test(int max_n, int iterations) {
 
 /* Driver */
 int main(void) {
-    int arr[] = {39, 27, 43, 3, 9, 82, 10};
+    int arr[] = {39, 27, 43, 3, 9, 82, 10, 1, 1, 2, 19};
     size_t n = sizeof(arr) / sizeof(arr[0]);
 
     sort_info.original_size = n;
@@ -260,9 +260,9 @@ int main(void) {
     printf("\nReconstructed original array:\n");
     print_int_array(arr, n);
 
-    //printf("\nStarting fuzz tests...\n");
-    //fuzz_test(2000, 2000);
-    //printf("All fuzz tests passed!\n");
+    printf("\nStarting fuzz tests...\n");
+    fuzz_test(2000, 2000);
+    printf("All fuzz tests passed!\n");
 
     return 0;
 }
