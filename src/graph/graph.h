@@ -72,43 +72,35 @@ void rebuild_seq_freq_map(const uint8_t *block, uint8_t avoid_done_levels);
 void mark_single_freq_nodes_useless(const uint8_t* block);
 
 /**
- * @brief Detects Run-Length Encodable (RLE) sequences within a data block
- * 
- * This function analyzes a block of data to identify the longest prefix suitable for RLE compression,
- * either as a uniform byte sequence or a repeating pattern. The function is optimized for performance
- * when processing entire blocks at once.
- * 
- * Key Features:
- * - Detects both uniform sequences (e.g., "AAAAA") and patterned sequences (e.g., "ABABAB")
- * - Returns the longest valid RLE prefix meeting minimum length requirements
- * - Processes data in-place without memory allocation
- * - Uses optimized checks for early rejection of non-RLE candidates
- * 
+ * @brief Detects simple Run-Length Encodable (RLE) sequences in a data block.
+ *
+ * The function checks for two types of RLE sequences starting at the given offset:
+ *   1. Uniform sequences (e.g., "AAAAAA").
+ *   2. Arithmetic +1 sequences (e.g., "ABCDE", "56789").
+ *
+ * Only prefixes of length >= MIN_RLE_SEQ_LENGTH are considered valid.
+ *
  * Output Parameters:
- * - repeat_seq_length: For uniform sequences = 1, for patterns = pattern length
- * - length_of_RLE: Number of bytes that can be RLE encoded (may be less than block_size)
- * 
- * @param[out] repeat_seq_length Length of repeating pattern (1 for uniform sequences)
- * @param[out] length_of_RLE Length of encodable sequence (0 if no RLE found)
- * @param[in] block_size Total size of the block to analyze
- * @param[in] offset Byte offset within the block to start analysis
- * @param[in] block Pointer to the data block
- * 
- * @return uint8_t Returns 1 if RLE sequence found, 0 otherwise
- * 
- * @note Performance Considerations:
- *       - Processes data in a single pass when possible
- *       - Uses memcmp for efficient pattern comparison
- *       - Early termination on non-RLE sequences
- * 
- * @example "AAAAAAABCD" → returns 1, repeat_seq_length=1, length_of_RLE=7
- * @example "ABABABXXXX" → returns 1, repeat_seq_length=2, length_of_RLE=6
- * @example "ABCDEFGHIJ" → returns 0
- * 
- * @see MIN_RLE_SEQ_LENGTH Minimum sequence length to consider for RLE
- * @see RLE_MAX_PATTERN_LENGTH Maximum pattern length to check
+ * - repeat_seq_length: For both uniform and arithmetic sequences = 1.
+ * - length_of_RLE: Length of the detected sequence, or 0 if none found.
+ * - rle_type: 0 = not RLE, 1 = uniform RLE, 2 = arithmetic +1 RLE.
+ *
+ * @param[out] repeat_seq_length Unit length of repeating sequence (always 1 here).
+ * @param[out] length_of_RLE Number of bytes encodable with RLE (0 if not found).
+ * @param[in] block_size Size of the block region to analyze.
+ * @param[in] offset Start offset within the block.
+ * @param[in] block Pointer to the data block.
+ * @param[out] rle_type Type of RLE found (0=none, 1=uniform, 2=arithmetic+1).
+ *
+ * @note Stops at the first valid match (uniform checked before arithmetic).
+ *
+ * @example "AAAAAB" → rle_type=1, repeat_seq_length=1, length_of_RLE=5
+ * @example "ABCDEZ" → rle_type=2, repeat_seq_length=1, length_of_RLE=5
+ * @example "AXYZ"   → rle_type=0, length_of_RLE=0
  */
-uint8_t is_RLE_sequence(uint8_t* repeat_seq_length, uint8_t* length_of_RLE, uint8_t block_size, uint32_t offset, const uint8_t *block);
+void is_RLE_sequence(uint8_t* repeat_seq_length, uint8_t* length_of_RLE,
+                     uint8_t block_size, uint32_t offset,
+                     const uint8_t *block, uint8_t* rle_type);
 
 static inline void reset_graph(void) {
     graph.size = 0;

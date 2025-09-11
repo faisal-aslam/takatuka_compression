@@ -27,7 +27,7 @@ static inline int level_is_deleted(uint16_t level) {
  * Also avoids inflating counts for self-overlapping sequences.
  */
 void rebuild_seq_freq_map(const uint8_t *block, uint8_t avoid_done_levels) {
-    //clean the old map.
+    // clean the old map.
     init_seq_freq_map();
 
     for (uint32_t i = 0; i < graph.size; i++) {
@@ -63,19 +63,18 @@ void rebuild_seq_freq_map(const uint8_t *block, uint8_t avoid_done_levels) {
     }
 }
 
-void mark_single_freq_nodes_useless(const uint8_t* block) {
+void mark_single_freq_nodes_useless(const uint8_t *block) {
     for (uint32_t id = 1; id < get_graph_size(); id++) {
         GraphNode *node = get_graph_node(id);
-        if(node->useless) continue;
+        if (node->useless) continue;
         if (node->sequence_length > 1 && !node->is_RLE) {
             uint32_t freq = 0, dummy_node_id = 0;
             if (seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_node_id) && freq <= 1) {
-                node->useless = 1; //this node is useless.
+                node->useless = 1; // this node is useless.
             }
         }
     }
 }
-
 
 void compact_graph(const uint8_t *block) {
     (void)block;
@@ -83,9 +82,9 @@ void compact_graph(const uint8_t *block) {
     rebuild_seq_freq_map(block, 0);
     uint32_t write_idx = 0;
     uint32_t current_level = 0;
-    
+
     // Root is always useful.
-    get_graph_node(0)->useless = 0;    
+    get_graph_node(0)->useless = 0;
 
     // Mark all levels "unset" initially
     for (uint32_t l = 0; l < graph.total_levels; l++) {
@@ -129,13 +128,12 @@ void compact_graph(const uint8_t *block) {
 
         write_idx++;
     }
-//#ifdef DEBUG
-    printf("%lu: Done with graph compaction from %u to %u nodes\n",
-           get_elapsed_ms(), graph.size, write_idx);
-//#endif
+    // #ifdef DEBUG
+    printf("%lu: Done with graph compaction from %u to %u nodes\n", get_elapsed_ms(), graph.size, write_idx);
+    // #endif
     graph.size = write_idx;
-    graph.total_levels = current_level + 1; // trailing deleted levels vanish   
-    //rebuild_seq_freq_map(block, 0); do it outside of it.
+    graph.total_levels = current_level + 1; // trailing deleted levels vanish
+    // rebuild_seq_freq_map(block, 0); do it outside of it.
 }
 
 void init_graph(void) {
@@ -153,22 +151,22 @@ void mass_increment_levels(int add_levels) {
     }
 }
 
-uint8_t is_RLE_sequence(uint8_t *repeat_seq_length, uint8_t *length_of_RLE, uint8_t block_size, uint32_t offset,
-                        const uint8_t *block) {
+void is_RLE_sequence(uint8_t *repeat_seq_length, uint8_t *length_of_RLE,
+                     uint8_t block_size, uint32_t offset,
+                     const uint8_t *block, uint8_t *rle_type) {
     *repeat_seq_length = 0;
     *length_of_RLE = 0;
+    *rle_type = 0;  // Default: not RLE
 
     if (block_size < MIN_RLE_SEQ_LENGTH) {
-        return 0;
+        return;
     }
 
     const uint8_t *sequence = block + offset;
     const uint8_t first_byte = sequence[0];
 
-    // ===== Stage 1: Uniform Sequence Check (for whole sequence or prefix) =====
+    // ===== Stage 1: Uniform Sequence Check =====
     uint8_t uniform_length = block_size;
-
-    // Find the first position where the byte differs
     for (uint8_t i = 1; i < block_size; i++) {
         if (sequence[i] != first_byte) {
             uniform_length = i;
@@ -179,76 +177,34 @@ uint8_t is_RLE_sequence(uint8_t *repeat_seq_length, uint8_t *length_of_RLE, uint
     if (uniform_length >= MIN_RLE_SEQ_LENGTH) {
         *repeat_seq_length = 1;
         *length_of_RLE = uniform_length;
+        *rle_type = 1;  // Uniform RLE
 
 #ifdef DEBUG
-        printf("[RLE] Uniform sequence found at offset %u: repeat_len = %u, RLE_len = %u\n", offset, *repeat_seq_length,
-               *length_of_RLE);
+        printf("[RLE] Uniform sequence found at offset %u: repeat_len=%u, RLE_len=%u\n",
+               offset, *repeat_seq_length, *length_of_RLE);
 #endif
-
-        return 1;
-    }
-    if (1) return 0; // not supporting multiple byte pattern.
-
-    // ===== Stage 2: Pattern-Based RLE Check (for whole sequence or prefix) =====
-    if (block_size < 16) {
-        return 0;
+        return;  // Already found an RLE → no need to check arithmetic
     }
 
-    // Quick entropy filter: check uniqueness among first 4 bytes
-    bool is_unique = true;
-    for (int i = 0; i < 4 && is_unique; i++) {
-        for (int j = i + 1; j < 4; j++) {
-            if (sequence[i] == sequence[j]) {
-                is_unique = false;
-                break;
-            }
+    // ===== Stage 2: Arithmetic +1 Sequence Check =====
+    uint8_t arith_length = block_size;
+    for (uint8_t i = 1; i < block_size; i++) {
+        if (sequence[i] != (uint8_t)(sequence[i - 1] + 1)) {
+            arith_length = i;
+            break;
         }
     }
-    if (is_unique) {
-        return 0;
-    }
 
-    int max_pattern = MIN(block_size / 2, RLE_MAX_PATTERN_LENGTH);
-
-    for (int pattern_len = max_pattern; pattern_len >= 2; pattern_len--) {
-        int max_valid_repeats = 1; // start with 1 pattern already seen
-        bool valid = true;
-
-        while (valid) {
-            int base = (max_valid_repeats - 1) * pattern_len;
-            int next = base + pattern_len;
-            if ((uint32_t)(next + pattern_len) > (block_size - offset)) {
-                break;
-            }
-
-            for (int i = 0; i < pattern_len; i++) {
-                if (sequence[base + i] != sequence[next + i]) {
-                    valid = false;
-                    break;
-                }
-            }
-
-            if (valid) {
-                max_valid_repeats++;
-            }
-        }
-
-        int total_length = max_valid_repeats * pattern_len;
-
-        if (max_valid_repeats >= 2 && total_length >= MIN_RLE_SEQ_LENGTH) {
-            *repeat_seq_length = pattern_len;
-            *length_of_RLE = total_length;
+    if (arith_length >= MIN_RLE_SEQ_LENGTH) {
+        *repeat_seq_length = 1;    // step size = +1
+        *length_of_RLE = arith_length;
+        *rle_type = 2;  // Arithmetic +1 RLE
 
 #ifdef DEBUG
-            printf("[RLE] Pattern sequence found at offset %u: repeat_len = %u, RLE_len = %u, repeats = %d\n", offset,
-                   *repeat_seq_length, *length_of_RLE, max_valid_repeats);
+        printf("[RLE] Arithmetic +1 sequence found at offset %u: RLE_len=%u\n",
+               offset, *length_of_RLE);
 #endif
-
-            return 1;
-        }
     }
-
-    return 0;
 }
 
 static inline void print_node_link(GraphNode *node, GraphNode *parent) {

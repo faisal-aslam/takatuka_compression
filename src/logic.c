@@ -12,7 +12,7 @@
 #include <string.h>
 
 double WEIGHT_FREQ = 0.5;
-double WEIGHT_LEN  = 0.5;
+double WEIGHT_LEN = 0.5;
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -43,18 +43,16 @@ static inline GraphNode *create_node(uint32_t start, uint8_t length) {
     return node;
 }
 
-static inline uint8_t RLE_level(const uint8_t *block, uint32_t block_index, uint32_t block_size) {
+static inline void RLE_level(const uint8_t *block, uint32_t block_index, uint32_t block_size, uint8_t *rle_type) {
     uint16_t current_level = get_last_level_index();
-    if (is_RLE_sequence(&rle_info.repeat_seq_length, &rle_info.length_of_RLE, MIN(block_size, 255), block_index,
-                        block)) {
-        // wait for the right level to create node.
-        // do not create any RLE nodes before reaching that level.
-        // remember data of RLE node to be created later on, at the appropriate level.
-        rle_info.next_RLE_level = current_level + rle_info.length_of_RLE - 1;
-        rle_info.RLE_offset = block_index;
-        return 1;
-    }
-    return 0;
+    is_RLE_sequence(&rle_info.repeat_seq_length, &rle_info.length_of_RLE, MIN(block_size, 255), block_index, block,
+                    rle_type);
+    if (rle_type == 0) return;
+    // wait for the right level to create node.
+    // do not create any RLE nodes before reaching that level.
+    // remember data of RLE node to be created later on, at the appropriate level.
+    rle_info.next_RLE_level = current_level + rle_info.length_of_RLE - 1;
+    rle_info.RLE_offset = block_index;
 }
 static inline void set_RLE_data() {
     // Create RLE node, if any. There could be at most one RLE node per level.
@@ -68,7 +66,7 @@ static inline void set_RLE_data() {
         current_node->length_of_RLE = rle_info.length_of_RLE;
 
 #ifdef DEBUG
-        //print_graph_node(current_node); // print the RLE node.
+        // print_graph_node(current_node); // print the RLE node.
 #endif
     } else {
         fprintf(stderr, "Illegal set_RLE_data\n");
@@ -83,17 +81,16 @@ static inline void compute_best_path_and_write_in_file_with_alpha_beta(const uin
     // sweep WEIGHT_FREQ from 0.1 to 0.9, WEIGHT_LEN = 1 - WEIGHT_FREQ
     for (int i = 1; i <= 9; i++) {
         WEIGHT_FREQ = i / 10.0;
-        WEIGHT_LEN  = 1.0 - WEIGHT_FREQ;
+        WEIGHT_LEN = 1.0 - WEIGHT_FREQ;
 
         Path path_state;
-        find_best_saving_path(block, &path_state);    
+        find_best_saving_path(block, &path_state);
         if (path_state.path_size[PATH_BEST] <= 0) {
             continue; // skip invalid
         }
 
         final_book_keeping(block, &path_state);
-        set_best_path_view(path_state.path_stack[PATH_BEST],
-                           path_state.path_freqs[PATH_BEST],
+        set_best_path_view(path_state.path_stack[PATH_BEST], path_state.path_freqs[PATH_BEST],
                            path_state.path_size[PATH_BEST]);
 
         long size_of_compressed_file = write_compressed_output(output_file, block);
@@ -111,14 +108,13 @@ static inline void compute_best_path_and_write_in_file_with_alpha_beta(const uin
 
     // rerun with best weights so output_file has final best result
     WEIGHT_FREQ = best_wf;
-    WEIGHT_LEN  = best_wl;
+    WEIGHT_LEN = best_wl;
 
     Path path_state;
     find_best_saving_path(block, &path_state);
     if (path_state.path_size[PATH_BEST] > 0) {
         final_book_keeping(block, &path_state);
-        set_best_path_view(path_state.path_stack[PATH_BEST],
-                           path_state.path_freqs[PATH_BEST],
+        set_best_path_view(path_state.path_stack[PATH_BEST], path_state.path_freqs[PATH_BEST],
                            path_state.path_size[PATH_BEST]);
         long size_of_compressed_file = write_compressed_output(output_file, block);
         printf("Written best result to output file, size=%ld\n", size_of_compressed_file);
@@ -129,18 +125,18 @@ static inline void compute_best_path_and_write_in_file_with_alpha_beta(const uin
 
 static inline long compute_best_path_and_write_in_file(const uint8_t *block) {
     Path path_state;
-    find_best_saving_path(block, &path_state);    
+    find_best_saving_path(block, &path_state);
     printf("\n%lu: Computed the best possible path \n", get_elapsed_ms());
     if (path_state.path_size[PATH_BEST] <= 0) {
         printf("No path found\n");
         return 0; // no path exist
     }
     final_book_keeping(block, &path_state);
-//#ifdef DEBUG
+    // #ifdef DEBUG
     print_path(0, 1, block, &path_state);
-//#endif
+    // #endif
     set_best_path_view(path_state.path_stack[PATH_BEST], path_state.path_freqs[PATH_BEST],
-                       path_state.path_size[PATH_BEST]);                
+                       path_state.path_size[PATH_BEST]);
     long size_of_compressed_file = write_compressed_output(output_file, block);
     printf("\n%lu: Written the path in output file sized=%ld \n", get_elapsed_ms(), size_of_compressed_file);
     return size_of_compressed_file;
@@ -163,10 +159,11 @@ long process_block(const uint8_t *block, uint32_t block_size) {
 
         uint8_t max_sequence = MIN(current_level, MAX_WEIGHTS);
         uint32_t start;
+        
         // special treatment of RLE nodes.
-        // special treatment of RLE nodes.
-        uint8_t created_rle_node = RLE_level(block, block_index, block_size);
-        if (created_rle_node) {
+        uint8_t rle_type;
+         RLE_level(block, block_index, block_size, &rle_type);
+        if (rle_type == 1) {
             while (current_level != rle_info.next_RLE_level) {
                 current_level = create_graph_level();
                 block_index++;
@@ -189,11 +186,11 @@ long process_block(const uint8_t *block, uint32_t block_size) {
                 current_node->useless = 1; // by default the node is useless.
                 uint32_t index = seq_freq_get_with_index(&block[current_node->offset], seq_len, &freq, &old_node_id);
                 if (index != UINT32_MAX) {                             // found, same sequence already in the map.
-                    GraphNode *old_node = get_graph_node(old_node_id); // get the old node.                    
+                    GraphNode *old_node = get_graph_node(old_node_id); // get the old node.
                     // as exist multiple times in the graph so mark the old and new node both useful now.
                     current_node->useless = 0;
                     old_node->useless = 0;
-                    //However, increment its frequency only when it is not self overlapping.
+                    // However, increment its frequency only when it is not self overlapping.
                     if (old_node->node_level <= get_parent_level(current_node)) {
                         seq_freq_increment_with_index(index, current_node->node_id);
                     }
@@ -203,7 +200,7 @@ long process_block(const uint8_t *block, uint32_t block_size) {
                 }
             }
 #ifdef DEBUG
-            //print_graph_node(current_node); // print the newly create node.
+            // print_graph_node(current_node); // print the newly create node.
 #endif
         }
     }
@@ -214,5 +211,5 @@ long process_block(const uint8_t *block, uint32_t block_size) {
     visualize_graph(block);
 #endif
     return compute_best_path_and_write_in_file(block);
-    //compute_best_path_and_write_in_file_with_alpha_beta(block);
+    // compute_best_path_and_write_in_file_with_alpha_beta(block);
 }

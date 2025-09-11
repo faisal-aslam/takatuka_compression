@@ -245,6 +245,7 @@ static void fuzz_test(int max_n, int iterations) {
     free(restored);
 }
 
+#ifdef TEST_MAGIC_SORT
 /* Driver */
 int main(void) {
     int arr[] = {39, 27, 43, 3, 9, 82, 10, 1, 1, 2, 19, 13, 15, 0, 9};
@@ -279,3 +280,4 @@ int main(void) {
 
     return 0;
 }
+#endif
