@@ -4,6 +4,7 @@ SRCS = \
     src/map/xxhash.c \
     src/map/seq_freq_map.c \
     src/files/compression/compress.c \
+    src/iterative_rle/sort.c \
     src/time.c \
     src/graph/shortest_path/shortest_path.c \
     src/graph/shortest_path/shortest_path_greedy.c \
