@@ -9,6 +9,7 @@ decompress
 graph.dot
 graph.png
 graph.svg
+src/combined_code.c
 
 # Ignore custom scripts
 push.sh
