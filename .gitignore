@@ -2,6 +2,13 @@
 *.o
 *.out
 *.html
+compress
+decompress-debug
+compress-debug
+decompress
+graph.dot
+graph.png
+graph.svg
 
 # Ignore custom scripts
 push.sh

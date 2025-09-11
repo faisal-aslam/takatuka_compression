@@ -31,7 +31,7 @@ process_files() {
 
 process_files "/home/noman/takatuka/takatuka_compression/src/files/code_classes.h" 
 process_files "/home/noman/takatuka/takatuka_compression/src/files/code_classes.c" 
-process_files "/home/noman/takatuka/takatuka_compression/src/files/decompression" 
+process_files "/home/noman/takatuka/takatuka_compression/src/files/compression" 
 
 echo "Combined all .h and .c files into $output_file"
 
