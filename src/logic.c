@@ -159,10 +159,10 @@ long process_block(const uint8_t *block, uint32_t block_size) {
 
         uint8_t max_sequence = MIN(current_level, MAX_WEIGHTS);
         uint32_t start;
-        
+
         // special treatment of RLE nodes.
         uint8_t rle_type;
-         RLE_level(block, block_index, block_size, &rle_type);
+        RLE_level(block, block_index, block_size, &rle_type);
         if (rle_type == 1) {
             while (current_level != rle_info.next_RLE_level) {
                 current_level = create_graph_level();
