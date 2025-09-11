@@ -24,7 +24,7 @@ static inline void backtrack_node(const uint8_t *block, Path *path_state) {
 
     uint32_t node_id = path_state->path_stack[PATH_CURRENT][index];
     GraphNode *node = get_graph_node(node_id);
-    if (!node->is_RLE && node->sequence_length > 1) {
+    if (!node->RLE_type && node->sequence_length > 1) {
 
         seq_freq_decrement(&block[node->offset], node->sequence_length);
     }
@@ -61,7 +61,7 @@ static inline void process_node(const uint8_t *block, GraphNode *node, Path *pat
 
     uint32_t freq = 0;
 
-    if (node->sequence_length > 1 && !node->is_RLE) {
+    if (node->sequence_length > 1 && !node->RLE_type) {
         freq = seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
     }
 #ifdef DEBUG
@@ -89,7 +89,7 @@ static void bookkeeping_best_path(const uint8_t *block, Path *path_state) {
     for (int32_t i = 0; i <= path_state->path_size[PATH_BEST]; i++) {
         uint32_t node_id = path_state->path_stack[PATH_BEST][i];
         node = get_graph_node(node_id);
-        if (node->sequence_length > 1 && !node->is_RLE) {
+        if (node->sequence_length > 1 && !node->RLE_type) {
             seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
         }
     }

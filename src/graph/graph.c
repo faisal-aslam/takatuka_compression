@@ -42,7 +42,7 @@ void rebuild_seq_freq_map(const uint8_t *block, uint8_t avoid_done_levels) {
         // Skip useless, trivial, or RLE nodes
         if (node->useless) continue;
         if (node->sequence_length <= 1) continue;
-        if (node->is_RLE) continue;
+        if (node->RLE_type) continue;
 
         uint32_t freq, old_node_id;
         uint32_t index = seq_freq_get_with_index(&block[node->offset], node->sequence_length, &freq, &old_node_id);
@@ -67,7 +67,7 @@ void mark_single_freq_nodes_useless(const uint8_t *block) {
     for (uint32_t id = 1; id < get_graph_size(); id++) {
         GraphNode *node = get_graph_node(id);
         if (node->useless) continue;
-        if (node->sequence_length > 1 && !node->is_RLE) {
+        if (node->sequence_length > 1 && !node->RLE_type) {
             uint32_t freq = 0, dummy_node_id = 0;
             if (seq_freq_get(&block[node->offset], node->sequence_length, &freq, &dummy_node_id) && freq <= 1) {
                 node->useless = 1; // this node is useless.
@@ -99,7 +99,7 @@ void compact_graph(const uint8_t *block) {
     for (uint32_t read_idx = 1; read_idx < graph.size; read_idx++) {
         GraphNode *node = &graph.nodes[read_idx];
 
-        if (node->node_id != 0 && !node->is_RLE) { // never skip the root or RLE nodes.
+        if (node->node_id != 0 && !node->RLE_type) { // never skip the root or RLE nodes.
             // NEW: skip whole levels marked deleted
             if (level_is_deleted(node->node_level)) {
                 // Do NOT advance current_level here; the next kept node will
@@ -231,7 +231,7 @@ void print_graph_node(GraphNode *node) {
     uint16_t parent_nodes_count = get_parent_nodes_count(node);
     printf("node_id = %u, start_of_sequence = %u, sequence_length = %u, level=%u", node->node_id, node->offset,
            node->sequence_length, node->node_level);
-    if (!node->is_RLE) {
+    if (!node->RLE_type) {
         printf(", parent_count = %u\n", parent_nodes_count);
     } else {
         printf(", RLE=YES, parent_count = %u\n", parent_nodes_count);

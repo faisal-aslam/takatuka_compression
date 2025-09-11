@@ -60,7 +60,7 @@ void print_best_view(const BestPathView *view, uint8_t shouldPrintData, const ui
         const uint32_t freq = view->freqs[i];
 
         printf("\n -> ");
-        if (node->is_RLE) {
+        if (node->RLE_type) {
             printf("RLE=YES ");
         }
 

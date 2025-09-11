@@ -46,7 +46,7 @@ void print_path(uint8_t isCurrent, uint8_t shouldPrintData, const uint8_t *block
         uint32_t cost_per_node = path_state->path_per_node_cost[idx][i];
 
         printf("\n -> ");
-        if (node->is_RLE) {
+        if (node->RLE_type) {
             printf("RLE=YES ");
         }
 
@@ -71,7 +71,7 @@ void final_book_keeping(const uint8_t *block, Path *path_state) {
     // Pass 1: Count sequence frequencies
     for (int32_t i = 0; i < path_len; i++) {
         node = get_graph_node(path[i]);
-        if (node->sequence_length > 1 && !node->is_RLE) {
+        if (node->sequence_length > 1 && !node->RLE_type) {
             seq_freq_increment(&block[node->offset], node->sequence_length, node->node_id);
         }
     }
@@ -79,7 +79,7 @@ void final_book_keeping(const uint8_t *block, Path *path_state) {
     // Pass 2: Store frequencies per node
     for (int32_t i = 0; i < path_len; i++) {
         node = get_graph_node(path[i]);
-        if (node->sequence_length > 1 && !node->is_RLE) {
+        if (node->sequence_length > 1 && !node->RLE_type) {
             uint32_t freq, node_id_unused;
             seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id_unused);
             path_state->path_freqs[PATH_BEST][i] = freq;

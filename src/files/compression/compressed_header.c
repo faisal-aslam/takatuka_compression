@@ -50,7 +50,7 @@ static int compare_candidates_desc(const void *a, const void *b) {
 
 /* Helper: whether a node should be skipped for header code creation */
 static inline bool should_skip_node(const GraphNode *node, uint32_t freq) {
-    return (node->sequence_length == 1) || (freq == 1) || (node->is_RLE) || (node->node_id == 0);
+    return (node->sequence_length == 1) || (freq == 1) || (node->RLE_type) || (node->node_id == 0);
 }
 
 /* Check whether the sequence at block[offset] has already been seen; if not, mark it with freq2 */
@@ -114,7 +114,7 @@ long populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
         GraphNode *node = get_graph_node(best_path.nodes[i]);
         if (!node) continue;
         // Track maximum RLE count
-        if (node->is_RLE && node->length_of_RLE > max_rle_count) {
+        if (node->RLE_type && node->length_of_RLE > max_rle_count) {
             max_rle_count = node->length_of_RLE;
         }
         uint32_t freq = best_path.freqs[i];

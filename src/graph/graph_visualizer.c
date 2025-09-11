@@ -60,7 +60,7 @@ static void print_node(FILE *output, const GraphNode *node, const uint8_t *block
     seq_freq_get(&block[node->offset], node->sequence_length, &freq, &node_id);
 
     // Append level/freq info (always with \\n for DOT newlines)
-    if (!node->is_RLE) {
+    if (!node->RLE_type) {
         fprintf(output, "\\nl=%u, f=%u", node->node_level, freq);
     } else {
         fprintf(output, "\\nl=%u, f=%u\\nRLE", node->node_level, freq);

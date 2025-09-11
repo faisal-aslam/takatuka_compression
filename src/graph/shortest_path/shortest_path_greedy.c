@@ -44,7 +44,7 @@ inline static void mark_all_but_one_useless(uint32_t only_useful_node) {
     for (uint32_t level_id = start_id; level_id < end_id; level_id++) {
         GraphNode *current_node = get_graph_node(level_id);
         if (current_node->node_level != level) continue;
-        if (level_id == only_useful_node || current_node->is_RLE) {
+        if (level_id == only_useful_node || current_node->RLE_type) {
             current_node->useless = 0; // only usefull
         } else {                       // do not mark rle nodes uselss.
             current_node->useless = 1; // all other are useless.
@@ -130,7 +130,7 @@ uint8_t get_best_saving(const uint8_t *block, uint8_t *best_seq, uint8_t *best_l
             if (start_id == end_id) continue; // empty level.
             GraphNode *node = get_graph_node(start_id);
 
-            if (node->is_RLE && node->sequence_length > longest_RLE) {
+            if (node->RLE_type && node->sequence_length > longest_RLE) {
                 longest_RLE = node->sequence_length;
                 longest_RLE_level = level;
                 best_node_id = start_id;

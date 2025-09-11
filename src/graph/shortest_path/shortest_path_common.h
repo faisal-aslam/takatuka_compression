@@ -22,7 +22,7 @@ static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
 
     if (node->node_id == 0) return 0; // no cost for the root node.
 
-    if (node->is_RLE) {
+    if (node->RLE_type) {
         return 1u; // prefer RLE the most.
     } else if (frequency > 1 && node->sequence_length > 1) {
         return 2u; // next perfer repeated sequences with freq more than 1.
@@ -45,7 +45,7 @@ static inline uint32_t calc_cost(GraphNode *node, uint32_t frequency) {
  */
 static inline uint32_t calc_savings(GraphNode *node, uint32_t frequency) {
     // No savings for root node
-    if (node->is_RLE) {
+    if (node->RLE_type) {
         return node->sequence_length * 2u;
     } else if (frequency > 1) {
         return node->sequence_length;
@@ -105,7 +105,7 @@ static inline void rollback_path_freqs(int path_index, const uint8_t *block, Pat
         if (!node) continue;
 
         // Only decrement for multi-byte non-RLE sequences
-        if (node->sequence_length > 1 && !node->is_RLE) {
+        if (node->sequence_length > 1 && !node->RLE_type) {
             // NOTE: seq_freq_decrement should safely handle cases where
             //       the sequence isn't found or freq is already 0.
             seq_freq_decrement(&block[node->offset], node->sequence_length);

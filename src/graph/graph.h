@@ -27,8 +27,9 @@ typedef struct {
     uint16_t node_level;
     uint8_t useless;
     uint8_t sequence_length;
-    uint8_t is_RLE;
-    //uint8_t repeat_seq_length;
+    uint8_t RLE_type;
+    uint8_t RLE_start;
+    uint8_t RLE_end;
     uint8_t length_of_RLE;
 } GraphNode;
 

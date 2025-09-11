@@ -61,7 +61,7 @@ static inline void set_RLE_data() {
     if (current_level == rle_info.next_RLE_level) {
         current_node = create_node(rle_info.RLE_offset, rle_info.length_of_RLE);
         current_node->useless = 0;
-        current_node->is_RLE = 1;
+        current_node->RLE_type = 1;
         // current_node->repeat_seq_length = rle_info.repeat_seq_length;
         current_node->length_of_RLE = rle_info.length_of_RLE;
 
