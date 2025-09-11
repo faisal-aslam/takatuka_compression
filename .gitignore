@@ -1,7 +1,10 @@
 # Ignore build artifacts
 *.o
 *.out
+*.html
 
 # Ignore custom scripts
 push.sh
 
+#ignore build folder
+./build
