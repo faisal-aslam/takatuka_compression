@@ -1,4 +1,4 @@
-// decompress_body.c
+// files/compression/decompress_body.c
 
 #include "decompress_body.h"
 #include "bit_reader.h"
@@ -11,9 +11,10 @@
 
 #define BODY_BUFFER_SIZE 4096
 
-// Add external declarations
+// externs from header
 extern uint8_t global_class2_bits;
 extern uint8_t global_rle_bits;
+extern DecoderMap decoder_map; // assumed present elsewhere
 
 void read_body_using_decoder_map(BitReader *reader, const char *decompress_file_name) {
     FILE *output_file = fopen(decompress_file_name, "wb");
@@ -22,8 +23,6 @@ void read_body_using_decoder_map(BitReader *reader, const char *decompress_file_
         exit(EXIT_FAILURE);
     }
 
-    uint8_t output[256]; // Max sequence size
-    uint32_t bit;
     size_t total_bytes_written = 0;
 
 #ifdef DEBUG
@@ -33,102 +32,146 @@ void read_body_using_decoder_map(BitReader *reader, const char *decompress_file_
     bitreader_print_state(reader);
 #endif
 
-    while (bitreader_read(reader, &bit, 1)) {
+    while (1) {
+        uint32_t prefix;
+        if (!bitreader_read(reader, &prefix, 1)) {
+            // Graceful end: no more bits available
+            break;
+        }
+
 #ifdef DEBUG
-        printf("\n[READ] Prefix bit: %u\n", bit);
+        printf("\n[READ] Prefix bit: %u\n", prefix);
         bitreader_print_state(reader);
 #endif
 
-        if (bit == 0) {
-            // Uncompressed single byte
+        if (prefix == 0) {
+            /* Uncompressed raw byte */
             uint32_t byte;
             if (!bitreader_read(reader, &byte, 8)) {
-                // Accept EOF if the reader has no more data
-                if (reader->overflow) {
-                    break;
-                }
-                fprintf(stderr, "Unexpected EOF while reading uncompressed byte\n");
-                exit(EXIT_FAILURE);
+                // If no more data, treat as normal EOF (padding)
+                break;
             }
             fputc((uint8_t)byte, output_file);
             total_bytes_written++;
+
+#ifdef DEBUG
+            printf("[RAW] Wrote byte %02X\n", (uint8_t)byte);
+            bitreader_print_state(reader);
+#endif
         } else {
-            // Compressed data - read code class to determine type
+            /* Compressed entry */
             uint32_t code_class;
             if (!bitreader_read(reader, &code_class, 2)) {
-                fprintf(stderr, "Failed to read code_class\n");
+                fprintf(stderr, "Truncated stream: expected code_class after prefix\n");
                 exit(EXIT_FAILURE);
             }
 
 #ifdef DEBUG
-            printf("[COMPRESSED] Read code class: %u\n", code_class);
+            printf("[COMPRESSED] code_class=%u\n", code_class);
             bitreader_print_state(reader);
 #endif
 
-            if (code_class == 3) { // RLE
-                uint32_t rle_count;
-
-                // Use dynamic RLE bits instead of fixed 8 bits
-                if (global_rle_bits > 0) {
-                    if (!bitreader_read(reader, &rle_count, global_rle_bits)) {
-                        fprintf(stderr, "Failed to read RLE count (%u bits)\n", global_rle_bits);
-                        exit(EXIT_FAILURE);
-                    }
-                } else {
-                    // Fallback: should only happen if there are no RLE sequences
-                    if (!bitreader_read(reader, &rle_count, 8)) {
-                        fprintf(stderr, "Failed to read RLE count (8 bits fallback)\n");
-                        exit(EXIT_FAILURE);
-                    }
-                }
-
-                // Read the RLE pattern byte (always 8 bits)
-                uint32_t pattern_byte;
-                if (!bitreader_read(reader, &pattern_byte, 8)) {
-                    fprintf(stderr, "Failed to read RLE pattern byte\n");
+            if (code_class == 3) {
+                /* RLE sequence */
+                uint32_t rle_flag;
+                if (!bitreader_read(reader, &rle_flag, 1)) {
+                    fprintf(stderr, "Truncated stream: expected RLE flag\n");
                     exit(EXIT_FAILURE);
                 }
-
-                // For single-byte RLE pattern (current implementation)
-                uint8_t output_byte = (uint8_t)pattern_byte;
-
-                // Write the repeated byte
-                for (uint32_t rep = 0; rep < rle_count; ++rep) {
-                    fputc(output_byte, output_file);
-                }
-                total_bytes_written += rle_count;
 
 #ifdef DEBUG
-                printf("[RLE] Count=%u (using %u bits), Pattern=%02X, Total bytes=%zu\n", rle_count, global_rle_bits,
-                       output_byte, total_bytes_written);
+                printf("[RLE] rle_flag=%u\n", rle_flag);
+                bitreader_print_state(reader);
 #endif
-            } else if (code_class == 0 || code_class == 1 || code_class == 2) {
-                // Regular compressed case (class 0,1 or 2)
-                uint8_t bits = get_code_class_size((uint8_t)code_class, global_class2_bits);
 
+                if (rle_flag == 1) {
+                    /* Uniform RLE */
+                    uint32_t rle_count;
+                    if (global_rle_bits > 0) {
+                        if (!bitreader_read(reader, &rle_count, global_rle_bits)) {
+                            fprintf(stderr, "Truncated stream: expected RLE count (%u bits)\n", global_rle_bits);
+                            exit(EXIT_FAILURE);
+                        }
+                    } else {
+                        if (!bitreader_read(reader, &rle_count, 8)) {
+                            fprintf(stderr, "Truncated stream: expected RLE count (8 bits fallback)\n");
+                            exit(EXIT_FAILURE);
+                        }
+                    }
+
+                    uint32_t pattern_byte;
+                    if (!bitreader_read(reader, &pattern_byte, 8)) {
+                        fprintf(stderr, "Truncated stream: expected RLE symbol\n");
+                        exit(EXIT_FAILURE);
+                    }
+
+#ifdef DEBUG
+                    printf("[UNIFORM RLE] count=%u symbol=%02X\n", rle_count, pattern_byte);
+#endif
+
+                    for (uint32_t rep = 0; rep < rle_count; ++rep) {
+                        fputc((uint8_t)pattern_byte, output_file);
+                    }
+                    total_bytes_written += rle_count;
+
+                } else {
+                    /* Arithmetic RLE */
+                    uint32_t start_val, end_val;
+                    if (!bitreader_read(reader, &start_val, 8) ||
+                        !bitreader_read(reader, &end_val, 8)) {
+                        fprintf(stderr, "Truncated stream: expected arithmetic RLE start/end\n");
+                        exit(EXIT_FAILURE);
+                    }
+
+#ifdef DEBUG
+                    printf("[ARITH RLE] start=%02X end=%02X\n", start_val, end_val);
+#endif
+
+                    if (end_val < start_val) {
+                        fprintf(stderr, "Invalid arithmetic RLE range: start=%u end=%u\n",
+                                start_val, end_val);
+                        exit(EXIT_FAILURE);
+                    }
+
+                    for (uint32_t v = start_val; v <= end_val; ++v) {
+                        fputc((uint8_t)v, output_file);
+                        total_bytes_written++;
+                    }
+                }
+
+            } else if (code_class == 0 || code_class == 1 || code_class == 2) {
+                /* Normal compressed sequence */
+                uint8_t bits = get_code_class_size((uint8_t)code_class, global_class2_bits);
                 uint32_t code;
                 if (!bitreader_read(reader, &code, bits)) {
-                    fprintf(stderr, "Failed to read code (%u bits)\n", bits);
+                    fprintf(stderr, "Truncated stream: expected code (%u bits)\n", bits);
                     exit(EXIT_FAILURE);
                 }
+
+#ifdef DEBUG
+                printf("[DECODE] class=%u code=%u bits=%u\n", code_class, code, bits);
+#endif
 
                 const uint8_t *seq = NULL;
                 uint8_t length = 0;
                 if (!decoder_map_get(&decoder_map, (uint16_t)code, (uint8_t)code_class, &seq, &length)) {
-                    fprintf(stderr, "Failed to decode sequence for code=0x%X class=%u\n", code, code_class);
+                    fprintf(stderr, "Failed to resolve code=%u class=%u\n", code, code_class);
                     exit(EXIT_FAILURE);
                 }
 
-                fwrite(seq, 1, length, output_file);
-                total_bytes_written += length;
+                if (length > 0) {
+                    fwrite(seq, 1, length, output_file);
+                    total_bytes_written += length;
+                }
+
             } else {
-                fprintf(stderr, "Invalid code class: %u\n", code_class);
+                fprintf(stderr, "Invalid code_class read: %u\n", code_class);
                 exit(EXIT_FAILURE);
             }
         }
 
 #ifdef DEBUG
-        printf("[PROGRESS] Total bytes written so far: %zu\n", total_bytes_written);
+        printf("[PROGRESS] Total bytes written: %zu\n", total_bytes_written);
         bitreader_print_state(reader);
 #endif
     }
@@ -136,7 +179,6 @@ void read_body_using_decoder_map(BitReader *reader, const char *decompress_file_
 #ifdef DEBUG
     printf("\n=== DECOMPRESSION COMPLETE ===\n");
     printf("Total bytes written: %zu\n", total_bytes_written);
-    printf("Final reader state:\n");
     bitreader_print_state(reader);
 #endif
 
