@@ -151,12 +151,13 @@ void mass_increment_levels(int add_levels) {
     }
 }
 
-void is_RLE_sequence(uint8_t *repeat_seq_length, uint8_t *length_of_RLE,
-                     uint8_t block_size, uint32_t offset,
-                     const uint8_t *block, uint8_t *rle_type) {
-    *repeat_seq_length = 0;
+void is_RLE_sequence(uint8_t *length_of_RLE, uint8_t block_size, uint32_t offset, const uint8_t *block,
+                     uint8_t *rle_type, uint8_t *rle_start, uint8_t *rle_end) 
+{
     *length_of_RLE = 0;
-    *rle_type = 0;  // Default: not RLE
+    *rle_type = 0; // Default: not RLE
+    *rle_start = 0;
+    *rle_end = 0;
 
     if (block_size < MIN_RLE_SEQ_LENGTH) {
         return;
@@ -175,15 +176,16 @@ void is_RLE_sequence(uint8_t *repeat_seq_length, uint8_t *length_of_RLE,
     }
 
     if (uniform_length >= MIN_RLE_SEQ_LENGTH) {
-        *repeat_seq_length = 1;
         *length_of_RLE = uniform_length;
-        *rle_type = 1;  // Uniform RLE
+        *rle_type = 1; // Uniform RLE
+        *rle_start = first_byte;
+        *rle_end = first_byte;
 
 #ifdef DEBUG
-        printf("[RLE] Uniform sequence found at offset %u: repeat_len=%u, RLE_len=%u\n",
-               offset, *repeat_seq_length, *length_of_RLE);
+        printf("[RLE] Uniform sequence found at offset %u: RLE_len=%u, start=%u, end=%u\n",
+               offset, *length_of_RLE, *rle_start, *rle_end);
 #endif
-        return;  // Already found an RLE → no need to check arithmetic
+        return; // Already found uniform RLE → no need to check arithmetic
     }
 
     // ===== Stage 2: Arithmetic +1 Sequence Check =====
@@ -196,13 +198,14 @@ void is_RLE_sequence(uint8_t *repeat_seq_length, uint8_t *length_of_RLE,
     }
 
     if (arith_length >= MIN_RLE_SEQ_LENGTH) {
-        *repeat_seq_length = 1;    // step size = +1
         *length_of_RLE = arith_length;
-        *rle_type = 2;  // Arithmetic +1 RLE
+        *rle_type = 2; // Arithmetic +1 RLE
+        *rle_start = sequence[0];
+        *rle_end = sequence[arith_length - 1];
 
 #ifdef DEBUG
-        printf("[RLE] Arithmetic +1 sequence found at offset %u: RLE_len=%u\n",
-               offset, *length_of_RLE);
+        printf("[RLE] Arithmetic +1 sequence found at offset %u: RLE_len=%u, start=%u, end=%u\n",
+               offset, *length_of_RLE, *rle_start, *rle_end);
 #endif
     }
 }

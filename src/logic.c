@@ -26,10 +26,12 @@ static inline void create_root() {
 }
 // use to store
 typedef struct {
-    uint32_t RLE_offset;       // The starting point of block of RLE
-    uint16_t next_RLE_level;   // we must wait till the next RLE level to create the node.
-    uint8_t repeat_seq_length; // number of bytes repeated. Like for ABCABCABCABC repeat_seq_length=3
-    uint8_t length_of_RLE;     // length of RLE sequence. Like for ABCABCABCABC length_of_RLE=4
+    uint8_t RLE_type;        // it stores the rle_type that can either be 1 or 2.
+    uint32_t RLE_offset;     // The starting point of block of RLE
+    uint16_t next_RLE_level; // we must wait till the next RLE level to create the node.
+    uint8_t length_of_RLE;   // only when RLE_type== 1, length of RLE sequence. Like for ABCABCABCABC length_of_RLE=4
+    uint8_t RLE_start;       // When RLE_type == 2, it stores start of RLE sequence.
+    uint8_t RLE_end;         // When RLE_type == 1, it stores end of RLE sequence.
 } RLE_info;
 
 RLE_info rle_info;
@@ -43,17 +45,17 @@ static inline GraphNode *create_node(uint32_t start, uint8_t length) {
     return node;
 }
 
-static inline void RLE_level(const uint8_t *block, uint32_t block_index, uint32_t block_size, uint8_t *rle_type) {
+static inline void RLE_level(const uint8_t *block, uint32_t block_index, uint32_t block_size) {
     uint16_t current_level = get_last_level_index();
-    is_RLE_sequence(&rle_info.repeat_seq_length, &rle_info.length_of_RLE, MIN(block_size, 255), block_index, block,
-                    rle_type);
-    if (rle_type == 0) return;
+    is_RLE_sequence(&rle_info.length_of_RLE, MIN(block_size, 255), block_index, block, &rle_info.RLE_type, &rle_info.RLE_start, &rle_info.RLE_end);
+    if (rle_info.RLE_type == 0) return;
     // wait for the right level to create node.
     // do not create any RLE nodes before reaching that level.
     // remember data of RLE node to be created later on, at the appropriate level.
     rle_info.next_RLE_level = current_level + rle_info.length_of_RLE - 1;
     rle_info.RLE_offset = block_index;
 }
+
 static inline void set_RLE_data() {
     // Create RLE node, if any. There could be at most one RLE node per level.
     uint16_t current_level = get_last_level_index();
@@ -61,16 +63,16 @@ static inline void set_RLE_data() {
     if (current_level == rle_info.next_RLE_level) {
         current_node = create_node(rle_info.RLE_offset, rle_info.length_of_RLE);
         current_node->useless = 0;
-        current_node->RLE_type = 1;
-        // current_node->repeat_seq_length = rle_info.repeat_seq_length;
-        current_node->length_of_RLE = rle_info.length_of_RLE;
-
-#ifdef DEBUG
-        // print_graph_node(current_node); // print the RLE node.
-#endif
-    } else {
-        fprintf(stderr, "Illegal set_RLE_data\n");
-        abort();
+        current_node->RLE_type = rle_info.RLE_type;
+        if (rle_info.RLE_type == 1) {
+            current_node->length_of_RLE = rle_info.length_of_RLE;
+        } else if (rle_info.RLE_type == 2) {
+            current_node->RLE_start = rle_info.RLE_start;
+            current_node->RLE_end = rle_info.RLE_end;
+        } else {
+            fprintf(stderr, "Illegal set_RLE_data\n");
+            abort();
+        }
     }
 }
 
@@ -161,9 +163,8 @@ long process_block(const uint8_t *block, uint32_t block_size) {
         uint32_t start;
 
         // special treatment of RLE nodes.
-        uint8_t rle_type;
-        RLE_level(block, block_index, block_size, &rle_type);
-        if (rle_type == 1) {
+        RLE_level(block, block_index, block_size);
+        if (rle_info.RLE_type) {
             while (current_level != rle_info.next_RLE_level) {
                 current_level = create_graph_level();
                 block_index++;
