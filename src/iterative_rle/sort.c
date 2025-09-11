@@ -1,7 +1,5 @@
 // src/iterative_rle/sort.c
 
-// src/iterative_rle/sort.c
-
 #include "sort.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,11 +18,17 @@ static void print_int_array(const int *A, size_t size);
 static void print_bitmap(const uint8_t *A, size_t size);
 static int compare_arrays(const int *a, const int *b, size_t n);
 
-/* Iterative bottom-up mergesort */
-void merge_sort(int arr[], int n, int max_stages) {
-    int stages = -1;
-    for (int curr_size = 1; curr_size < n; curr_size *= 2) {
-        if (stages++ >= max_stages) break;
+/* Iterative bottom-up mergesort
+   max_block_size: maximum block length allowed (e.g. 8 => stages 1,2,4,8)
+*/
+void merge_sort(int arr[], int n, int max_block_size) {
+    if (max_block_size < 1) max_block_size = 1;
+    int limit = min_int(max_block_size, n);
+
+    /* store the effective limit so reverse can use the same bound */
+    sort_info.max_block_size = limit;
+
+    for (int curr_size = 1; curr_size <= limit; curr_size *= 2) {
 #ifdef DEBUG
         printf("\n=== Forward merge stage (curr_size=%d) ===\n", curr_size);
 #endif
@@ -107,13 +111,19 @@ static void merge(int arr[], int l, int m, int r) {
     free(R);
 }
 
-/* Iterative bottom-up mergesort - REVERSE */
+/* Iterative bottom-up mergesort - REVERSE
+   This uses sort_info.max_block_size (set by merge_sort) so it unwinds exactly
+   the same stages that were applied in forward sort.
+*/
 void merge_sort_reverse(int arr[], int n) {
-    int max_size = 1;
-    while (max_size < n) max_size *= 2;
-    max_size /= 2;
+    if (sort_info.max_block_size < 1) return;
 
-    for (int curr_size = max_size; curr_size >= 1; curr_size /= 2) {
+    /* Start from largest power-of-two <= sort_info.max_block_size (and <= n) */
+    int start = 1;
+    int effective_limit = min_int(sort_info.max_block_size, n);
+    while (start * 2 <= effective_limit) start *= 2;
+
+    for (int curr_size = start; curr_size >= 1; curr_size /= 2) {
         if (sort_info.bitmap_size == 0) break;
 #ifdef DEBUG
         printf("\n=== Reverse merge stage (curr_size=%d) ===\n", curr_size);
@@ -212,6 +222,7 @@ static void fuzz_test(int max_n, int iterations) {
         sort_info.bitmap_size = 0;
         sort_info.original_size = n;
 
+        /* here we pass max_block_size = n (allow all stages up to n) */
         merge_sort(arr, n, n);
 
         memcpy(restored, arr, n * sizeof(int));
@@ -236,16 +247,18 @@ static void fuzz_test(int max_n, int iterations) {
 
 /* Driver */
 int main(void) {
-    int arr[] = {39, 27, 43, 3, 9, 82, 10, 1, 1, 2, 19};
+    int arr[] = {39, 27, 43, 3, 9, 82, 10, 1, 1, 2, 19, 13, 15, 0, 9};
     size_t n = sizeof(arr) / sizeof(arr[0]);
 
     sort_info.original_size = n;
     sort_info.bitmap_size = 0;
+    sort_info.max_block_size = 0; /* ensure initialized */
 
     printf("Original array:\n");
     print_int_array(arr, n);
 
-    merge_sort(arr, n, n);
+    /* Example: allow blocks up to length 8 (1,2,4,8). Here we pass n to allow all */
+    merge_sort(arr, n, 256);
 
     printf("\nSorted array:\n");
     print_int_array(arr, n);

@@ -1,0 +1,7 @@
+# Ignore build artifacts
+*.o
+*.out
+
+# Ignore custom scripts
+push.sh
+
