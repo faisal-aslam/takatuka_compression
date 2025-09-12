@@ -150,17 +150,6 @@ void read_header_and_create_decoder_map(BitReader *reader) {
     /* Initialize decoder map with capacity for num_codes */
     init_decoder_map(&decoder_map, num_codes);
 
-    // In read_header_and_create_decoder_map function:
-    if (num_codes == 0) {
-        global_class2_bits = 0;
-        global_rle_bits = 0;
-        // Free any existing decoder map to avoid leaks
-        free_decoder_map(&decoder_map);
-        init_decoder_map(&decoder_map, 0); // Reinitialize with capacity 0
-        bitreader_move_byte_boundary(reader);
-        return;
-    }
-
     /* Read class2_bits (one byte) */
     uint32_t cb = 0;
     SAFE_BITREAD(reader, &cb, 8);

@@ -136,19 +136,6 @@ long populate_header(BestPathView best_path, const uint8_t *block, FILE *file_to
 
     printf("Maximum RLE count: %u, using %u bits for RLE encoding\n", max_rle_count, global_rle_bits);
 
-    if (candidate_count == 0) {
-#ifdef DEBUG
-        printf("[DEBUG] No candidates found for header\n");
-#endif
-        if (!bitwriter_write_to_file(writer, file_to_write)) {
-            fprintf(stderr, "Failed to write empty header\n");
-            exit(EXIT_FAILURE);
-        }
-        bitwriter_reset(writer);
-        free(candidates);
-        global_class2_bits = 0; // nothing to do in body
-        return 0;
-    }
 
     // Sort and init code_map
     qsort(candidates, candidate_count, sizeof(CodeCandidate), compare_candidates_desc);
