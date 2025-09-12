@@ -9,8 +9,7 @@
      : ((LEVEL) <= (SEQ_LIMIT)) ? ((LEVEL) * ((LEVEL) + 1)) / 2                                                        \
                                 : ((SEQ_LIMIT) * ((SEQ_LIMIT) + 1)) / 2 + ((LEVEL) - (SEQ_LIMIT)) * (SEQ_LIMIT))
 
-#define MIN_RLE_SEQ_LENGTH 10
-#define RLE_MAX_PATTERN_LENGTH 3 // such as abcabcabc...
+#define MIN_RLE_SEQ_LENGTH 6
 
 Graph graph; // Actual single definition
 
