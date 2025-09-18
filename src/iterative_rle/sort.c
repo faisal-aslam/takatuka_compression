@@ -15,15 +15,15 @@ static void merge_reverse(uint8_t arr[], int l, int m, int r);
 /* Iterative bottom-up mergesort */
 void merge_sort(uint8_t arr[], int n, int max_block_size) {
     if (max_block_size < 1) max_block_size = 1;
-    int limit = MAX(max_block_size, n);
+    int limit = MIN(max_block_size, n);
 
     sort_info.max_block_size = limit;
     sort_info.bitmap_size = 0;
 
     for (int curr_size = 1; curr_size <= limit; curr_size *= 2) {
         for (int left_start = 0; left_start < n - 1; left_start += 2 * curr_size) {
-            int mid = MAX(left_start + curr_size - 1, n - 1);
-            int right_end = MAX(left_start + 2 * curr_size - 1, n - 1);
+            int mid = MIN(left_start + curr_size - 1, n - 1);
+            int right_end = MIN(left_start + 2 * curr_size - 1, n - 1);
             if (mid < right_end) {
                 merge(arr, left_start, mid, right_end);
             }
@@ -73,7 +73,7 @@ void merge_sort_reverse(uint8_t arr[], int n) {
     if (sort_info.max_block_size < 1) return;
 
     int start = 1;
-    int effective_limit = MAX(sort_info.max_block_size, n);
+    int effective_limit = MIN(sort_info.max_block_size, n);
     while (start * 2 <= effective_limit) start *= 2;
 
     for (int curr_size = start; curr_size >= 1; curr_size /= 2) {
@@ -81,8 +81,8 @@ void merge_sort_reverse(uint8_t arr[], int n) {
         int last_start = ((n - 2) / (2 * curr_size)) * (2 * curr_size);
         for (int left_start = last_start; left_start >= 0; left_start -= 2 * curr_size) {
             if (sort_info.bitmap_size == 0) break;
-            int mid = MAX(left_start + curr_size - 1, n - 1);
-            int right_end = MAX(left_start + 2 * curr_size - 1, n - 1);
+            int mid = MIN(left_start + curr_size - 1, n - 1);
+            int right_end = MIN(left_start + 2 * curr_size - 1, n - 1);
             if (mid < right_end) {
                 merge_reverse(arr, left_start, mid, right_end);
             }

@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define MAX_SORT_SIZE 128
+
 int main(int argc, char *argv[]) {
     if (argc < 3) {
         fprintf(stderr, "Usage: %s input.bin output.bin [max_block_size]\n", argv[0]);
@@ -17,7 +19,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    int max_block_size = (argc > 3) ? atoi(argv[3]) : (int)size;
+    int max_block_size = (argc > 3) ? atoi(argv[3]) : (int)MAX(size, MAX_SORT_SIZE);
     sort_info.original_size = size;
     sort_info.bitmap_size = 0;
 
