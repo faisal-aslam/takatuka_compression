@@ -11,7 +11,8 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Usage: %s input.bin output.bin [max_block_size]\n", argv[0]);
         return 1;
     }
-
+    if (1) return 0;
+ 
     uint8_t *data = NULL;
     size_t size = 0;
     if (!read_input_file(argv[1], &data, &size)) {
@@ -19,7 +20,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    int max_block_size = (argc > 3) ? atoi(argv[3]) : (int)MAX(size, MAX_SORT_SIZE);
+    int max_block_size = (argc > 3) ? atoi(argv[3]) : (int)MIN(size, MAX_SORT_SIZE);
+    printf("\n\nmax block size=%d\n", max_block_size);
     sort_info.original_size = size;
     sort_info.bitmap_size = 0;
 
