@@ -4,6 +4,14 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
+#ifndef MAX
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
+
 typedef struct {
     size_t original_size;   // size of original array
     size_t bitmap_size;     // number of valid entries in bitmap
