@@ -2,11 +2,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug compress-debug",
+            "name": "Debug iterative_rle",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/compress-debug",
-            "args": ["tests/test.bin", "out.bin"], 
+            "program": "${workspaceFolder}/build/iterative_rle",
+            "args": ["./tests/test.bin", "output.bin"], 
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

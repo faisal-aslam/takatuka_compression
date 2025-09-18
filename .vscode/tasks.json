@@ -4,8 +4,10 @@
         {
             "label": "make",
             "type": "shell",
-            "command": "make clean && make debug",
-            "args": [],
+            "command": "make clean && make all",
+            "options": {
+                "cwd": "${workspaceFolder}/src/iterative_rle"
+            },
             "group": {
                 "kind": "build",
                 "isDefault": true
