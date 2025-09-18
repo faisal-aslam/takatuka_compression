@@ -27,9 +27,12 @@ int main(int argc, char *argv[]) {
 
     merge_sort(data, (int)size, max_block_size);
 
+    print_bitmap(sort_info.bitmap, sort_info.bitmap_size);
     /* Pack bitmap */
     uint8_t *packed = malloc((sort_info.bitmap_size + 7) / 8);
     size_t packed_size = pack_bitmap(packed, sort_info.bitmap, sort_info.bitmap_size);
+
+    print_bitmap(packed, packed_size);
 
     if (!write_output_file(argv[2], data, size, packed, packed_size, (uint8_t)max_block_size)) {
         fprintf(stderr, "Failed to write output file %s\n", argv[2]);

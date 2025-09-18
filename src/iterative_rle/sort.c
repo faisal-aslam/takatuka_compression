@@ -1,10 +1,10 @@
 // src/iterative_rle/sort.c
 
 #include "sort.h"
+#include <math.h> // for log2, floor
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h> // for log2, floor
 
 SortInfo sort_info = {0, 0, NULL, 0, 0}; // ensure zeros/NULL initialised
 
@@ -12,7 +12,11 @@ SortInfo sort_info = {0, 0, NULL, 0, 0}; // ensure zeros/NULL initialised
 static void merge(uint8_t arr[], int l, int m, int r);
 static void merge_reverse(uint8_t arr[], int l, int m, int r);
 
-
+static inline void print_array(const uint8_t *arr, int size) {
+    for (int i = 0; i < size; i++) {
+        printf("%u", arr[i]);
+    }
+}
 
 // Compute max bitmap size based on n and limit
 static inline size_t calc_bitmap_capacity(size_t n, size_t limit) {
@@ -79,6 +83,11 @@ static void merge(uint8_t arr[], int l, int m, int r) {
     for (int j = 0; j < n2; j++)
         R[j] = arr[m + 1 + j];
 
+#ifdef DEBUG
+    print_array(L, n1);
+    print_array(R, n2);
+#endif
+
     int i = 0, j = 0, k = l;
     uint8_t *tmp_bits = malloc((size_t)(n1 + n2) * sizeof(uint8_t));
     if (!tmp_bits) {
@@ -92,9 +101,16 @@ static void merge(uint8_t arr[], int l, int m, int r) {
     while (i < n1 && j < n2) {
         if (L[i] <= R[j]) {
             tmp_bits[bit_count++] = 0;
+#ifdef DEBUG
+            printf("\n bit=0, bit_count=%d", bit_count);
+#endif
             arr[k++] = L[i++];
         } else {
             tmp_bits[bit_count++] = 1;
+#ifdef DEBUG
+            printf("\n bit=1, bit_count=%d", bit_count);
+#endif
+
             arr[k++] = R[j++];
         }
     }

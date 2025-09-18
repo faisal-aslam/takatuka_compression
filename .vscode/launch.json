@@ -5,7 +5,7 @@
             "name": "Debug iterative_rle",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/iterative_rle",
+            "program": "${workspaceFolder}/build/iterative_rle_debug",
             "args": ["./tests/test.bin", "output.bin"], 
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
