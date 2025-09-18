@@ -14,8 +14,9 @@ static void merge_reverse(uint8_t arr[], int l, int m, int r);
 
 static inline void print_array(const uint8_t *arr, int size) {
     for (int i = 0; i < size; i++) {
-        printf("%u", arr[i]);
+        printf("%u ", arr[i]);
     }
+    printf("\n");
 }
 
 // Compute max bitmap size based on n and limit
@@ -42,7 +43,10 @@ static int ensure_bitmap_capacity(size_t cap) {
 void merge_sort(uint8_t arr[], int n, int max_block_size) {
     if (max_block_size < 1) max_block_size = 1;
     int limit = MIN(max_block_size, n);
-
+#ifdef DEBUG
+    printf("input array of size=%d\n", n);
+    print_array(arr, n);
+#endif
     sort_info.max_block_size = limit;
     sort_info.bitmap_size = 0;
 
@@ -56,6 +60,9 @@ void merge_sort(uint8_t arr[], int n, int max_block_size) {
     }
 
     for (int curr_size = 1; curr_size <= limit; curr_size *= 2) {
+#ifdef DEBUG
+        printf("\n\n************************** current merge size=%d\n\n", curr_size);
+#endif        
         for (int left_start = 0; left_start < n - 1; left_start += 2 * curr_size) {
             int mid = MIN(left_start + curr_size - 1, n - 1);
             int right_end = MIN(left_start + 2 * curr_size - 1, n - 1);
@@ -84,6 +91,7 @@ static void merge(uint8_t arr[], int l, int m, int r) {
         R[j] = arr[m + 1 + j];
 
 #ifdef DEBUG
+    printf("l=%d, m=%d, r=%d\n", l, m, r);
     print_array(L, n1);
     print_array(R, n2);
 #endif
@@ -102,13 +110,13 @@ static void merge(uint8_t arr[], int l, int m, int r) {
         if (L[i] <= R[j]) {
             tmp_bits[bit_count++] = 0;
 #ifdef DEBUG
-            printf("\n bit=0, bit_count=%d", bit_count);
+            printf("bit=0, bit_count=%ld\n", sort_info.bitmap_size+bit_count);
 #endif
             arr[k++] = L[i++];
         } else {
             tmp_bits[bit_count++] = 1;
 #ifdef DEBUG
-            printf("\n bit=1, bit_count=%d", bit_count);
+            printf("bit=1, bit_count=%ld\n", sort_info.bitmap_size+bit_count);
 #endif
 
             arr[k++] = R[j++];

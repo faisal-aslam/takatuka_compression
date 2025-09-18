@@ -33,27 +33,48 @@ DEBUG_OBJS := $(patsubst %.c,$(DEBUG_OBJ_DIR)/%.o,$(SRCS))
 OUT := $(BUILD_DIR)/iterative_rle
 DEBUG_OUT := $(BUILD_DIR)/iterative_rle_debug
 
-.PHONY: all clean run val debug
+.PHONY: all clean run val debug debug_test
 
 all: $(OUT)
 
 debug: $(DEBUG_OUT)
+	@echo "=== DEBUG BUILD COMPLETE ==="
+	@echo "Executable: $(DEBUG_OUT)"
+	@echo "Debug flags: $(DEBUG_FLAGS)"
+	@echo "============================"
+
+# Test to verify DEBUG macro is defined
+debug_test: $(DEBUG_OUT)
+	@echo "=== TESTING DEBUG MACRO ==="
+	@./$(DEBUG_OUT) --test-debug
+	@echo "==========================="
 
 $(OUT): $(OBJS)
+	@echo "Linking release executable..."
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $(OBJS) -lm
 
 $(DEBUG_OUT): $(DEBUG_OBJS)
+	@echo "Linking debug executable..."
 	$(CC) $(DEBUG_FLAGS) $(CFLAGS) $(INCLUDES) -o $@ $(DEBUG_OBJS) -lm
 
 # Pattern rule: compile .c into obj dir (release)
 $(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
+	@echo "Compiling release: $<"
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # Pattern rule: compile .c into debug obj dir
 $(DEBUG_OBJ_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
+	@echo "Compiling debug: $<"
 	$(CC) $(DEBUG_FLAGS) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+# Force rebuild of all debug objects
+debug_clean:
+	@echo "Cleaning debug objects..."
+	rm -rf $(DEBUG_OBJ_DIR) $(DEBUG_OUT)
+
+debug_rebuild: debug_clean debug
 
 run: $(OUT)
 	./$(OUT) $(ARGS)
@@ -72,4 +93,5 @@ val_debug: $(DEBUG_OUT)
 	         ./$(DEBUG_OUT) $(ARGS)
 
 clean:
+	@echo "Cleaning all build artifacts..."
 	rm -rf $(OBJ_DIR) $(DEBUG_OBJ_DIR) $(OUT) $(DEBUG_OUT)

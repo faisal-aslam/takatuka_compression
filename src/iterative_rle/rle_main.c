@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MAX_SORT_SIZE 128
+#define MAX_SORT_SIZE 32
 
 int main(int argc, char *argv[]) {
     if (argc < 3) {
