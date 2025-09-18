@@ -1,19 +1,45 @@
-CC      = gcc
-CFLAGS  = -Wall -Wextra -O2
-OBJ     = main.o sort.o bitmap.o fileio.o
-TARGET  = iterative_rle
+# Compiler and flags
+CC := gcc
+CFLAGS := -Wall -Wextra -O2
 
-all: $(TARGET)
+# Include directories
+INC_DIRS := \
+    .. \
+    ../map \
+    ../graph \
+    ../graph/shortest_path \
+    ../files \
+    ../files/compression \
+    ../files/decompression \
+    ../decompress
 
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $(OBJ)
+INCLUDES := $(addprefix -I, $(INC_DIRS))
 
-main.o: main.c sort.h bitmap.h fileio.h
-sort.o: sort.c sort.h
-bitmap.o: bitmap.c bitmap.h
-fileio.o: fileio.c fileio.h
+# Pull in sources from .mk
+include rle_sources.mk
+SRCS := $(RLE_SRCS)
 
-clean:
-	rm -f $(OBJ) $(TARGET)
+# Build directories
+BUILD_DIR := ../../build
+OBJ_DIR := $(BUILD_DIR)/obj
+
+# Objects (mirror src paths under obj/)
+OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(SRCS))
+
+# Output binary
+OUT := $(BUILD_DIR)/iterative_rle
 
 .PHONY: all clean
+
+all: $(OUT)
+
+$(OUT): $(OBJS)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $(OBJS)
+
+# Pattern rule: compile .c into obj dir
+$(OBJ_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+clean:
+	rm -rf $(OBJ_DIR) $(OUT)
