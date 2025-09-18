@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Usage: %s input.bin output.bin [max_block_size]\n", argv[0]);
         return 1;
     }
-    if (1) return 0;
+
  
     uint8_t *data = NULL;
     size_t size = 0;
