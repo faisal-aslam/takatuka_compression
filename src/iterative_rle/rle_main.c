@@ -7,15 +7,15 @@
 #include <stdint.h>
 #include <string.h>
 
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 64
 #define BIT_MAP_THREASHOLD (BLOCK_SIZE*8/2)
-#define COMPRESSION_THRESHOLD 10.0  // lower for testing
+#define COMPRESSION_THRESHOLD 50.0  // lower for testing
 
 extern SortInfo sort_info;
 
 static void print_block(const uint8_t *data, int block_size) {
     for (int i = 0; i < block_size; i++) {
-        printf("%02X ", data[i]);
+        printf("%c ", data[i]);
     }
     printf("\n");
 }
@@ -101,6 +101,7 @@ int main(int argc, char *argv[]) {
 
         // Sort block (needed for bitmap + RLE effectiveness)
         merge_sort(block, BLOCK_SIZE, BLOCK_SIZE);
+        print_block(block, BLOCK_SIZE);
 
         if (sort_info.bitmap_size <= BIT_MAP_THREASHOLD) {
             // Run Delta+RLE test
