@@ -43,7 +43,7 @@ static int ensure_bitmap_capacity(size_t cap) {
 void merge_sort(uint8_t arr[], int n, int max_block_size) {
     if (max_block_size < 1) max_block_size = 1;
     int limit = MIN(max_block_size, n);
-#ifdef DEBUG
+#ifdef DEBUG1
     printf("input array of size=%d\n", n);
     print_array(arr, n);
 #endif
@@ -60,7 +60,7 @@ void merge_sort(uint8_t arr[], int n, int max_block_size) {
     }
 
     for (int curr_size = 1; curr_size <= limit; curr_size *= 2) {
-#ifdef DEBUG
+#ifdef DEBUG1
         printf("\n\n************************** current merge size=%d\n\n", curr_size);
 #endif        
         for (int left_start = 0; left_start < n - 1; left_start += 2 * curr_size) {
@@ -90,7 +90,7 @@ static void merge(uint8_t arr[], int l, int m, int r) {
     for (int j = 0; j < n2; j++)
         R[j] = arr[m + 1 + j];
 
-#ifdef DEBUG
+#ifdef DEBUG1
     printf("l=%d, m=%d, r=%d\n", l, m, r);
     print_array(L, n1);
     print_array(R, n2);
@@ -109,13 +109,13 @@ static void merge(uint8_t arr[], int l, int m, int r) {
     while (i < n1 && j < n2) {
         if (L[i] <= R[j]) {
             tmp_bits[bit_count++] = 0;
-#ifdef DEBUG
+#ifdef DEBUG1
             printf("bit=0, bit_count=%ld\n", sort_info.bitmap_size+bit_count);
 #endif
             arr[k++] = L[i++];
         } else {
             tmp_bits[bit_count++] = 1;
-#ifdef DEBUG
+#ifdef DEBUG1
             printf("bit=1, bit_count=%ld\n", sort_info.bitmap_size+bit_count);
 #endif
 
