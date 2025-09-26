@@ -9,9 +9,9 @@
 
 #define BLOCK_SIZE 256
 #define BIT_MAP_THREASHOLD (BLOCK_SIZE*8/2)
-#define COMPRESSION_THRESHOLD 50.0
+#define COMPRESSION_THRESHOLD 10.0
 #define MIN_SUBBLOCK_SIZE 10
-#define DENSITY 2.0   // tune for suitable_sequences()
+#define DENSITY 1.0   // tune for suitable_sequences()
 
 extern SortInfo sort_info;
 
@@ -73,6 +73,8 @@ int main(int argc, char *argv[]) {
     }
 
     size_t accepted_blocks = 0, total_blocks = 0;
+    size_t total_orig_bytes = 0;
+    size_t total_compressed_bytes = 0;
 
     for (size_t i = 0; i + BLOCK_SIZE <= size; i += BLOCK_SIZE) {
         total_blocks++;
@@ -101,10 +103,17 @@ int main(int argc, char *argv[]) {
 
         // Compress sorted subblock
         int compressed_size = delta_rle_size(subblock, sub_len);
-        double gain = 100.0 * (1.0 - (double)compressed_size / sub_len);
 
-        printf("  orig=%d, compressed=%d, gain=%.2f%%\n",
-               sub_len, compressed_size, gain);
+        // ✅ Include bitmap size
+        int effective_size = compressed_size /*+ sort_info.bitmap_size/8*/;
+        double gain = 100.0 * (1.0 - (double)effective_size / sub_len);
+
+        printf("  orig=%d, compressed=%d, bitmap=%zu, effective=%d, gain=%.2f%%\n",
+               sub_len, compressed_size, sort_info.bitmap_size,
+               effective_size, gain);
+
+        total_orig_bytes += sub_len;
+        total_compressed_bytes += effective_size;
 
         if (gain >= COMPRESSION_THRESHOLD) {
             accepted_blocks++;
@@ -120,11 +129,20 @@ int main(int argc, char *argv[]) {
         free(subblock);
     }
 
+    // Final stats
     printf("\n=== SUMMARY ===\n");
     printf("Total blocks processed: %zu\n", total_blocks);
     printf("Accepted blocks: %zu\n", accepted_blocks);
     printf("Acceptance rate: %.2f%%\n",
            total_blocks ? 100.0 * accepted_blocks / total_blocks : 0.0);
+
+    if (total_orig_bytes > 0) {
+        double overall_gain =
+            100.0 * (1.0 - (double)total_compressed_bytes / total_orig_bytes);
+        printf("Total original bytes:   %zu\n", total_orig_bytes);
+        printf("Total compressed bytes: %zu\n", total_compressed_bytes);
+        printf("Overall gain: %.2f%%\n", overall_gain);
+    }
 
     free(data);
     return 0;

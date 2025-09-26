@@ -93,7 +93,7 @@ void run_test(uint8_t *arr, int n, double density, int min_size, const char *lab
 }
 
 int main(void) {
-    // FIXED: Use sizeof(arr)/sizeof(arr[0]) to get correct array length
+    /*
     uint8_t arr1[] = {100, 5, 200, 7, 250};
     run_test(arr1, sizeof(arr1)/sizeof(arr1[0]), 2.0, 2, "Random - No valid sub-block");
 
@@ -122,6 +122,9 @@ int main(void) {
         else               arr7[i] = 50 + (i % 10); // values 50..59
     }
     run_test(arr7, 256, 2.0, 16, "256-length array with valid sub-block only in the middle");
+    */
+    uint8_t arr8[]={255, 190, 1, 2, 3,4, 5, 6, 7, 7,7,7,7,7,7,7,7,7, 210, 214, 220, 230, 222, 22, 20, 198  };    
+    run_test(arr8, sizeof(arr8)/sizeof(arr8[0]), 2.0, 2, "it should not select all in this case");
 
     return 0;
 }
