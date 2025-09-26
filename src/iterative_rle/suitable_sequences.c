@@ -1,6 +1,8 @@
 #include <stdio.h>
-#include <stdint.h>
+#include <limits.h>
+#include "suitable_sequences.h"
 
+//#define TEST_SUITABLE_SEQ
 /*
 Finds the longest consecutive sub-block in `arr` that satisfies:
 
@@ -17,61 +19,42 @@ Otherwise:
 */
 int find_suitable_subblock(uint8_t *arr, int n, double density,
                            int min_size, int *best_start, int *best_end) {
-    int longest_len = 0;
-    *best_start = UINT8_MAX;  // Fixed: use UINT8_MAX as specified
-    *best_end = UINT8_MAX;
+    int best_len = 0;
+    int best_range = INT_MAX;
+    *best_start = -1;
+    *best_end = -1;
 
-    // Fixed: use proper array sizes
-    int minDeque[n], maxDeque[n];
-    int minFront = 0, minBack = -1;
-    int maxFront = 0, maxBack = -1;
-    int left = 0;
+    for (int left = 0; left < n; left++) {
+        uint8_t min_val = arr[left];
+        uint8_t max_val = arr[left];
 
-    for (int right = 0; right < n; right++) {
-        // Maintain minDeque (increasing order)
-        while (minBack >= minFront && arr[minDeque[minBack]] >= arr[right]) 
-            minBack--;
-        minDeque[++minBack] = right;
+        for (int right = left; right < n; right++) {
+            if (arr[right] < min_val) min_val = arr[right];
+            if (arr[right] > max_val) max_val = arr[right];
 
-        // Maintain maxDeque (decreasing order)
-        while (maxBack >= maxFront && arr[maxDeque[maxBack]] <= arr[right]) 
-            maxBack--;
-        maxDeque[++maxBack] = right;
-
-        // Check current window and shrink if necessary
-        while (left <= right) {
-            uint8_t min_val = arr[minDeque[minFront]];
-            uint8_t max_val = arr[maxDeque[maxFront]];
             int length = right - left + 1;
+            int range = max_val - min_val;
             double threshold = (double)length / density;
 
-            // Check if current window satisfies conditions
-            if (length > min_size && (max_val - min_val) < threshold) {
-                // Valid window found
-                if (length > longest_len) {
-                    longest_len = length;
+            if (length >= min_size && range <= threshold) {
+                // Better candidate if:
+                //  1) longer length, or
+                //  2) same length but smaller range
+                if (length > best_len ||
+                    (length == best_len && range < best_range)) {
+                    best_len = length;
+                    best_range = range;
                     *best_start = left;
                     *best_end = right;
                 }
-                break; // Don't shrink further - we want the longest valid window
             }
-            
-            // If condition not satisfied, shrink from left
-            // But only if we're not at the minimum size
-            if (length <= min_size + 1) {
-                break; // Can't shrink further without making window too small
-            }
-            
-            // Move left pointer and update deques
-            if (minDeque[minFront] == left) minFront++;
-            if (maxDeque[maxFront] == left) maxFront++;
-            left++;
         }
     }
 
-    return (longest_len > 0);
+    return (best_len > 0);
 }
 
+#ifdef TEST_SUITABLE_SEQ
 // helper: print subblock if found
 void print_subblock(uint8_t *arr, int start, int end, double density) {
     uint8_t min_val = arr[start], max_val = arr[start];
@@ -132,5 +115,15 @@ int main(void) {
     };
     run_test(arr6, sizeof(arr6)/sizeof(arr6[0]), 2.0, 2, "Random - One valid long sub-block");
 
+    uint8_t arr7[256];
+    for (int i = 0; i < 256; i++) {
+        if (i == 0)        arr7[i] = 0;    // extreme low outlier
+        else if (i == 255) arr7[i] = 200;  // extreme high outlier
+        else               arr7[i] = 50 + (i % 10); // values 50..59
+    }
+    run_test(arr7, 256, 2.0, 16, "256-length array with valid sub-block only in the middle");
+
     return 0;
 }
+
+#endif
