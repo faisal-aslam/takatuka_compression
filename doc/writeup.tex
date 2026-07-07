@@ -1,0 +1,276 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\geometry{margin=1in}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{claim}{Claim}
+\newtheorem{definition}{Definition}
+\newtheorem{corollary}{Corollary}
+
+\title{A Layered DAG for Bounded-Length Optimal Parsing}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Setup}
+
+Let $x = x_1 x_2 \cdots x_n$ be a string (sequence of symbols) of length $n$ over some
+alphabet $\Sigma$, and let $k \ge 1$ be a fixed integer bound on chunk length. For
+$1 \le i \le j \le n$ write $x_{i..j} = x_i x_{i+1} \cdots x_j$ for the substring from
+position $i$ to position $j$ inclusive.
+
+\begin{definition}[Valid partition]
+A \emph{valid partition} of $x$ (with respect to $k$) is a sequence of break points
+$0 = p_0 < p_1 < \cdots < p_m = n$ such that every piece
+$x_{p_{t-1}+1 .. p_t}$ has length at most $k$, for $t = 1, \dots, m$. Equivalently, $x$
+is written as a concatenation of consecutive chunks, each of length in $\{1,\dots,k\}$.
+\end{definition}
+
+\section{Construction of the graph $G$}
+
+We build a layered directed acyclic graph $G = (V, E)$ with $n+1$ levels
+$0, 1, \dots, n$.
+
+\begin{itemize}
+  \item \textbf{Level 0} contains a single node $r$, the \emph{root}, representing the
+  empty prefix.
+  \item For each level $l = 1, \dots, n$ and each chunk length
+  $s = 1, \dots, \min(k, l)$, we create a node
+  \[
+    v_{l,s} \quad \text{labeled with the substring } x_{(l-s+1)..l},
+  \]
+  i.e. the length-$s$ substring ending at position $l$.
+  \item \textbf{Edges.} Every node $v_{l,s}$ is joined by an edge from \emph{every} node
+  at level $l - s$. If $l - s = 0$ the unique predecessor is the root $r$; otherwise the
+  predecessors are all nodes $v_{l-s, s'}$ for $s' = 1, \dots, \min(k, l-s)$.
+\end{itemize}
+
+\begin{table}[h]
+\centering
+\caption{Example: $x = \text{``abab''}$, $n = 4$, $k = 3$.}
+\begin{tabular}{@{}clc@{}}
+\toprule
+Level $l$ & Nodes $(s, \text{label})$ & Linked from level(s) \\
+\midrule
+0 & root & --- \\
+1 & $(1, a)$ & 0 \\
+2 & $(1, b)$, $(2, ab)$ & 1, 0 \\
+3 & $(1, a)$, $(2, ba)$, $(3, aba)$ & 2, 1, 0 \\
+4 & $(1, b)$, $(2, ab)$, $(3, bab)$ & 3, 2, 1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Node count and construction time}
+
+\begin{lemma}[Size of $G$]
+$G$ has $O(nk)$ nodes and $O(nk^2)$ edges, so it can be built in $O(nk^2)$ time and
+$O(nk)$ space (not counting edge storage), or $O(nk^2)$ time and space if edges are
+stored explicitly.
+\end{lemma}
+
+\begin{proof}
+Level $l$ contains exactly $\min(k, l)$ nodes, so the total number of nodes is
+\[
+  |V| \;=\; 1 + \sum_{l=1}^{n} \min(k, l) \;=\; O(nk).
+\]
+Each node $v_{l,s}$ receives edges from every node at level $l-s$, of which there are
+$\min(k, l - s) \le k$ (or $1$, for $l = s$, since level $0$ has a single root). Hence
+each node has $O(k)$ incoming edges, giving $|E| = O(nk) \cdot O(k) = O(nk^2)$.
+Materializing the label of $v_{l,s}$ costs $O(s) = O(k)$ time (reading back $s$
+symbols), and there are $O(nk)$ nodes, so labeling costs $O(nk^2)$ as well. When
+$k = \Theta(n)$ this is $O(n^2)$ nodes, $O(n^3)$ edges/time.
+\end{proof}
+
+\section{$G$ encodes exactly the valid partitions}
+
+\begin{theorem}[Completeness and soundness of $G$]
+\label{thm:complete}
+There is a bijection between valid partitions of $x_{1..l}$ (into chunks of length
+$\le k$) and root-to-$v_{l,\cdot}$ directed paths in $G$, for every $l = 0, \dots, n$.
+In particular (taking $l = n$), root-to-level-$n$ paths in $G$ are in bijection with
+valid partitions of the whole string $x$.
+\end{theorem}
+
+\begin{proof}
+We show both directions by induction on $l$.
+
+\smallskip
+\noindent \emph{(Soundness: every root-to-$v_{l,s}$ path yields a valid partition.)}
+Base case $l = 0$: the only path is the trivial path at the root, corresponding to the
+empty partition. Inductive step: a path ending at $v_{l,s}$ consists of a path ending at
+some node $u$ at level $l - s$, followed by the edge $u \to v_{l,s}$. By the inductive
+hypothesis, the path to $u$ corresponds to a valid partition of $x_{1..(l-s)}$ into
+chunks of length $\le k$; appending the chunk $x_{(l-s+1)..l}$ (length $s \le k$) yields
+a valid partition of $x_{1..l}$.
+
+\smallskip
+\noindent \emph{(Completeness: every valid partition arises this way.)}
+Base case $l = 0$ as above. Inductive step: let $0 = p_0 < \cdots < p_m = l$ be a valid
+partition of $x_{1..l}$, and let $s = p_m - p_{m-1} \in \{1, \dots, \min(k,l)\}$ be the
+length of the last chunk. By construction $v_{l,s}$ exists and is linked from every node
+at level $l - s = p_{m-1}$. By the inductive hypothesis, the partition
+$p_0, \dots, p_{m-1}$ of $x_{1..(l-s)}$ corresponds to some root-to-(level $l-s$) path;
+extending it by the edge into $v_{l,s}$ gives a root-to-$v_{l,s}$ path realizing the
+full partition.
+
+\smallskip
+Since distinct partitions of $x_{1..l}$ produce distinct sequences of chunk lengths and
+hence distinct nodes/edges at each level, the correspondence is a bijection.
+\end{proof}
+
+\section{Optimal compression as shortest path}
+
+Suppose a compressor emits one \emph{token} (e.g., a literal or a back-reference) per
+chunk, and let $c(s) \ge 0$ be the cost of emitting a token for a chunk of length $s$
+(for instance $c(s) = 1$ if we simply want to minimize the number of tokens, or $c(s)$
+proportional to the encoded size of a length-$s$ back-reference). Give edge
+$u \to v_{l,s}$ weight $c(s)$.
+
+\begin{corollary}[Optimal parsing]
+\label{cor:optimal}
+The minimum total cost over all valid partitions of $x$ equals the weight of a shortest
+root-to-level-$n$ path in $G$, and any shortest such path, read off as a sequence of
+edges, is an optimal partition (optimal compression under this cost model).
+\end{corollary}
+
+\begin{proof}
+Immediate from Theorem~\ref{thm:complete}: the cost of the partition corresponding to a
+path is exactly the sum of the edge weights on the path, and the bijection preserves
+this correspondence in both directions.
+\end{proof}
+
+Since $G$ is a DAG whose edges strictly increase in level, a shortest path from the
+root to level $n$ can be computed in $O(|V| + |E|) = O(nk^2)$ time by a single dynamic
+programming sweep in level order (Section~\ref{sec:shortest-path} makes this explicit
+and shows how to avoid ever materializing $G$).
+
+\section{Collapsing $G$: a linear-size graph with no loss of optimality}
+\label{sec:collapse}
+
+The graph of Section~2 stores, at each level $l$, one node per chunk length $s$, and
+links each such node to \emph{every} node at level $l-s$. Most of this structure is
+redundant whenever the edge cost $c(s)$ depends only on the chunk length $s$ and not on
+which earlier node the edge originates from (this holds for both cost models in
+Section~5).
+
+\begin{definition}[Collapsed graph $G'$]
+Let $G'$ have exactly one node $u_l$ per level $l = 0, \dots, n$ (so $|V(G')| = n+1$),
+with a single edge $u_{l-s} \to u_l$ of weight $c(s)$ for every $s = 1, \dots,
+\min(k, l)$.
+\end{definition}
+
+\begin{theorem}[$G'$ preserves optimal cost]
+\label{thm:collapse}
+For every level $l$, the shortest path length from $u_0$ to $u_l$ in $G'$ equals the
+shortest path length from the root to \emph{any} node at level $l$ in $G$. Hence $G'$
+suffices to compute the optimal compression cost and an optimal partition, using only
+$\Theta(n)$ nodes and $O(nk)$ edges instead of $O(nk)$ nodes and $O(nk^2)$ edges.
+\end{theorem}
+
+\begin{proof}
+Let $d(l)$ denote the shortest-path cost from the root to level $l$ in $G$ (well
+defined since, by Theorem~\ref{thm:complete}, every node at level $l$ is reachable and
+the cost of reaching \emph{any} node at level $l$ depends only on $l$, not on $s$, once
+we take the minimum over incoming edges — this is exactly what we verify next). Define
+$d'(l)$ analogously in $G'$. We show $d(l) = d'(l)$ by strong induction on $l$, using the
+recurrence each satisfies:
+\[
+  d(0) = d'(0) = 0, \qquad
+  d(l) = \min_{1 \le s \le \min(k,l)} \big( d(l-s) + c(s) \big),
+\]
+and identically for $d'(l)$, since in $G$ the cost of reaching $v_{l,s}$ is
+$\min_{u \text{ at level } l-s} \big(\text{dist}(u)\big) + c(s)$, and by
+Theorem~\ref{thm:complete} the minimum distance to level $l-s$ over all its nodes is by
+definition $d(l-s)$; symmetrically for $G'$, where $u_{l-s}$ is the unique node at that
+level. The two recurrences coincide term for term, and $d(0)=d'(0)$, so $d(l) = d'(l)$
+for all $l$ by induction.
+\end{proof}
+
+This is precisely the classical dynamic-programming reformulation: instead of a graph
+node per \emph{(position, chunk length just used)} pair, we keep one state per
+\emph{position}, because the only information the future needs from the past is ``the
+best cost so far to reach this position,'' not which particular chunk sequence achieved
+it. This collapses node count from $O(nk)$ to $O(n)$ and edges from $O(nk^2)$ to
+$O(nk)$, with \emph{zero} loss of optimality, as long as $c(s)$ has no dependence on
+context beyond the chunk itself (true for token-count minimization and for
+context-independent back-reference costs).
+
+\begin{itemize}
+  \item \emph{When this does not collapse for free:} if the cost of encoding a chunk
+  depends on history beyond its own length -- e.g. an adaptive dictionary whose costs
+  change based on which symbols were already emitted, or a cost that depends on the
+  \emph{previous} chunk's length (order-1 context) -- the state must retain that extra
+  information. In the order-1 case one still gets a linear-size graph by using states
+  $(l, \text{last chunk length})$, i.e. $O(nk)$ states rather than $O(n)$; in general,
+  the state space grows with however much history the cost function genuinely depends
+  on, but it does not need one state per \emph{path}, which is what would blow up
+  combinatorially.
+  \item \emph{A second, complementary reduction:} only create a node/edge for chunk
+  length $s$ at position $l$ if $x_{(l-s+1)..l}$ is actually a useful chunk under your
+  compression scheme -- e.g., for LZ-style back-reference compression, only if that
+  substring occurs at an earlier position in $x$ (so it can legally be referenced).
+  Using a suffix automaton or suffix tree of $x$, built in $O(n)$ or $O(n \log n)$ time,
+  one can enumerate, for every ending position $l$, all lengths $s \le k$ for which
+  $x_{(l-s+1)..l}$ has an earlier occurrence, and this enumeration touches only
+  $O(n)$ amortized (position, valid-length) pairs in many practical settings rather
+  than $O(nk)$, because the number of maximal earlier-occurring extensions at a given
+  position is data-dependent and often far smaller than $k$.
+\end{itemize}
+
+\section{Finding an optimal path without exponential time}
+\label{sec:shortest-path}
+
+Enumerating every valid partition explicitly and comparing their costs is exponential:
+the number of valid partitions of a length-$n$ string into chunks of length $\le k$ can
+itself be exponential in $n$ (e.g. $k \ge 2$ already gives Fibonacci-many partitions).
+The point of Sections 2--6, however, is that we never need to enumerate paths: because
+$G$ (or its collapse $G'$) is a DAG whose edges strictly increase in level, the
+shortest path to every level can be computed with a single forward dynamic-programming
+sweep, visiting each level once in increasing order.
+
+\begin{theorem}[Linear-time optimal parsing via DP]
+Given the collapsed graph $G'$ (equivalently, given only the cost function $c(\cdot)$
+and the ability to test, for each position $l$ and length $s \le k$, whether chunk
+$x_{(l-s+1)..l}$ is admissible), an optimal partition of $x$ can be computed in
+$O(nk)$ time and $O(n)$ space.
+\end{theorem}
+
+\begin{proof}[Algorithm and analysis]
+Maintain arrays $d[0..n]$ (best cost to reach position $l$) and
+$\mathrm{back}[0..n]$ (the chunk length used to achieve it). Set $d[0] = 0$. For
+$l = 1, \dots, n$, compute
+\[
+  d[l] = \min_{\substack{1 \le s \le \min(k,l) \\ \text{chunk admissible}}}
+  \big( d[l-s] + c(s) \big),
+\]
+recording the minimizing $s$ in $\mathrm{back}[l]$. Each $d[l]$ requires examining at
+most $k$ candidates, so the whole sweep costs $O(nk)$ time and $O(n)$ space (only the
+$d$ and $\mathrm{back}$ arrays are kept; $G'$ itself need not be materialized). After
+the sweep, $d[n]$ is the optimal total cost (Theorem~\ref{thm:collapse} shows it equals
+the true shortest-path cost in $G$), and the optimal partition is recovered by walking
+backwards from $n$ via $\mathrm{back}[\cdot]$ until reaching $0$, then reversing the
+resulting list of chunk lengths.
+\end{proof}
+
+\begin{itemize}
+  \item If $k = \Theta(n)$ this is $O(n^2)$ time, matching standard ``optimal parsing''
+  algorithms used in dictionary compressors (e.g. LZ77 optimal parsing, word-break DP).
+  \item If, in addition, $c(\cdot)$ is such that longer chunks are never worse per
+  symbol (a common assumption for well-behaved cost functions, e.g. concave or
+  submodular $c$), further speedups (e.g. divide-and-conquer or SMAWK-style
+  optimizations) can bring this down to $O(n \log n)$ or $O(n)$; this depends on the
+  specific shape of $c$ and is a separate, cost-model-specific optimization.
+  \item Using the suffix-automaton restriction from Section~\ref{sec:collapse}, the
+  inner loop only ranges over \emph{admissible} $s$ (those with an earlier occurrence),
+  which in practice is far fewer than $k$ candidates per position, often bringing the
+  real running time close to $O(n)$ even though the worst case remains $O(nk)$.
+\end{itemize}
+
+\end{document}
