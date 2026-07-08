@@ -1,0 +1,486 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\geometry{margin=1in}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{definition}{Definition}
+\newtheorem{corollary}{Corollary}
+
+\lstset{
+  basicstyle=\small\ttfamily,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible,
+  keywordstyle=\bfseries,
+}
+
+\title{Building an Implicit-Dictionary LZSS Compressor \\
+\large A Practical Guide to Sliding-Window Matching, Optimal Parsing, \\
+and Where the Real Gains Over DEFLATE/zstd/LZMA Come From}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{tcolorbox}[colback=yellow!5!white,colframe=yellow!75!black,title=How to use this document]
+This is written as a build guide, not just a theory reference. Each section ends with a
+concrete deliverable: a data structure, an algorithm, or a file to write. Follow the
+sections in order -- each one only depends on what came before it. Section
+\ref{sec:calibration} at the end is the most important one to internalize \emph{before}
+you start coding: it tells you honestly where the compression-ratio gains over
+DEFLATE/zstd/LZMA actually come from, so you don't spend weeks on the part that matters
+least.
+\end{tcolorbox}
+
+\tableofcontents
+
+\section{Goal and Non-Goal}
+
+\textbf{Goal}: an LZSS-style compressor where the dictionary is never stored. The decoder
+reconstructs it implicitly, byte by byte, from the same data it has already decoded --
+exactly the same way the encoder does. Nothing about a "dictionary" is ever written to
+the compressed file; only literal bytes and (length, distance) back-references are.
+
+\textbf{Non-goal}: reproducing DEFLATE. DEFLATE's specific parameters (32KB window,
+greedy/lazy matching, static per-block Huffman) were 1996 engineering trade-offs for
+speed and memory, not a template for maximum ratio. This guide deliberately departs from
+several of them; each departure is called out explicitly.
+
+\section{Why No Header Dictionary Is Needed: The Causality Argument}
+\label{sec:causality}
+
+\begin{definition}[Implicit dictionary]
+An implicit dictionary at position $l$ is simply the already-decoded prefix
+$x_{1..(l-1)}$ of the output itself. There is no separate structure to store or
+transmit.
+\end{definition}
+
+\begin{theorem}[Decoder can always reconstruct the dictionary on its own]
+\label{thm:causal}
+If the encoder only ever emits back-references whose source position $p$ satisfies
+$p < l$ (the current position), the decoder can resolve every reference using only
+bytes it has \emph{already} produced, in the same left-to-right order the encoder used.
+No side information about the dictionary is required.
+\end{theorem}
+
+\begin{proof}
+By induction on $l$. At $l = 1$ nothing has been decoded, so only a literal can be
+emitted (there is nothing to reference). Suppose the decoder has correctly reconstructed
+$x_{1..(l-1)}$. If the encoder emits a literal at $l$, the decoder appends it directly.
+If the encoder emits a back-reference $(s, \delta)$ with source position
+$p = l - \delta$, then $p < l \le l$, so $x_p$ (and, byte by byte, $x_p, \dots,
+x_{p+s-1}$, even if $p + s - 1 \ge l$, since each output byte becomes available to be
+read the instant it is produced) is already in the decoder's output buffer. The decoder
+copies it forward exactly as the encoder did. By induction, this holds for all $l$.
+\end{proof}
+
+This is the same argument that dissolved the "per-path hash" confusion from earlier in
+this project: match validity is a property of the \emph{fixed input string}, not of
+which parse/path was chosen to reach a given position. Section~\ref{sec:matchfinder}
+turns this into an algorithm for finding valid matches quickly.
+
+\begin{tcolorbox}[colback=blue!5!white,colframe=blue!50!black,title=What this replaces]
+Your current \texttt{compressed\_header.c} / \texttt{code\_map.c} store an explicit
+dictionary. Under the design in this document, those become unnecessary: the header
+only needs to store per-block metadata (block length, entropy-coder tables if any), not
+a symbol table. This is the single biggest structural simplification in this rewrite.
+\end{tcolorbox}
+
+\section{Sliding Window: Choosing Its Size}
+\label{sec:window}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Compressor & Window size & Note \\
+\midrule
+DEFLATE & 32{,}768 bytes & Fixed by RFC 1951's bit-field widths \\
+zstd (level $\le$ 19) & up to 8~MB & Configurable \\
+zstd \texttt{--ultra -22} & up to 128~MB & \\
+LZMA/xz & up to $1.5$~GB & Configurable, dictionary-size parameter \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Recommendation}: do not hardcode a small window. Use the entire block you are
+compressing as the window (your current \texttt{BLOCK\_SIZE} of 64{,}000 bytes is already
+larger than DEFLATE's whole window). If you later support multi-block or streaming
+files, make the window at least as large as \texttt{BLOCK\_SIZE}, ideally the size of the
+whole file for offline compression -- there is no ratio reason to shrink it, only a
+memory-budget reason, and modern machines make that budget generous.
+
+\section{Match Finding}
+\label{sec:matchfinder}
+
+\subsection{Data structure: hash chains}
+
+\begin{definition}[Hash chain matchfinder]
+For every position $i$, hash the next $H$ bytes ($H=3$ or $4$ is standard) into a table
+\texttt{head[hash]} pointing to the most recent position with that hash, with each
+position also storing \texttt{prev[i]} pointing to the next-most-recent earlier position
+sharing the same hash -- a singly linked list per hash bucket, walked nearest-first.
+\end{definition}
+
+\begin{algorithm}[H]
+\caption{Insert position $i$ into the hash-chain structure}
+\begin{algorithmic}[1]
+\Procedure{InsertPosition}{$i$, $data$, $head[\,]$, $prev[\,]$}
+  \State $h \gets \text{Hash}(data[i..i+H-1])$
+  \State $prev[i] \gets head[h]$
+  \State $head[h] \gets i$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{Find match candidates ending at position $l$ (equivalently, starting at $i = l -
+s + 1$ for the position under consideration)}
+\label{alg:findmatches}
+\begin{algorithmic}[1]
+\Procedure{FindMatches}{$i$, $data$, $head[\,]$, $prev[\,]$, $max\_chain$}
+  \State $h \gets \text{Hash}(data[i..i+H-1])$
+  \State $p \gets head[h]$
+  \State $best\_len \gets 0$
+  \State $candidates \gets \emptyset$ \Comment{list of (length, distance), one per achievable length}
+  \State $tries \gets 0$
+  \While{$p \ge 0$ and $tries < max\_chain$}
+    \State $len \gets \text{MatchLength}(data, p, i)$ \Comment{extend while bytes match, capped by window}
+    \If{$len > best\_len$}
+      \For{$s \gets best\_len+1$ to $len$}
+        \State $candidates[s] \gets (s,\, i - p)$ \Comment{nearest distance for every new length reached}
+      \EndFor
+      \State $best\_len \gets len$
+    \EndIf
+    \State $p \gets prev[p]$
+    \State $tries \gets tries + 1$
+  \EndWhile
+  \State \textbf{return} $candidates$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\begin{tcolorbox}[colback=blue!5!white,colframe=blue!50!black,title=Key property this relies on]
+Because the chain is walked nearest-first, the \emph{first} time a given length is
+reached during the walk, its distance is automatically the smallest (cheapest) distance
+achieving that length. You never need to compare distances for the same length --
+just keep walking until longer matches stop appearing, or the chain/budget runs out.
+\end{tcolorbox}
+
+\subsection{How deep to walk the chain}
+
+\texttt{max\_chain} trades encode speed for match quality. DEFLATE's higher settings use
+depths in the hundreds; since your goal is ratio, not encode speed, use a generous depth
+(thousands, or unbounded for smaller blocks like your current 64{,}000-byte block size --
+exhaustive chain walking on 64KB is entirely affordable on modern hardware).
+
+\subsection{Upgrading the matchfinder later: binary trees and suffix automata}
+
+Hash chains can still miss the best match if the chain is very long and gets truncated by
+\texttt{max\_chain}. Two standard upgrades, in order of typical benefit-to-effort:
+
+\begin{itemize}
+  \item \textbf{Binary-tree matchfinder} (what LZMA's strongest mode, \texttt{BT4}, uses):
+  replace each hash bucket's linked list with a binary search tree ordered by the
+  matched suffix, giving exact nearest-distance-per-length without a depth cutoff, at
+  $O(\log n)$ insertion/search instead of $O(\text{chain length})$.
+  \item \textbf{Suffix automaton / suffix array}: gives you the true longest previous
+  factor at every position in one linear-time pass over the whole block, as discussed
+  earlier in this project. More work to implement correctly, but removes match-finding
+  quality as a variable entirely.
+\end{itemize}
+
+Start with hash chains (Algorithm~\ref{alg:findmatches}); it is by far the easiest to get
+correct, and with a generous \texttt{max\_chain} on a 64KB block it will already be very
+close to exhaustive.
+
+\section{Candidate Representation: Retiring the Old Graph Structure}
+\label{sec:candidates}
+
+Your existing \texttt{Graph}/\texttt{GraphNode} machinery enumerates every possible
+chunk length $1..k$ at every position (the "virtual parent link" design), because the
+old dictionary scheme needed to consider every candidate length to know which ones
+repeat anywhere in the file. A real matchfinder does not need this: at each position it
+hands you a short, explicit list of \emph{real} candidates.
+
+\begin{definition}[Candidate list]
+For each position $l = 1, \dots, n$, define $C_l$ as the list of pairs $(s, \delta)$
+returned by \textsc{FindMatches} -- typically a handful of entries, not up to $k=128$.
+\end{definition}
+
+\textbf{Recommendation}: replace \texttt{Graph}/\texttt{GraphNode}/\texttt{MAX\_GRAPH\_NODES}
+with a flat, per-position array of candidates:
+\begin{lstlisting}[language=C]
+typedef struct {
+    uint32_t length;
+    uint32_t distance;
+} MatchCandidate;
+
+typedef struct {
+    MatchCandidate candidates[MAX_CANDIDATES_PER_POSITION];
+    uint8_t count;
+} PositionCandidates;
+
+PositionCandidates candidates[BLOCK_SIZE]; // one entry per position
+\end{lstlisting}
+This is smaller, simpler, and removes \texttt{SEQ\_LENGTH\_LIMIT} as an artificial cap on
+match length -- a real match can be as long as the matchfinder actually finds (DEFLATE's
+258 and LZMA's 273 caps are themselves just wire-format choices, not fundamental
+limits; choose a cap based on your entropy coder's length-encoding range, not before).
+
+\section{Cost Model}
+\label{sec:cost}
+
+You already have the right building block: \texttt{lzss\_cost.h}'s
+\texttt{lzss\_match\_cost\_bits(length, distance)} and
+\texttt{lzss\_literal\_cost\_bits()}. Nothing about this section changes once real
+distances are available -- the cost model was already written distance-aware, precisely
+in anticipation of this rewrite.
+
+\begin{tcolorbox}[colback=blue!5!white,colframe=blue!50!black,title=Reminder: why this is exactly the right unit now]
+Under the old dictionary/header scheme, a chunk's true cost depended on how many
+distinct dictionary entries the whole file ended up needing -- a shared, global,
+history-dependent cost the flat DP could not see, which is why the DP lost to greedy in
+your benchmark. Under pure back-references, a match's cost is a function of its own
+$(length, distance)$ alone, nothing shared with any other token. This is exactly the
+assumption the DP's optimality proof requires, so the same DP that lost to greedy
+before will not have that problem here.
+\end{tcolorbox}
+
+\section{Optimal Parsing}
+\label{sec:parsing}
+
+\subsection{The flat DP (exactly optimal, given the cost model above)}
+
+This is precisely Section~7 of \texttt{doc/writeup.tex}, restated for candidate lists
+instead of graph levels:
+
+\begin{algorithm}[H]
+\caption{Optimal parse via forward DP}
+\begin{algorithmic}[1]
+\Procedure{OptimalParse}{$data$, $candidates[\,]$, $n$}
+  \State $d[0] \gets 0$
+  \For{$l \gets 1$ to $n$}
+    \State $d[l] \gets d[l-1] + \textsc{LiteralCostBits}()$
+    \State $back[l] \gets \textsc{Literal}$
+    \For{each $(s, \delta) \in candidates[l]$}
+      \State $cand \gets d[l - s] + \textsc{MatchCostBits}(s, \delta)$
+      \If{$cand < d[l]$}
+        \State $d[l] \gets cand$
+        \State $back[l] \gets (\textsc{Match}, s, \delta)$
+      \EndIf
+    \EndFor
+  \EndFor
+  \State \Return \Call{ReconstructPath}{$back$, $n$}
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Complexity}: $O(n \cdot \bar{c})$ time, $O(n)$ space, where $\bar{c}$ is the
+average candidate-list length (typically small, bounded by \texttt{max\_chain} or by how
+many distinct lengths were actually found -- not by $k$). This is the direct successor
+of \texttt{shortest\_path\_dp.c}: same forward-sweep structure, simpler inner loop (no
+\texttt{get\_parent\_level}/\texttt{useless} bookkeeping needed), same optimality proof.
+
+\subsection{Extension: repeat-distance modeling (practical, not exactly optimal)}
+\label{sec:repdist}
+
+Real data reuses the \emph{same} back-reference distance repeatedly (column-aligned
+data, periodic structure). LZMA exploits this with 4 cached "recent distances"
+(\texttt{rep0..rep3}); matching one of them costs far fewer bits than encoding a fresh
+distance.
+
+\begin{tcolorbox}[colback=red!5!white,colframe=red!60!black,title=Honesty check]
+Tracking recent distances exactly turns the DP state into (position, exact set of
+recently used distances) -- and distances range up to the window size, so this state
+space is not small in general. \emph{Exact} joint optimization of parse and
+repeat-distance cache is not tractable this way, and there is no widely known
+polynomial algorithm for it in full generality (it is closely related to the "smallest
+grammar" family of hard problems flagged earlier in this project). Real encoders,
+including LZMA's own optimal-parse mode, do not solve this exactly either -- they use a
+bounded-lookahead approximation. What follows is that same standard, practical
+approximation, not a new exact algorithm.
+\end{tcolorbox}
+
+\textbf{The practical approximation} (what LZMA and zstd's optimal-parse modes actually
+do): extend the DP state to $(l, \texttt{rep0})$, where \texttt{rep0} is \emph{only the
+single most recently used distance along the best path reaching $l$} (not all four, and
+not all combinations) -- carried forward from \texttt{back[l]} the same way
+\texttt{shortest\_path\_dp.c} already carries forward a single winning predecessor per
+level. At each position, in addition to the matchfinder's candidates, check whether
+\texttt{rep0} (inherited from the predecessor state) still matches at this position; if
+so, offer it as an extra candidate with a cheaper cost (no full distance encoding
+needed, just a "reuse rep0" flag):
+
+\begin{algorithm}[H]
+\caption{Optimal parse with a single repeat-distance slot}
+\begin{algorithmic}[1]
+\Procedure{OptimalParseWithRep0}{$data$, $candidates[\,]$, $n$}
+  \State $d[0] \gets 0$; $rep[0] \gets 0$
+  \For{$l \gets 1$ to $n$}
+    \State $d[l] \gets d[l-1] + \textsc{LiteralCostBits}()$;\ $back[l] \gets \textsc{Literal}$;\ $rep[l] \gets rep[l-1]$
+    \For{each $(s, \delta) \in candidates[l]$}
+      \State $cand \gets d[l - s] + \textsc{MatchCostBits}(s, \delta)$
+      \If{$cand < d[l]$}
+        \State $d[l] \gets cand$;\ $back[l] \gets (\textsc{Match}, s, \delta)$;\ $rep[l] \gets \delta$
+      \EndIf
+    \EndFor
+    \State $r \gets rep[l-1]$
+    \If{$r > 0$ and \Call{MatchLengthAt}{$data$, $l - r$, $l$} $> 0$}
+      \State $s' \gets$ \Call{MatchLengthAt}{$data$, $l-r$, $l$}
+      \State $cand \gets d[l - s'] + \textsc{RepMatchCostBits}(s')$ \Comment{cheaper: no distance field}
+      \If{$cand < d[l]$}
+        \State $d[l] \gets cand$;\ $back[l] \gets (\textsc{RepMatch}, s')$;\ $rep[l] \gets r$
+      \EndIf
+    \EndIf
+  \EndFor
+  \State \Return \Call{ReconstructPath}{$back$, $n$}
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+This stays $O(n \cdot \bar{c})$ -- one extra $O(1)$-ish check per position -- and
+typically captures most of the practical benefit of repeat-distance caching. Extending
+to 2--4 tracked slots (closer to LZMA's rep0..rep3) is a straightforward generalization
+of the same idea if benchmarking shows it is worth the added complexity; start with one
+slot and measure before adding more.
+
+\section{Entropy Coding Integration}
+\label{sec:entropy}
+
+Your plan (item 3: range coding / context mixing) is already the right choice --
+strictly more expressive than DEFLATE's Huffman stage, which is limited to integer-bit
+code lengths per symbol.
+
+\subsection{The cost-model / entropy-coder feedback loop}
+
+The bit costs in Section~\ref{sec:cost} are \emph{estimates} (an Elias-gamma-style
+approximation), not what your adaptive entropy coder will actually spend, since its
+costs depend on model state that evolves with the actual token sequence chosen. The
+standard, well-tested resolution (used by LZMA/zstd) is iterative:
+
+\begin{enumerate}
+  \item Parse once using the static cost estimates from Section~\ref{sec:cost}.
+  \item Feed the resulting token sequence through the real entropy coder; measure the
+  actual bits it assigned to each literal/length/distance symbol.
+  \item Re-derive per-symbol cost estimates from those measured statistics.
+  \item Re-run \textsc{OptimalParse} (Section~\ref{sec:parsing}) with the updated costs.
+  \item Repeat 2--4 rounds, or until total size stops improving.
+\end{enumerate}
+
+This is not a proof of global optimality (exact joint optimization of parse and adaptive
+model state is intractable in general, for the same reason as
+Section~\ref{sec:repdist}) -- but it is an empirically excellent fixed point, and it is
+exactly what today's best general-purpose compressors ship.
+
+\subsection{Context choices for the entropy stage, roughly in order of expected payoff}
+
+\begin{enumerate}
+  \item Separate probability models for literals vs.\ match-length vs.\ distance
+  symbols (do not share one model across all three).
+  \item Condition literal probabilities on the preceding 1--2 bytes (order-1/order-2
+  context), not just an unconditional byte frequency table.
+  \item Condition on whether the previous token was a literal or a match (DEFLATE and
+  LZMA both find this genuinely useful).
+  \item If you pursue full context mixing: combine several such predictors with a
+  logistic mixer (PAQ/cmix-style) rather than picking one context order -- this is where
+  most of the ratio gap to state-of-the-art compressors actually lives, more so than in
+  parsing sophistication.
+\end{enumerate}
+
+\section{Implementation Roadmap}
+\label{sec:roadmap}
+
+\begin{center}
+\begin{tabular}{@{}p{0.5cm}p{4.3cm}p{7.5cm}@{}}
+\toprule
+\# & Deliverable & Notes \\
+\midrule
+1 & Hash-chain matchfinder & Algorithm~\ref{alg:findmatches}. New file, e.g.\
+\texttt{matchfinder.c}. \\
+2 & Candidate-list data structure & Section~\ref{sec:candidates}. Replaces
+\texttt{Graph}/\texttt{GraphNode} for this purpose. \\
+3 & Flat optimal-parse DP & Adapt \texttt{shortest\_path\_dp.c} to iterate over
+candidate lists; reuse \texttt{lzss\_cost.h} as-is (already written for this). \\
+4 & Round-trip test harness & Verify byte-exact decompression on your existing
+\texttt{tests/} corpus before optimizing further. \\
+5 & Benchmark vs.\ gzip/zstd/xz & Establish your real baseline gap \emph{before}
+adding complexity -- see Section~\ref{sec:validation}. \\
+6 & Repeat-distance (rep0) DP extension & Section~\ref{sec:repdist}. Only after 1--5
+are working and measured. \\
+7 & Entropy coder + refinement loop & Section~\ref{sec:entropy}. Likely your single
+biggest remaining ratio lever -- see Section~\ref{sec:calibration}. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Validation and Benchmarking Protocol}
+\label{sec:validation}
+
+\begin{enumerate}
+  \item \textbf{Correctness first, always}: every change gets a full round-trip
+  (compress $\to$ decompress $\to$ byte-diff) over your entire \texttt{tests/} corpus,
+  including \texttt{tests/cantrbry}, before you look at compression ratio at all.
+  \item \textbf{Compare against real baselines on the same files}: \texttt{gzip -9},
+  \texttt{zstd --ultra -22}, and \texttt{xz -9e} on every test file, not just your
+  previous version -- your own history-vs-history comparisons (DP vs.\ greedy) are
+  useful for internal regressions, but the external baselines are what tells you whether
+  you are actually competitive.
+  \item \textbf{Ablate one change at a time}: matchfinder quality, DP vs.\ greedy,
+  rep-distance, entropy stage -- toggle each independently so you know which one is
+  actually earning its keep, the same way this document's earlier greedy-vs-DP
+  benchmark isolated exactly one variable.
+  \item \textbf{Track encode time too}: an exhaustive \texttt{max\_chain} and a full
+  context-mixing entropy stage can get slow; note the trade-off even if ratio is your
+  primary goal, so you know what you're spending to get it.
+\end{enumerate}
+
+\section{Calibration: Where the Real Gains Actually Come From}
+\label{sec:calibration}
+
+Read this section before writing code, not after.
+
+\begin{enumerate}
+  \item \textbf{Matchfinder quality} (Section~\ref{sec:matchfinder}): a shallow hash
+  chain vs.\ an exhaustive one, or vs.\ a binary tree, changes what matches you can even
+  see. Real, but bounded, gains.
+  \item \textbf{Optimal vs.\ greedy parsing} (Section~\ref{sec:parsing}): you already
+  measured this empirically on your own data once the cost model is fair (see the
+  earlier greedy-vs-DP benchmark in this project) -- meaningful, but this alone will
+  bring you roughly to where LZMA/zstd's own optimal-parse modes already are, not past
+  them, since they do this too.
+  \item \textbf{Repeat-distance modeling} (Section~\ref{sec:repdist}): often the single
+  best ratio-per-effort win on structured/periodic data, and a real point of leverage
+  over compressors that skip it.
+  \item \textbf{Entropy coding sophistication} (Section~\ref{sec:entropy}): once parsing
+  is near-optimal, this is realistically where most of the remaining gap to
+  state-of-the-art ratios lives -- how well you predict the next symbol's probability,
+  not how you choose chunk boundaries. The very best general-purpose compressors (cmix,
+  paq-family) get their ratio almost entirely from rich, mixed context models here, not
+  from unusual match-finding.
+\end{enumerate}
+
+\begin{tcolorbox}[colback=yellow!5!white,colframe=yellow!75!black,title=Honest expectation setting]
+Beating gzip/DEFLATE outright is a realistic, achievable target with just
+Sections~\ref{sec:matchfinder}--\ref{sec:parsing} (better matchfinder + optimal parse
+already exceeds DEFLATE's greedy/lazy design). Matching or narrowly beating zstd at high
+levels and competing with LZMA/xz is achievable but will require Sections
+\ref{sec:repdist}--\ref{sec:entropy} done well, since those tools already run
+near-optimal parsers themselves -- your edge over them has to come from matching or
+exceeding their entropy-coding sophistication, not from parsing alone. Decisively
+beating LZMA/zstd/xz \emph{in general}, across all data types, is a very high bar few
+tools clear; beating them on a \emph{specific} data type you care about (by exploiting
+structure they don't model) is a much more tractable and still valuable goal. Aim
+there first.
+\end{tcolorbox}
+
+\end{document}
