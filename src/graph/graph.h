@@ -30,6 +30,15 @@ typedef struct {
     uint8_t RLE_start;
     uint8_t RLE_end;
     uint8_t length_of_RLE;
+    // LZSS-style back-reference distance: how many bytes BACK from this
+    // node's offset the copy source begins (i.e. source_offset = offset -
+    // distance). 0 means "not a back-reference" (literal, RLE, or a node
+    // built under the old dictionary/header scheme). Left at 0 by all
+    // current graph-construction code; a future matchfinder that emits
+    // real LZSS back-references should populate this per match node.
+    // shortest_path_dp.c automatically switches to LZSS-style
+    // (length, distance) costing for any node where this is > 0.
+    uint32_t distance;
 } GraphNode;
 
 typedef struct {
