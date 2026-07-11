@@ -56,6 +56,26 @@ greedy/lazy matching, static per-block Huffman) were 1996 engineering trade-offs
 speed and memory, not a template for maximum ratio. This guide deliberately departs from
 several of them; each departure is called out explicitly.
 
+\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title=Running example used throughout this document]
+Every worked example below uses the same 13-byte string, so the pieces connect into one
+coherent picture instead of thirteen disconnected toy cases:
+\[
+  S = \texttt{a\,b\,c\,a\,b\,c\,a\,b\,c\,x\,a\,b\,c}, \qquad
+  \text{positions } 1,2,\dots,13.
+\]
+It repeats \texttt{"abc"} three times, is interrupted once by \texttt{"x"}, then repeats
+\texttt{"abc"} once more. Small enough to trace completely by hand, rich enough to show
+a real match, a real choice between two parses, and a real place where a repeat
+distance changes.
+
+All bit costs below use exactly the formulas in \texttt{lzss\_cost.h}: a literal costs 9
+bits (1 flag + 8 data bits); a match of length $s$ and distance $\delta$ costs
+$1 + \text{var}(s-1) + \text{var}(\delta)$ bits, where $\text{var}(x) = 2\lfloor \log_2
+x\rfloor + 1$ is the Elias-gamma-style variable-length code cost. Every number quoted
+below was computed with this exact formula (verified by script, not by hand), so you can
+recompute any of them yourself as a sanity check while implementing.
+\end{tcolorbox}
+
 \section{Why No Header Dictionary Is Needed: The Causality Argument}
 \label{sec:causality}
 
@@ -88,6 +108,30 @@ This is the same argument that dissolved the "per-path hash" confusion from earl
 this project: match validity is a property of the \emph{fixed input string}, not of
 which parse/path was chosen to reach a given position. Section~\ref{sec:matchfinder}
 turns this into an algorithm for finding valid matches quickly.
+
+\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title=Worked example: decoding without a dictionary]
+Suppose the encoder emitted, for our running example $S$: three literals \texttt{a},
+\texttt{b}, \texttt{c}; then one back-reference $(s{=}6,\delta{=}3)$; then a literal
+\texttt{x}; then a back-reference $(s{=}3,\delta{=}4)$. The decoder replays this with no
+dictionary at all, just its own output buffer:
+\begin{enumerate}
+  \item Emit literals \texttt{a}, \texttt{b}, \texttt{c} $\to$ buffer is \texttt{"abc"}.
+  \item See $(6,3)$: copy 6 bytes starting 3 bytes back from the current end (position
+  $4-3=1$). Copy byte-by-byte: buffer[4] = buffer[1] = \texttt{a}; buffer[5] =
+  buffer[2] = \texttt{b}; buffer[6] = buffer[3] = \texttt{c}; buffer[7] = buffer[4]
+  (just written!) = \texttt{a}; buffer[8] = buffer[5] = \texttt{b}; buffer[9] =
+  buffer[6] = \texttt{c}. Buffer is now \texttt{"abcabcabc"}.
+  \item Emit literal \texttt{x} $\to$ \texttt{"abcabcabcx"}.
+  \item See $(3,4)$: copy 3 bytes starting 4 back from position 11 (source position 7):
+  buffer[11..13] = buffer[7..9] = \texttt{"abc"}. Final buffer:
+  \texttt{"abcabcabcxabc"} -- exactly $S$.
+\end{enumerate}
+Note step 2: the source range (positions 1--6) and the destination range (positions
+4--9) \emph{overlap}, yet the byte-by-byte copy still works, because each source byte is
+always already-written by the time it's read (Theorem~\ref{thm:causal}'s proof handles
+this explicitly). This overlapping-copy trick is exactly how a single short back-reference
+can expand into a long run.
+\end{tcolorbox}
 
 \begin{tcolorbox}[colback=blue!5!white,colframe=blue!50!black,title=What this replaces]
 Your current \texttt{compressed\_header.c} / \texttt{code\_map.c} store an explicit
@@ -176,6 +220,33 @@ achieving that length. You never need to compare distances for the same length -
 just keep walking until longer matches stop appearing, or the chain/budget runs out.
 \end{tcolorbox}
 
+\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title=Worked example: two hash-chain lookups on $S$]
+Take $H{=}1$ (hash on a single byte, for simplicity of the example only -- real
+implementations use $H{=}3$ or $4$ to avoid degenerate chains). As positions $1,2,3$
+(\texttt{a},\texttt{b},\texttt{c}) are inserted, \texttt{head['a']}$=1$,
+\texttt{head['b']}$=2$, \texttt{head['c']}$=3$.
+
+\textbf{Query at $i=4$} (\texttt{'a'}): $h=$ \texttt{'a'}, $p = head[\texttt{'a'}] = 1$.
+\textsc{MatchLength}$(data, 1, 4)$ extends: $S[4]{=}\texttt{a}{=}S[1]$,
+$S[5]{=}\texttt{b}{=}S[2]$, $S[6]{=}\texttt{c}{=}S[3]$, $S[7]{=}\texttt{a}{=}S[4]$
+(self-overlap, fine), $S[8]{=}\texttt{b}{=}S[5]$, $S[9]{=}\texttt{c}{=}S[6]$,
+$S[10]{=}\texttt{x}\ne S[7]{=}\texttt{a}$ -- stop. $len = 6$. $prev[1]$ is empty (no
+earlier \texttt{'a'}), so the chain ends after one try. Result: candidates
+$(2,3),(3,3),(4,3),(5,3),(6,3)$ -- one entry per length from 2 up to the max found, all
+at distance 3 (Section~\ref{sec:candidates} shows exactly this list).
+
+\textbf{Query at $i=11$} (\texttt{'a'}, after \texttt{head['a']} has since been updated
+to 7, then to... actually 7 is the most recent \texttt{'a'} before 11, since $i=4$'s
+\texttt{'a'} was itself inserted before $i=7$'s): $p = head[\texttt{'a'}] = 7$ (nearest
+first, so we try 7 before the older 4 or 1). \textsc{MatchLength}$(data, 7, 11)$:
+$S[11]{=}\texttt{a}{=}S[7]$, $S[12]{=}\texttt{b}{=}S[8]$, $S[13]{=}\texttt{c}{=}S[9]$,
+end of string -- stop. $len=3$, distance $=11-7=4$. Because the chain is walked
+nearest-first, we never even need to check $p=4$ (distance 7) or $p=1$ (distance 10):
+both would give the same length-3 match at a needlessly larger distance, hence strictly
+more expensive under the cost model in Section~\ref{sec:cost}. Result: candidates
+$(2,4),(3,4)$.
+\end{tcolorbox}
+
 \subsection{How deep to walk the chain}
 
 \texttt{max\_chain} trades encode speed for match quality. DEFLATE's higher settings use
@@ -237,6 +308,30 @@ match length -- a real match can be as long as the matchfinder actually finds (D
 258 and LZMA's 273 caps are themselves just wire-format choices, not fundamental
 limits; choose a cap based on your entropy coder's length-encoding range, not before).
 
+\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title=Worked example: the candidate lists for $S$]
+Continuing the running example, the non-empty candidate lists produced by
+\textsc{FindMatches} across all of $S$ are just the two lookups from
+Section~\ref{sec:matchfinder}, plus one more (a match starting at $i=7$ against the
+nearer source $p=4$, found the same way):
+\begin{center}
+\begin{tabular}{@{}clll@{}}
+\toprule
+$i$ & candidates $(length,\ distance)$ & source \\
+\midrule
+1--3, 10 & none (first occurrence of each byte) & -- \\
+4 & $(2,3),(3,3),(4,3),(5,3),(6,3)$ & $p=1$ \\
+7 & $(2,3),(3,3)$ & $p=4$ (capped by \texttt{x} at position 10) \\
+11 & $(2,4),(3,4)$ & $p=7$ (nearest \texttt{'a'} before 11) \\
+\bottomrule
+\end{tabular}
+\end{center}
+All other positions (2, 3, 5, 6, 8, 9, 10, 12, 13) have empty candidate lists of their
+own at that \emph{starting} position (though they may still be \emph{covered} by a
+match that started earlier, e.g. position 6 is covered by the $i{=}4$ match if the
+parser chooses to use it -- see Section~\ref{sec:parsing}, where this exact table
+becomes the input to the DP).
+\end{tcolorbox}
+
 \section{Cost Model}
 \label{sec:cost}
 
@@ -290,6 +385,80 @@ average candidate-list length (typically small, bounded by \texttt{max\_chain} o
 many distinct lengths were actually found -- not by $k$). This is the direct successor
 of \texttt{shortest\_path\_dp.c}: same forward-sweep structure, simpler inner loop (no
 \texttt{get\_parent\_level}/\texttt{useless} bookkeeping needed), same optimality proof.
+
+\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title=Worked example: the full DP table for $S$]
+Feeding the candidate table from Section~\ref{sec:candidates} into
+\textsc{OptimalParse} gives (literal $=9$ bits always; match costs from
+Section~\ref{sec:cost}'s formula, e.g.\ $\text{match\_cost}(6,3)=9$,
+$\text{match\_cost}(3,4)=9$, $\text{match\_cost}(2,4)=7$):
+\begin{center}
+\begin{tabular}{@{}rrl@{}}
+\toprule
+$l$ & $d[l]$ (bits) & chosen edge \\
+\midrule
+0 & 0 & -- \\
+1 & 9 & literal \texttt{a} \\
+2 & 18 & literal \texttt{b} \\
+3 & 27 & literal \texttt{c} \\
+4 & 36 & literal \texttt{a} (no match reaches exactly here yet) \\
+5 & 32 & match$(2,3)$ from $d[3]=27$ \\
+6 & 34 & match$(3,3)$ from $d[3]=27$ \\
+7 & 34 & match$(4,3)$ from $d[3]=27$ \\
+8 & 36 & match$(5,3)$ from $d[3]=27$ \\
+9 & \textbf{36} & \textbf{match$(6,3)$ from $d[3]=27$} \\
+10 & 45 & literal \texttt{x} \\
+11 & 54 & literal \texttt{a} \\
+12 & 52 & match$(2,4)$ from $d[10]=45$ \\
+13 & 54 & match$(3,4)$ from $d[10]=45$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\textbf{Final parse}: literal(\texttt{a}), literal(\texttt{b}), literal(\texttt{c}),
+match$(6,3)$, literal(\texttt{x}), match$(3,4)$ -- total $27 + 9 + 9 + 9 = 54$ bits,
+matching Section~\ref{sec:causality}'s decode example exactly.
+
+\textbf{Why row 9 is the interesting one.} There are two genuinely different ways to
+reach position 9: one big match $(6,3)$ covering positions 4--9 in a single token
+($36$ bits total), or two smaller matches -- $(3,3)$ from $i{=}4$ reaching position 6,
+then $(3,3)$ again from $i{=}7$ (source $p{=}4$) reaching position 9
+($d[6] + \text{match\_cost}(3,3) = 34 + 7 = 41$ bits). The DP correctly rejects the
+split (41 bits) in favor of the single long match (36 bits): every extra token pays a
+fresh flag bit and a fresh length/distance code, so fragmenting an otherwise-contiguous
+match is a real, measurable cost (5 bits here) with no offsetting benefit, since both
+pieces would have used the same distance anyway. This is exactly the kind of decision a
+greedy "always take what's in front of you" parser gets right by luck when there's only
+one source available (as here) -- but not always, as the next example shows.
+\end{tcolorbox}
+
+\begin{tcolorbox}[colback=orange!5!white,colframe=orange!70!black,title=Worked counterexample: where plain greedy actually loses]
+This one is a constructed synthetic scenario (not from $S$), built specifically to
+isolate the failure mode. Suppose at some position, the matchfinder's chain search finds
+one long-but-far match: length $7$, distance $500$. Suppose also that, purely by
+coincidence, taking just \emph{one literal byte} here and then re-querying the
+matchfinder one position later would reveal a match covering the remaining 6 bytes at
+distance $4$ (very near) -- but a plain greedy encoder, which only ever asks "what's the
+best match available \emph{right now}", cannot see this: it has no mechanism to look
+one step ahead and re-evaluate.
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Option & Tokens & Cost \\
+\midrule
+A (plain greedy's choice) & one match$(7, 500)$ & $1 + \text{var}(6) + \text{var}(500) = 1+5+17 = 23$ bits \\
+B (what the DP finds) & literal $+$ match$(6, 4)$ & $9 + (1+\text{var}(5)+\text{var}(4)) = 9+11 = 20$ bits \\
+\bottomrule
+\end{tabular}
+\end{center}
+Option B wins by 3 bits, purely because a distance of 4 is so much cheaper to encode than
+a distance of 500 that sacrificing one byte of match length more than pays for itself.
+Greedy takes Option A because it is the longest match \emph{visible from the current
+position} and greedy never reconsiders; the DP in Algorithm~\ref{alg:findmatches}--%
+\ref{sec:parsing} naturally finds Option B because $d[\,]$ is computed for
+\emph{every} position and compared globally -- it doesn't matter how many steps of
+"lookahead" the better option required, since the DP has no lookahead limit at all. Even
+DEFLATE's "lazy matching" (which checks only one position ahead) would fail on a version
+of this example requiring two or more steps of foresight; the DP has no such bound.
+\end{tcolorbox}
 
 \subsection{Extension: repeat-distance modeling (practical, not exactly optimal)}
 \label{sec:repdist}
@@ -353,6 +522,23 @@ typically captures most of the practical benefit of repeat-distance caching. Ext
 to 2--4 tracked slots (closer to LZMA's rep0..rep3) is a straightforward generalization
 of the same idea if benchmarking shows it is worth the added complexity; start with one
 slot and measure before adding more.
+
+\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title=Worked example: what rep-distance caching would (and wouldn't) save here]
+In our running example's optimal parse, the first match uses distance 3, and the second
+uses distance 4 -- \emph{different} distances, so a \texttt{rep0} cache would not help
+between them (this is a realistic, honest outcome, not a cherry-picked success case).
+But suppose a variant of $S$ had no \texttt{"x"} interruption, so the trailing
+\texttt{"abc"} also ended up matching at distance 3 (the same as the first match).
+Encoding that trailing match fresh costs $\text{match\_cost}(3,3) = 7$ bits as usual; but
+if the encoder instead recognizes "this is the same distance as last time" and emits a
+cheap reuse flag instead of a full distance code, the cost drops to just
+$1 + \text{var}(2) = 1 + 3 = 4$ bits (flag $+$ length code only, no distance field at
+all) -- a 3-bit saving on that one token alone. Across a file with many aligned repeats
+at the same distance (e.g.\ column-structured or periodic data), these per-token savings
+compound into one of the largest practical wins available, which is why
+Section~\ref{sec:calibration} flags this as often the best ratio-per-effort item on the
+whole roadmap.
+\end{tcolorbox}
 
 \section{Entropy Coding Integration}
 \label{sec:entropy}
