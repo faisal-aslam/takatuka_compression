@@ -140,28 +140,195 @@ only needs to store per-block metadata (block length, entropy-coder tables if an
 a symbol table. This is the single biggest structural simplification in this rewrite.
 \end{tcolorbox}
 
-\section{Sliding Window: Choosing Its Size}
+\section{Bounding Memory and Speed: The Sliding Window}
 \label{sec:window}
 
+Section~\ref{sec:candidates} already replaces the old \texttt{Graph} structure's memory
+cost (which scaled with $O(n\cdot k)$) with something much smaller. This section does
+the same thing for the \emph{window} itself: right now, "the window" is implicitly
+"everything before position $l$ in the current 64{,}000-byte block" -- a
+\emph{growing} dictionary bounded only by block size, not a true sliding window. That's
+fine while blocks stay small, but it doesn't give you an explicit, tunable memory
+ceiling, and it can't reference across a block boundary. This section fixes both.
+
+\subsection{Search buffer vs.\ look-ahead buffer}
+
+\begin{definition}[Search buffer and look-ahead buffer]
+The \emph{search buffer} is the set of already-decoded bytes eligible as copy sources
+-- this is your window, and its size is what you want to bound. The \emph{look-ahead
+buffer} is just the next few not-yet-encoded bytes the matchfinder is trying to extend
+a match into; it only needs to be as large as the longest match you're willing to
+consider (Section~\ref{sec:candidates}'s note about not hard-capping match length still
+applies -- just cap it at something sane, e.g.\ a few hundred to a few thousand bytes,
+not thousands of times the window).
+\end{definition}
+
+Only the search buffer needs active memory-bounding; the look-ahead buffer is small and
+fixed by construction.
+
+\subsection{A fixed-memory search buffer: the ring buffer}
+\label{sec:ringbuffer}
+
+\begin{definition}[Ring-buffer window]
+Choose a window size $W$ (a power of two, for cheap modular arithmetic). Store the
+search buffer as \texttt{buffer[W]}; the byte at absolute stream position $i$ lives at
+\texttt{buffer[i \% W]}. Writing a new byte at position $i$ simply overwrites whatever
+was at \texttt{buffer[i \% W]} -- the byte from position $i - W$, which has fallen out
+of the window and can never be referenced again.
+\end{definition}
+
+This gives you $O(W)$ memory for the search buffer, \emph{independent of total file
+size} -- exactly the "fixed memory based on parameters I control" property you're
+after.
+
+\textbf{Enforcing the window bound in the matchfinder.} Recall
+Algorithm~\ref{alg:findmatches}'s hash-chain walk: \texttt{prev[p]} always points to a
+\emph{strictly earlier} position, so distance $i - p$ only grows as the chain is
+walked. That gives you a free, correct early-exit:
 \begin{center}
-\begin{tabular}{@{}lll@{}}
+\textbf{Stop walking the chain the moment $i - p > W$.}
+\end{center}
+Every remaining entry in the chain is even farther away, hence already outside the
+window and unusable -- this is both a correctness requirement (you must never reference
+an evicted byte) and a speed win (you stop doing work you'd have to discard anyway). You
+never need to explicitly delete old chain entries; capping the walk at distance $> W$
+makes them naturally unreachable.
+
+\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title=Worked example: watching eviction happen, and how $W$ changes what's even possible]
+Take a deliberately tiny window, $W{=}4$, and trace the ring buffer through our running
+example $S = \texttt{abcabcabcxabc}$ (slot $= (i{-}1) \bmod 4$):
+\begin{center}
+\begin{tabular}{@{}rrrrr@{}}
 \toprule
-Compressor & Window size & Note \\
+$i$ & byte & slot & buffer contents after write (slots 0--3) & evicted \\
 \midrule
-DEFLATE & 32{,}768 bytes & Fixed by RFC 1951's bit-field widths \\
-zstd (level $\le$ 19) & up to 8~MB & Configurable \\
-zstd \texttt{--ultra -22} & up to 128~MB & \\
-LZMA/xz & up to $1.5$~GB & Configurable, dictionary-size parameter \\
+1 & a & 0 & a\,\_\,\_\,\_ & -- \\
+2 & b & 1 & a\,b\,\_\,\_ & -- \\
+3 & c & 2 & a\,b\,c\,\_ & -- \\
+4 & a & 3 & a\,b\,c\,a & -- \\
+5 & b & 0 & b\,b\,c\,a & byte from $i{=}1$ (\texttt{a}) \\
+6 & c & 1 & b\,c\,c\,a & byte from $i{=}2$ (\texttt{b}) \\
+7 & a & 2 & b\,c\,a\,a & byte from $i{=}3$ (\texttt{c}) \\
+$\vdots$ & & & & \\
+11 & a & 2 & \dots & \\
+\bottomrule
+\end{tabular}
+\end{center}
+By position 5, the byte written at position 1 is already gone -- overwritten, not just
+"old." This is exactly what "fixed memory regardless of file length" costs you: any
+match wanting to reference something more than $W$ bytes back simply cannot exist,
+because the byte is no longer there to compare against or copy from.
+
+\textbf{Why this makes $W$ a real, consequential choice, not just a memory knob.}
+Recall the match found at $i{=}11$ in Section~\ref{sec:matchfinder}: length 3, distance
+4 (source position 7). With $W{=}4$, distance $4 \le W$, so this match is still exactly
+on the edge of legality -- it survives. With $W{=}3$ instead, distance $4 > W{=}3$, and
+this exact match would be \emph{unavailable}: the matchfinder's chain walk would stop
+before ever reaching position 7 (Algorithm~\ref{alg:findmatches}'s $i-p \le W$ check),
+and the parser would be forced to fall back to literals there instead, costing real bits
+(compare $d[13]{=}54$ in Section~\ref{sec:parsing}'s worked table against what it would
+become without that match -- strictly worse). This is the concrete mechanism behind
+Section~\ref{sec:profiles}'s claim that increasing $W$ can only help or tie the ratio:
+a bigger window never removes a match that a smaller one could find, it can only add
+matches a smaller window would have missed.
+\end{tcolorbox}
+
+\subsection{Why a smaller, fixed window is also \emph{faster}, not just smaller}
+\label{sec:cache}
+
+Your instinct that "an algorithm using more memory tends to be slower" is correct, and
+it's worth understanding precisely \emph{why}, since it tells you what to tune. The
+mechanism is CPU cache locality, not memory quantity per se:
+
+\begin{itemize}
+  \item A window/hash-chain structure that fits inside the CPU's L2 or L3 cache (typically
+  a few hundred KB to a few tens of MB, depending on hardware) gets match-finding
+  lookups served in a handful of cycles.
+  \item Once the structure is larger than cache, lookups increasingly miss into main
+  memory, each costing on the order of \emph{hundreds} of cycles instead -- a slowdown
+  of one to two orders of magnitude per access, not a gentle degradation.
+  \item This is exactly why real compressors expose a window/level parameter instead of
+  always using the largest window possible: past a certain size, you are trading a
+  large, predictable speed cost for a shrinking ratio gain (most of the exploitable
+  repetition in typical data lives within a much smaller distance than the theoretical
+  maximum).
+\end{itemize}
+
+So "fixed, appropriately-sized memory" isn't just easier to reason about -- choosing $W$
+to comfortably fit your target cache tier is a legitimate, direct speed lever, separate
+from and in addition to \texttt{max\_chain}.
+
+\subsection{Total memory as a function of your own parameters}
+\label{sec:memformula}
+
+With window size $W$ and a hash table indexed by $\texttt{hash\_bits}$ bits (so
+$2^{\texttt{hash\_bits}}$ buckets):
+
+\begin{center}
+\begin{tabular}{@{}p{5.2cm}p{4.3cm}p{4.3cm}@{}}
+\toprule
+Structure & Size & Notes \\
+\midrule
+Ring buffer (search buffer data) & $W$ bytes & Section~\ref{sec:ringbuffer} \\
+\texttt{head[\,]} (hash $\to$ most recent position) & $4 \cdot 2^{\texttt{hash\_bits}}$ bytes & one \texttt{uint32\_t} per bucket \\
+\texttt{prev[\,]} (chain links) & $4 \cdot W$ bytes & one \texttt{uint32\_t} per window position \\
+\midrule
+\textbf{Total (encoder)} & $W + 4 \cdot 2^{\texttt{hash\_bits}} + 4W$ & $= O(W)$, independent of file size \\
+\textbf{Total (decoder)} & $W$ & only the ring buffer -- no hash chain needed at all \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\textbf{Recommendation}: do not hardcode a small window. Use the entire block you are
-compressing as the window (your current \texttt{BLOCK\_SIZE} of 64{,}000 bytes is already
-larger than DEFLATE's whole window). If you later support multi-block or streaming
-files, make the window at least as large as \texttt{BLOCK\_SIZE}, ideally the size of the
-whole file for offline compression -- there is no ratio reason to shrink it, only a
-memory-budget reason, and modern machines make that budget generous.
+Note the last row: the \emph{decoder} only ever needs the ring buffer -- decoding is
+pure sequential copying (Section~\ref{sec:causality}), never search. All the matchfinder
+memory (\texttt{head}, \texttt{prev}) is encoder-only. If you later upgrade to a
+binary-tree matchfinder (Section~\ref{sec:matchfinder}), \texttt{prev[\,]} becomes two
+child pointers per position instead of one, i.e.\ $8W$ instead of $4W$ -- still $O(W)$,
+just a larger constant.
+
+\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title=Worked example: memory for a 1MB window]
+$W = 2^{20}$ (1{,}048{,}576 bytes), $\texttt{hash\_bits} = 18$ ($262{,}144$ buckets):
+\begin{align*}
+  \text{ring buffer} &= 1\text{MB} \\
+  \texttt{head[\,]} &= 4 \times 262{,}144 = 1\text{MB} \\
+  \texttt{prev[\,]} &= 4 \times 1{,}048{,}576 = 4\text{MB} \\
+  \textbf{total (encoder)} &\approx 6\text{MB, regardless of whether the input is 1MB or 1GB.}
+\end{align*}
+The decoder needs only the 1MB ring buffer.
+\end{tcolorbox}
+
+\subsection{Parameter profiles: make the speed/ratio/memory trade-off explicit}
+\label{sec:profiles}
+
+Rather than picking $W$, \texttt{hash\_bits}, and \texttt{max\_chain} once and hardcoding
+them, expose them as named profiles (mirroring how gzip's \texttt{-1..-9}, zstd's
+levels, and xz's presets work) so you can dial ratio vs.\ speed without touching code:
+
+\begin{center}
+\begin{tabular}{@{}lrrrl@{}}
+\toprule
+Profile & $W$ & \texttt{hash\_bits} & \texttt{max\_chain} & Encoder memory (approx.) \\
+\midrule
+Fast & 64~KB & 15 & 32 & $\approx 448$~KB \\
+Balanced & 1~MB & 18 & 128 & $\approx 6$~MB \\
+Max ratio & 16~MB & 20 & 4096 (or unbounded) & $\approx 68$~MB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+These are starting points to benchmark from (Section~\ref{sec:validation}), not fixed
+recommendations -- the right values depend on your actual data and hardware. The point
+is that all three levers ($W$, \texttt{hash\_bits}, \texttt{max\_chain}) are things
+\emph{you} set, not properties of the input, which is exactly the "control the
+parameters, don't let memory grow with data" property you asked for.
+
+\begin{tcolorbox}[colback=blue!5!white,colframe=blue!50!black,title=Relationship to Section~\ref{sec:calibration}'s "Fast" and "Max ratio" endpoints]
+Increasing $W$ can only ever \emph{help or tie} compression ratio (a larger window
+means strictly more candidate sources), never hurt it -- so the ratio side of this
+trade-off is monotonic. The speed cost is what's non-monotonic (cache locality,
+Section~\ref{sec:cache}) and chain-walk cost (\texttt{max\_chain}), which is why these
+are worth exposing as explicit, benchmarked profiles rather than a single guess.
+\end{tcolorbox}
 
 \section{Match Finding}
 \label{sec:matchfinder}
@@ -191,13 +358,13 @@ sharing the same hash -- a singly linked list per hash bucket, walked nearest-fi
 s + 1$ for the position under consideration)}
 \label{alg:findmatches}
 \begin{algorithmic}[1]
-\Procedure{FindMatches}{$i$, $data$, $head[\,]$, $prev[\,]$, $max\_chain$}
+\Procedure{FindMatches}{$i$, $data$, $head[\,]$, $prev[\,]$, $max\_chain$, $W$}
   \State $h \gets \text{Hash}(data[i..i+H-1])$
   \State $p \gets head[h]$
   \State $best\_len \gets 0$
   \State $candidates \gets \emptyset$ \Comment{list of (length, distance), one per achievable length}
   \State $tries \gets 0$
-  \While{$p \ge 0$ and $tries < max\_chain$}
+  \While{$p \ge 0$ and $tries < max\_chain$ and $i - p \le W$} \Comment{window bound, Section~\ref{sec:ringbuffer}}
     \State $len \gets \text{MatchLength}(data, p, i)$ \Comment{extend while bytes match, capped by window}
     \If{$len > best\_len$}
       \For{$s \gets best\_len+1$ to $len$}
@@ -341,6 +508,85 @@ You already have the right building block: \texttt{lzss\_cost.h}'s
 distances are available -- the cost model was already written distance-aware, precisely
 in anticipation of this rewrite.
 
+\subsection{What Elias-gamma actually is, as real bits}
+\label{sec:eliasgamma}
+
+The formula $\text{var\_cost}(x) = 2\lfloor\log_2 x\rfloor + 1$ isn't an abstract
+estimate pulled out of nowhere -- it's the exact bit-length of a real, simple,
+self-delimiting binary code for positive integers, called an \emph{Elias-gamma code}.
+It's worth seeing what it actually looks like, since "self-delimiting" is doing real
+work here: the decoder needs to know where one number's encoding ends and the next
+begins, without a separate length field, and this is the mechanism that provides that.
+
+\begin{definition}[Elias-gamma code]
+To encode a positive integer $n$: write $n$ in binary, note $k = \lfloor \log_2 n
+\rfloor$ (the number of bits \emph{after} the leading 1), then emit $k$ zero bits,
+followed by a single $1$ bit, followed by those $k$ remaining bits verbatim. Total
+length: $k$ zeros $+$ $1$ bit $+$ $k$ bits $= 2k+1$ bits -- exactly
+$\text{var\_cost}(n)$. To decode: count zero bits until the first $1$ (that count is
+$k$), then read the next $k$ bits as the remainder $r$; the value is $n = 2^k + r$.
+\end{definition}
+
+\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title=Worked example: the actual bits for values from our running example]
+\begin{center}
+\begin{tabular}{@{}rrrl@{}}
+\toprule
+$n$ & binary of $n$ & $k$ & Elias-gamma code (actual bits) \\
+\midrule
+1 & 1 & 0 & \texttt{1} (1 bit) \\
+3 & 11 & 1 & \texttt{011} (3 bits) -- the distance used in the running example \\
+4 & 100 & 2 & \texttt{00100} (5 bits) -- the other running-example distance \\
+500 & 111110100 & 8 & \texttt{00000000111110100} (17 bits) -- the "far" option \\
+\bottomrule
+\end{tabular}
+\end{center}
+Decoding \texttt{011}: count zeros before the first \texttt{1} $\to$ $k{=}1$; the first
+\texttt{1} is the stop marker; read the next $k{=}1$ bit as the remainder, \texttt{1}
+$\to r{=}1$; value $= 2^1 + 1 = 3$. Correct, and the decoder never needed to be told in
+advance how many bits were coming.
+\end{tcolorbox}
+
+\subsection{What it's actually being used for here (and what it isn't)}
+\label{sec:eliasgamma-purpose}
+
+This is worth being precise about, since Elias-gamma plays \emph{two conceptually
+separate} roles that are easy to blur together:
+
+\begin{enumerate}
+  \item \textbf{Its real, current job: a cost estimate for the parser.} The DP in
+  Section~\ref{sec:parsing} needs \emph{some} number representing "how expensive is
+  this token" in order to compare parses. Elias-gamma is used here \emph{because its
+  shape is right} -- cost grows with $\log(\text{value})$, so small distances and short
+  lengths are correctly treated as cheap and large ones as expensive -- not because the
+  DP is required to actually emit Elias-gamma bits into your compressed file. As
+  Section~\ref{sec:entropy} already says, your real entropy coder will very likely beat
+  this estimate (an adaptive model over distance \emph{slots}, Section~\ref{sec:slots},
+  learns your data's actual distribution instead of assuming this fixed shape) -- that's
+  exactly why the iterative refinement loop exists, to keep the DP's decisions aligned
+  with whatever your real coder actually costs.
+  \item \textbf{An optional, legitimate second job: a real "phase 0" bitstream encoder.}
+  Because Elias-gamma is a genuine, complete, working binary code -- not just a cost
+  formula -- you can, if you want a fully working end-to-end encoder/decoder before
+  building the adaptive range coder in Section~\ref{sec:entropy}, literally write these
+  bits to the file (one flag bit per token, then a byte for literals or Elias-gamma-coded
+  length/distance for matches). This genuinely saves space compared to fixed-width
+  fields (a 3-bit distance costs 3 bits, not a fixed 16 or 32), just not as much as an
+  adaptively-modeled coder eventually will.
+\end{enumerate}
+
+\begin{tcolorbox}[colback=blue!5!white,colframe=blue!50!black,title={Why building the "phase 0" encoder first is worth doing, not just a shortcut}]
+If you implement Elias-gamma \emph{as your real bitstream}, something useful falls out
+for free: the DP's predicted cost $d[n]$ (Section~\ref{sec:parsing}) and your actual
+compressed file size will match \emph{exactly} (up to rounding to whole bytes) --
+because they're now computing the literal same thing. That equality is a strong,
+easy correctness check for your matchfinder-plus-DP pipeline (Sections
+\ref{sec:matchfinder}--\ref{sec:parsing}) in isolation, \emph{before} the extra
+complexity of an adaptive entropy coder is anywhere in the picture. Once that's
+verified, swap in the real range coder from Section~\ref{sec:entropy} -- at that point
+$d[n]$ becomes an estimate again rather than an exact prediction, and the refinement
+loop is what keeps it honest.
+\end{tcolorbox}
+
 \begin{tcolorbox}[colback=blue!5!white,colframe=blue!50!black,title=Reminder: why this is exactly the right unit now]
 Under the old dictionary/header scheme, a chunk's true cost depended on how many
 distinct dictionary entries the whole file ended up needing -- a shared, global,
@@ -350,6 +596,67 @@ $(length, distance)$ alone, nothing shared with any other token. This is exactly
 assumption the DP's optimality proof requires, so the same DP that lost to greedy
 before will not have that problem here.
 \end{tcolorbox}
+
+\section{Making Near References Cheaper Than Far Ones: Distance/Length Slots}
+\label{sec:slots}
+
+DEFLATE and LZMA both avoid spending a full, uniformly-costed field on every distance:
+instead they bucket distances into a small number of \emph{slots} covering
+exponentially growing ranges, entropy-code the (small) slot index, and store the
+position \emph{within} the slot as close to raw bits as possible, since values within a
+bucket are close to equally likely.
+
+\begin{tcolorbox}[colback=blue!5!white,colframe=blue!50!black,title=You already have a version of this -- here's the connection]
+\texttt{lzss\_cost.h}'s \texttt{var\_cost}$(x) = 2\lfloor\log_2 x\rfloor + 1$ is already
+an Elias-gamma code, and Elias-gamma \emph{is} a slot scheme: it splits $x$ into a slot
+index $k = \lfloor \log_2 x \rfloor$ (written in unary, costing $k{+}1$ bits) and $k$
+raw extra bits locating $x$ within that slot. So the DP's cost estimates are already
+slot-shaped, and nothing here changes how the \emph{parser} reasons about near vs.\ far.
+What changes is the \emph{entropy coder}: replacing Elias-gamma's fixed unary slot-index
+code with an \emph{adaptively modeled} one, learned from your actual data's distance
+distribution, rather than assumed to follow a fixed geometric-ish shape.
+\end{tcolorbox}
+
+\begin{definition}[Distance slot]
+For a distance $\delta \ge 1$, let $k = \lfloor \log_2 \delta \rfloor$ (the slot index).
+Slot $k$ covers the range $[2^k,\, 2^{k+1}-1]$ and needs exactly $k$ extra bits to
+specify \emph{which} value in that range: $\text{extra} = \delta - 2^k$. The same
+construction applies to match lengths (over a much smaller range, since matches are
+typically far shorter than the window).
+\end{definition}
+
+\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title=Worked example: slotting our running example's distances]
+\begin{center}
+\begin{tabular}{@{}rrrl@{}}
+\toprule
+$\delta$ & slot $k$ & extra bits (value) & \\
+\midrule
+1 & 0 & 0 bits & (smallest possible distance) \\
+2 & 1 & 1 bit (value 0) & \\
+3 & 1 & 1 bit (value 1) & the distance used in our running example's big match \\
+4 & 2 & 2 bits (value 0) & the distance used in our running example's trailing match \\
+500 & 8 & 8 bits (value 244) & the "far" option in the greedy-vs-optimal counterexample \\
+\bottomrule
+\end{tabular}
+\end{center}
+For a 64KB window, the largest possible distance is 65{,}536, whose slot is $k{=}16$ --
+so there are only \textbf{17 distinct slot values} (0 through 16) no matter how large
+$\delta$ gets within that window. That's the real payoff: instead of an entropy coder
+having to learn a probability distribution over up to 65{,}536 raw distance values, it
+only ever needs to learn one over 17 slot values -- small enough to adapt quickly and
+cheaply, even early in a file, while the (much larger, but nearly-uniform) extra bits
+are left mostly raw, where an adaptive model would buy little anyway.
+\end{tcolorbox}
+
+\textbf{Where this belongs in your pipeline}: the slot/extra-bit split itself is a
+representation choice for the \emph{entropy coder} (item 3), not the parser -- encode
+slot index with an adaptive model (a small frequency table over $\sim$17--20 symbols is
+cheap to maintain and converges fast), and write extra bits close to raw (LZMA adds one
+adaptively-modeled "aligned" bit per slot on top of raw bits as a small extra refinement;
+worth trying once the basic scheme works, not before). Once this real coder exists, feed
+its \emph{actual measured} per-slot costs back into the DP through the iterative
+refinement loop in Section~\ref{sec:entropy} -- exactly the same loop already in this
+guide, just with a better cost source than the Elias-gamma estimate.
 
 \section{Optimal Parsing}
 \label{sec:parsing}
@@ -591,19 +898,26 @@ exactly what today's best general-purpose compressors ship.
 \toprule
 \# & Deliverable & Notes \\
 \midrule
-1 & Hash-chain matchfinder & Algorithm~\ref{alg:findmatches}. New file, e.g.\
-\texttt{matchfinder.c}. \\
+1 & Hash-chain matchfinder over a ring-buffer window & Algorithm~\ref{alg:findmatches}
+plus Section~\ref{sec:ringbuffer}. New file, e.g.\ \texttt{matchfinder.c}. Pick a
+starting profile from Section~\ref{sec:profiles}. \\
 2 & Candidate-list data structure & Section~\ref{sec:candidates}. Replaces
 \texttt{Graph}/\texttt{GraphNode} for this purpose. \\
 3 & Flat optimal-parse DP & Adapt \texttt{shortest\_path\_dp.c} to iterate over
 candidate lists; reuse \texttt{lzss\_cost.h} as-is (already written for this). \\
-4 & Round-trip test harness & Verify byte-exact decompression on your existing
+4 & "Phase 0" Elias-gamma bitwriter (optional but recommended) & Section~\ref{sec:eliasgamma-purpose}.
+Write the actual Elias-gamma bits computed by the cost model to the file. Gives you a
+complete, working encoder/decoder fast, and $d[n]$ will exactly match your real file
+size -- a strong correctness check before adding entropy-coder complexity. \\
+5 & Round-trip test harness & Verify byte-exact decompression on your existing
 \texttt{tests/} corpus before optimizing further. \\
-5 & Benchmark vs.\ gzip/zstd/xz & Establish your real baseline gap \emph{before}
+6 & Benchmark vs.\ gzip/zstd/xz & Establish your real baseline gap \emph{before}
 adding complexity -- see Section~\ref{sec:validation}. \\
-6 & Repeat-distance (rep0) DP extension & Section~\ref{sec:repdist}. Only after 1--5
+7 & Repeat-distance (rep0) DP extension & Section~\ref{sec:repdist}. Only after 1--6
 are working and measured. \\
-7 & Entropy coder + refinement loop & Section~\ref{sec:entropy}. Likely your single
+8 & Distance/length slot encoding & Section~\ref{sec:slots}. Part of the entropy coder,
+item 9 below, not the parser. \\
+9 & Entropy coder + refinement loop & Section~\ref{sec:entropy}. Likely your single
 biggest remaining ratio lever -- see Section~\ref{sec:calibration}. \\
 \bottomrule
 \end{tabular}
