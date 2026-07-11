@@ -194,7 +194,7 @@ an evicted byte) and a speed win (you stop doing work you'd have to discard anyw
 never need to explicitly delete old chain entries; capping the walk at distance $> W$
 makes them naturally unreachable.
 
-\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title=Worked example: watching eviction happen, and how $W$ changes what's even possible]
+\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title={Worked example: watching eviction happen, and how $W$ changes what's even possible}]
 Take a deliberately tiny window, $W{=}4$, and trace the ring buffer through our running
 example $S = \texttt{abcabcabcxabc}$ (slot $= (i{-}1) \bmod 4$):
 \begin{center}
@@ -352,6 +352,38 @@ sharing the same hash -- a singly linked list per hash bucket, walked nearest-fi
 \EndProcedure
 \end{algorithmic}
 \end{algorithm}
+
+\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title={Worked example: building the chain, byte by byte, over $S$}]
+Using $H{=}1$ (one byte per hash, as in Section~\ref{sec:matchfinder}'s lookup example)
+and inserting every position of $S = \texttt{abcabcabcxabc}$ in order:
+\begin{center}
+\begin{tabular}{@{}rcrl@{}}
+\toprule
+$i$ & byte & $prev[i]$ set to & \texttt{head[\,]} after this insert \\
+\midrule
+1 & a & $-1$ (none yet) & a$\to$1 \\
+2 & b & $-1$ & a$\to$1, b$\to$2 \\
+3 & c & $-1$ & a$\to$1, b$\to$2, c$\to$3 \\
+4 & a & $1$ & a$\to$\textbf{4}, b$\to$2, c$\to$3 \\
+5 & b & $2$ & a$\to$4, b$\to$\textbf{5}, c$\to$3 \\
+6 & c & $3$ & a$\to$4, b$\to$5, c$\to$\textbf{6} \\
+7 & a & $4$ & a$\to$\textbf{7}, b$\to$5, c$\to$6 \\
+8 & b & $5$ & a$\to$7, b$\to$\textbf{8}, c$\to$6 \\
+9 & c & $6$ & a$\to$7, b$\to$8, c$\to$\textbf{9} \\
+10 & x & $-1$ & \dots, x$\to$10 \\
+11 & a & $7$ & a$\to$\textbf{11}, \dots \\
+12 & b & $8$ & \dots, b$\to$\textbf{12} \\
+13 & c & $9$ & \dots, c$\to$\textbf{13} \\
+\bottomrule
+\end{tabular}
+\end{center}
+Two things worth noticing directly from the table: (1) \texttt{head['a']} keeps
+changing (1 $\to$ 4 $\to$ 7 $\to$ 11) as each new \texttt{'a'} arrives -- it always
+holds the \emph{most recent} position, which is exactly what makes nearest-first chain
+walking work; (2) $prev[11] = 7$, confirming the lookup traced in the next example: the
+chain from position 11 goes straight to 7 (the nearest earlier \texttt{'a'}), then would
+continue to 4, then 1, if the walk needed to go further.
+\end{tcolorbox}
 
 \begin{algorithm}[H]
 \caption{Find match candidates ending at position $l$ (equivalently, starting at $i = l -
@@ -790,61 +822,90 @@ approximation, not a new exact algorithm.
 \textbf{The practical approximation} (what LZMA and zstd's optimal-parse modes actually
 do): extend the DP state to $(l, \texttt{rep0})$, where \texttt{rep0} is \emph{only the
 single most recently used distance along the best path reaching $l$} (not all four, and
-not all combinations) -- carried forward from \texttt{back[l]} the same way
-\texttt{shortest\_path\_dp.c} already carries forward a single winning predecessor per
-level. At each position, in addition to the matchfinder's candidates, check whether
-\texttt{rep0} (inherited from the predecessor state) still matches at this position; if
-so, offer it as an extra candidate with a cheaper cost (no full distance encoding
-needed, just a "reuse rep0" flag):
+not all combinations) -- carried forward the same way \texttt{shortest\_path\_dp.c}
+already carries forward a single winning predecessor per level.
+
+\begin{tcolorbox}[colback=red!5!white,colframe=red!60!black,title={A subtlety to get right: check rep0 at the candidate's own base, not at $l-1$}]
+It's tempting to write this as "check whether $rep[l-1]$ still matches something ending
+at $l$" -- but that mixes up two different positions' state: $rep[l-1]$ describes the
+path arriving at $l-1$, which is not necessarily the same predecessor a given match
+candidate at $l$ would use. The correct, internally consistent check is: for a
+candidate $(s,\delta)$ ending at $l$ (so its base/predecessor is $l-s$), compare $\delta$
+against $rep[l-s]$ -- the rep state at \emph{that specific candidate's own base
+position}, not at $l-1$. This way you're always asking "does this candidate happen to
+reuse the distance already active at the point it branches from", which is the only
+version of the question that is actually well-defined.
+\end{tcolorbox}
 
 \begin{algorithm}[H]
-\caption{Optimal parse with a single repeat-distance slot}
+\caption{Optimal parse with a single repeat-distance slot (corrected)}
 \begin{algorithmic}[1]
 \Procedure{OptimalParseWithRep0}{$data$, $candidates[\,]$, $n$}
   \State $d[0] \gets 0$; $rep[0] \gets 0$
   \For{$l \gets 1$ to $n$}
     \State $d[l] \gets d[l-1] + \textsc{LiteralCostBits}()$;\ $back[l] \gets \textsc{Literal}$;\ $rep[l] \gets rep[l-1]$
     \For{each $(s, \delta) \in candidates[l]$}
-      \State $cand \gets d[l - s] + \textsc{MatchCostBits}(s, \delta)$
+      \State $base \gets l - s$
+      \If{$\delta = rep[base]$ and $rep[base] \ne 0$} \Comment{same distance as active at the base -- reuse it}
+        \State $cost \gets \textsc{RepMatchCostBits}(s)$ \Comment{cheaper: no distance field}
+      \Else
+        \State $cost \gets \textsc{MatchCostBits}(s, \delta)$
+      \EndIf
+      \State $cand \gets d[base] + cost$
       \If{$cand < d[l]$}
         \State $d[l] \gets cand$;\ $back[l] \gets (\textsc{Match}, s, \delta)$;\ $rep[l] \gets \delta$
       \EndIf
     \EndFor
-    \State $r \gets rep[l-1]$
-    \If{$r > 0$ and \Call{MatchLengthAt}{$data$, $l - r$, $l$} $> 0$}
-      \State $s' \gets$ \Call{MatchLengthAt}{$data$, $l-r$, $l$}
-      \State $cand \gets d[l - s'] + \textsc{RepMatchCostBits}(s')$ \Comment{cheaper: no distance field}
-      \If{$cand < d[l]$}
-        \State $d[l] \gets cand$;\ $back[l] \gets (\textsc{RepMatch}, s')$;\ $rep[l] \gets r$
-      \EndIf
-    \EndIf
   \EndFor
   \State \Return \Call{ReconstructPath}{$back$, $n$}
 \EndProcedure
 \end{algorithmic}
 \end{algorithm}
 
-This stays $O(n \cdot \bar{c})$ -- one extra $O(1)$-ish check per position -- and
-typically captures most of the practical benefit of repeat-distance caching. Extending
-to 2--4 tracked slots (closer to LZMA's rep0..rep3) is a straightforward generalization
-of the same idea if benchmarking shows it is worth the added complexity; start with one
-slot and measure before adding more.
+Notice this needs no separate "search for a rep-match" step at all -- it just re-prices
+the \emph{same} candidates the matchfinder already found, using whichever cost (fresh or
+reuse) is cheaper for each one. That's what keeps it consistent: the rep state and the
+DP state now always refer to the same position.
 
-\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title=Worked example: what rep-distance caching would (and wouldn't) save here]
-In our running example's optimal parse, the first match uses distance 3, and the second
-uses distance 4 -- \emph{different} distances, so a \texttt{rep0} cache would not help
-between them (this is a realistic, honest outcome, not a cherry-picked success case).
-But suppose a variant of $S$ had no \texttt{"x"} interruption, so the trailing
-\texttt{"abc"} also ended up matching at distance 3 (the same as the first match).
-Encoding that trailing match fresh costs $\text{match\_cost}(3,3) = 7$ bits as usual; but
-if the encoder instead recognizes "this is the same distance as last time" and emits a
-cheap reuse flag instead of a full distance code, the cost drops to just
-$1 + \text{var}(2) = 1 + 3 = 4$ bits (flag $+$ length code only, no distance field at
-all) -- a 3-bit saving on that one token alone. Across a file with many aligned repeats
-at the same distance (e.g.\ column-structured or periodic data), these per-token savings
-compound into one of the largest practical wins available, which is why
-Section~\ref{sec:calibration} flags this as often the best ratio-per-effort item on the
-whole roadmap.
+This stays $O(n \cdot \bar{c})$ -- the check is $O(1)$ per existing candidate, nothing
+extra to search for -- and typically captures most of the practical benefit of
+repeat-distance caching. Extending to 2--4 tracked slots (closer to LZMA's
+rep0..rep3) is a straightforward generalization of the same idea if benchmarking shows
+it is worth the added complexity; start with one slot and measure before adding more.
+
+\begin{tcolorbox}[colback=green!5!white,colframe=green!45!black,title={Worked example: rep0 genuinely winning, traced in full}]
+Take a second short string, purpose-built to actually exercise this (not just a
+counterfactual): $T = \texttt{abcabcdefgefg}$ (13 bytes). The matchfinder
+(Section~\ref{sec:matchfinder}) finds exactly two real matches here, and -- notice this
+carefully -- \emph{both happen to use distance 3}, even though they come from
+completely unrelated repeated substrings (\texttt{"abc"} and \texttt{"efg"}):
+candidates ending at $l{=}5$ and $l{=}6$ (from \texttt{"abc"} repeating, source
+position 1), and at $l{=}12$ and $l{=}13$ (from \texttt{"efg"} repeating, source
+position 8).
+\begin{center}
+\begin{tabular}{@{}rrp{9.5cm}@{}}
+\toprule
+$l$ & $d[l]$ (bits) & chosen edge \\
+\midrule
+0--4 & $0,9,18,27,36$ & literals (unchanged from the plain-DP pattern) \\
+5 & 32 & fresh match$(2,3)$ from $d[3]{=}27$; $rep[5]{\gets}3$ \\
+6 & 34 & fresh match$(3,3)$ from $d[3]{=}27$ ($rep[3]{=}0$, so no reuse yet); $rep[6]{\gets}3$ \\
+7--10 & $43,52,61,70$ & literals (\texttt{d},\texttt{e},\texttt{f},\texttt{g}); $rep$ stays 3 throughout \\
+11 & 79 & literal \texttt{e}; $rep[11]{=}3$ (carried) \\
+12 & \textbf{72} & \textbf{reuse rep0}: $\delta{=}3$ matches $rep[10]{=}3$! cost $= 1+\text{var}(1) = 2$ bits, from $d[10]{=}70$ \\
+13 & \textbf{74} & \textbf{reuse rep0} again: cost $= 1+\text{var}(2) = 4$ bits, from $d[10]{=}70$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\textbf{Final cost: 74 bits.} Re-running the exact same candidates through the
+\emph{plain} DP from Section~\ref{sec:parsing} (no rep0 mechanism, every match priced
+fresh) gives $d[12]{=}75$, $d[13]{=}77$ instead -- \textbf{3 bits worse}, purely because
+the second match's distance (3) was charged fresh instead of recognized as a reuse of
+what was already active. This is a real, verified improvement, not a counterfactual --
+and it demonstrates the honest, ordinary case: rep0 helps precisely when two
+\emph{unrelated} repeats happen to sit the same distance apart, which is common in
+structured or periodic data and exactly why Section~\ref{sec:calibration} flags this as
+often the best ratio-per-effort item on the whole roadmap.
 \end{tcolorbox}
 
 \section{Entropy Coding Integration}
@@ -874,6 +935,35 @@ This is not a proof of global optimality (exact joint optimization of parse and 
 model state is intractable in general, for the same reason as
 Section~\ref{sec:repdist}) -- but it is an empirically excellent fixed point, and it is
 exactly what today's best general-purpose compressors ship.
+
+\begin{tcolorbox}[colback=orange!5!white,colframe=orange!70!black,title={Illustrative example (hypothetical numbers -- not measured, unlike every other worked example in this document)}]
+Every other numeric example in this guide was computed by script and is exact. This one
+isn't, because it depends on a real entropy coder that doesn't exist yet -- it's here
+only to make the \emph{mechanism} concrete, not to predict actual numbers.
+
+\textbf{Round 1}: parse $S$ using the static Elias-gamma estimates, exactly as in
+Section~\ref{sec:parsing} -- literals \texttt{a},\texttt{b},\texttt{c} at 9 bits each,
+match$(6,3)$ at 9 bits, literal \texttt{x} at 9 bits, match$(3,4)$ at 9 bits, total 54
+bits (this part is the real, verified number from Section~\ref{sec:parsing}).
+
+\textbf{Measure}: feed this exact token sequence through a real adaptive entropy coder.
+Suppose (hypothetically) it discovers that \texttt{a}, \texttt{b}, \texttt{c} are
+common in this file and assigns them only $\sim$4 bits each once it has adapted, while
+rare \texttt{x} still costs close to 9 bits, and the two match tokens measure at 8 and
+10 bits respectively (slightly different from the 9-bit Elias-gamma guess in each
+direction, since the real coder's length/distance-slot model, Section~\ref{sec:slots},
+doesn't match Elias-gamma's assumed shape exactly). Measured total: $4{+}4{+}4{+}8{+}9{+}10 = 39$ bits
+-- already better than the estimate suggested, just from better entropy coding of the
+\emph{same} parse.
+
+\textbf{Re-price and re-parse}: feed these \emph{measured} per-symbol costs back into
+\textsc{OptimalParse} instead of the Elias-gamma estimates. If, under these updated
+costs, some other combination of tokens (e.g.\ a different split point, or trading a
+match for literals that are now unexpectedly cheap) totals fewer bits than 39, the DP
+will find and switch to it -- this is the case where round 2 changes the actual parse,
+not just its measured cost. Repeat measure/re-parse for 2--4 rounds, or until the total
+stops improving.
+\end{tcolorbox}
 
 \subsection{Context choices for the entropy stage, roughly in order of expected payoff}
 
